@@ -299,6 +299,26 @@ Returns the Spunkram release manifest.
 
 Before the first published release, `version` / `zxpUrl` may be `null`; `ffmpeg` URLs are still present.
 
+### 5.1b `GET /api/cep/update/versions` (admin)
+
+Bearer required. Email must be on the beta/admin allowlist (`basepackagehelp@gmail.com`, `admin@mail.ru`, or `SPUNKRAM_BETA_EMAILS`).
+
+Lists every uploaded ZXP under `public/downloads/spunkram/{version}/spunkram.zxp` (newest first):
+
+```json
+{
+  "current": { "stable": "0.4.2", "beta": "0.4.3-beta.1" },
+  "versions": [
+    { "version": "0.4.3-beta.1", "zxpUrl": "https://cdn…/spunkram.zxp", "channel": "beta" },
+    { "version": "0.4.2", "zxpUrl": "https://cdn…/spunkram.zxp", "channel": "stable" }
+  ],
+  "betas": […],
+  "stables": […]
+}
+```
+
+CEP Settings → **Admin · Builds** shows this list and can install any build.
+
 ### 5.2 Public CDN keys (R2 `motionflow-public`)
 
 | Key | Purpose |

@@ -32,8 +32,10 @@ export const VOICEOVER_ENDPOINTS = {
   voices: "/api/cep/voiceover/voices",
 } as const;
 
-/** Public (no auth) — Spunkram extension update manifest + ffmpeg CDN URLs */
+/** Public — Spunkram extension update manifest + ffmpeg CDN URLs (Bearer unlocks beta). */
 export const UPDATE_ENDPOINT = "/api/cep/update" as const;
+/** Admin — full list of uploaded ZXP versions */
+export const UPDATE_VERSIONS_ENDPOINT = "/api/cep/update/versions" as const;
 
 /**
  * Каталог MOGRT/AEP-стилей — код из предыдущей версии продукта (Captions CEP),

@@ -1,5 +1,5 @@
-import { apiUrl, UPDATE_ENDPOINT } from "./config";
-import { getUserIdentity } from "./user";
+import { apiUrl, UPDATE_ENDPOINT, UPDATE_VERSIONS_ENDPOINT } from "./config";
+import { getUserIdentity, DEV_ADMIN_EMAIL } from "./user";
 import { cepHttpRequest } from "@/lib/api/cep-http";
 
 export type UpdateManifest = {
@@ -13,6 +13,30 @@ export type UpdateManifest = {
     mac: string;
   };
 };
+
+export type SpunkramVersionEntry = {
+  version: string;
+  zxpUrl: string;
+  channel: "stable" | "beta";
+};
+
+export type SpunkramVersionsPayload = {
+  current: { stable: string | null; beta: string | null };
+  versions: SpunkramVersionEntry[];
+  betas: SpunkramVersionEntry[];
+  stables: SpunkramVersionEntry[];
+};
+
+/** Mirrors next-app `spunkram-beta.ts` defaults (UI gate; server enforces). */
+const RELEASE_ADMIN_EMAILS = new Set([
+  "basepackagehelp@gmail.com",
+  DEV_ADMIN_EMAIL.toLowerCase(),
+]);
+
+export function isReleaseAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return RELEASE_ADMIN_EMAILS.has(email.trim().toLowerCase());
+}
 
 type ParsedVersion = { core: number[]; pre: string | null };
 
@@ -51,19 +75,39 @@ export function isRemoteNewer(localVersion: string, remoteVersion: string | null
   return compareVersions(remoteVersion, localVersion) > 0;
 }
 
+function authHeaders(): Record<string, string> {
+  const user = getUserIdentity();
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (user.token) headers.Authorization = `Bearer ${user.token}`;
+  return headers;
+}
+
 export async function fetchUpdateInfo(): Promise<UpdateManifest | null> {
   try {
-    const user = getUserIdentity();
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (user.token) headers.Authorization = `Bearer ${user.token}`;
-
     const result = await cepHttpRequest(apiUrl(UPDATE_ENDPOINT), {
       method: "GET",
-      headers,
+      headers: authHeaders(),
       timeoutMs: 15000,
     });
     if (!result.ok) return null;
     const data = JSON.parse(result.text) as UpdateManifest;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** Admin-only: every uploaded ZXP under R2 (beta + stable). */
+export async function fetchSpunkramVersions(): Promise<SpunkramVersionsPayload | null> {
+  try {
+    const result = await cepHttpRequest(apiUrl(UPDATE_VERSIONS_ENDPOINT), {
+      method: "GET",
+      headers: authHeaders(),
+      timeoutMs: 20000,
+    });
+    if (!result.ok) return null;
+    const data = JSON.parse(result.text) as SpunkramVersionsPayload;
+    if (!Array.isArray(data.versions)) return null;
     return data;
   } catch {
     return null;

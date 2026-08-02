@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  ArrowUpCircle,
   FolderOpen,
   Loader2,
   RotateCcw,
@@ -20,6 +21,12 @@ import {
 import { selectFolder } from "@/lib/utils/bolt";
 import { EXTENSION_VERSION } from "@/lib/config/masked";
 import { fs, path } from "@/lib/cep/node";
+import {
+  fetchSpunkramVersions,
+  isReleaseAdminEmail,
+  type SpunkramVersionEntry,
+} from "@/api/update";
+import { applyExtensionUpdate } from "@/utils/extension-update";
 
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
@@ -132,9 +139,85 @@ function ConfirmDialog({
 }
 
 export function SettingsPanel({ onBack }: { onBack: () => void }) {
-  const { prefs, setPrefs } = useAuth();
+  const { prefs, setPrefs, auth } = useAuth();
   const [confirm, setConfirm] = useState<"reset" | "remove" | null>(null);
   const [busy, setBusy] = useState(false);
+  const isAdmin = isReleaseAdminEmail(auth.email);
+
+  const [versions, setVersions] = useState<SpunkramVersionEntry[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [versionsError, setVersionsError] = useState<string | null>(null);
+  const [selectedVersion, setSelectedVersion] = useState("");
+  const [pointerStable, setPointerStable] = useState<string | null>(null);
+  const [pointerBeta, setPointerBeta] = useState<string | null>(null);
+  const [installBusy, setInstallBusy] = useState(false);
+  const [installProgress, setInstallProgress] = useState<string | undefined>();
+  const [installError, setInstallError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    setVersionsLoading(true);
+    setVersionsError(null);
+    fetchSpunkramVersions().then((data) => {
+      if (cancelled) return;
+      setVersionsLoading(false);
+      if (!data) {
+        setVersionsError("Could not load version list (deploy next-app + sign in).");
+        return;
+      }
+      setVersions(data.versions);
+      setPointerStable(data.current.stable);
+      setPointerBeta(data.current.beta);
+      const preferred =
+        data.versions.find((v) => v.version === data.current.beta) ||
+        data.versions.find((v) => v.version !== EXTENSION_VERSION) ||
+        data.versions[0];
+      if (preferred) setSelectedVersion(preferred.version);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin]);
+
+  const selectedEntry = useMemo(
+    () => versions.find((v) => v.version === selectedVersion),
+    [versions, selectedVersion],
+  );
+
+  const canInstall =
+    Boolean(selectedEntry?.zxpUrl) &&
+    selectedEntry?.version !== EXTENSION_VERSION &&
+    !installBusy;
+
+  async function installSelectedVersion() {
+    if (!selectedEntry?.zxpUrl || installBusy) return;
+    setInstallBusy(true);
+    setInstallError(null);
+    setInstallProgress(`Downloading v${selectedEntry.version}…`);
+    try {
+      await applyExtensionUpdate(selectedEntry.zxpUrl, (p) => {
+        if (p.phase === "download") {
+          if (p.totalBytes && p.totalBytes > 0) {
+            const pct = Math.min(99, Math.round((p.bytesReceived / p.totalBytes) * 100));
+            setInstallProgress(`Downloading v${selectedEntry.version}… ${pct}%`);
+          } else {
+            setInstallProgress(`Downloading v${selectedEntry.version}…`);
+          }
+        } else if (p.phase === "extract") {
+          setInstallProgress("Extracting…");
+        } else if (p.phase === "apply") {
+          setInstallProgress("Applying…");
+        } else {
+          setInstallProgress("Reloading…");
+        }
+      });
+    } catch (err) {
+      setInstallBusy(false);
+      setInstallProgress(undefined);
+      setInstallError(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   function patch(partial: Partial<PrefSettings>) {
     setPrefs({ ...prefs, ...partial });
@@ -311,6 +394,92 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
             onChange={(v) => patch({ useSystemFonts: v ? 1 : 0 })}
           />
         </section>
+
+        {isAdmin && (
+          <section className="mb-3 rounded-xl border border-primary/25 bg-card/60 p-3 ring-1 ring-inset ring-primary/10">
+            <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Admin · Builds
+            </h3>
+            <p className="mb-2 text-[10px] text-muted-foreground">
+              All uploaded ZXPs from R2. Current:{" "}
+              <span className="text-foreground">v{EXTENSION_VERSION}</span>
+              {pointerBeta ? (
+                <>
+                  {" "}
+                  · beta pointer <span className="text-foreground">v{pointerBeta}</span>
+                </>
+              ) : null}
+              {pointerStable ? (
+                <>
+                  {" "}
+                  · stable <span className="text-foreground">v{pointerStable}</span>
+                </>
+              ) : null}
+            </p>
+
+            {versionsLoading ? (
+              <div className="flex items-center gap-2 py-2 text-[11px] text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                Loading versions…
+              </div>
+            ) : versionsError ? (
+              <p className="text-[11px] text-destructive">{versionsError}</p>
+            ) : versions.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground">No uploaded builds found.</p>
+            ) : (
+              <>
+                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Version
+                </label>
+                <select
+                  value={selectedVersion}
+                  onChange={(e) => setSelectedVersion(e.target.value)}
+                  disabled={installBusy}
+                  className="mb-2 w-full rounded-lg border border-white/10 bg-background/50 px-2.5 py-2 text-xs text-foreground focus:border-primary/50"
+                >
+                  {versions.map((v) => {
+                    const tags: string[] = [];
+                    if (v.channel === "beta") tags.push("beta");
+                    else tags.push("stable");
+                    if (v.version === EXTENSION_VERSION) tags.push("installed");
+                    if (v.version === pointerBeta) tags.push("beta→");
+                    if (v.version === pointerStable) tags.push("latest→");
+                    return (
+                      <option key={v.version} value={v.version}>
+                        v{v.version}
+                        {tags.length ? ` (${tags.join(", ")})` : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+                <button
+                  type="button"
+                  disabled={!canInstall}
+                  onClick={() => void installSelectedVersion()}
+                  className={cn(
+                    "flex w-full items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold transition-opacity",
+                    ACCENT_PILL,
+                    !canInstall && "cursor-not-allowed opacity-50",
+                  )}
+                >
+                  {installBusy ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <ArrowUpCircle className="size-3.5" />
+                  )}
+                  {installBusy
+                    ? installProgress || "Installing…"
+                    : selectedEntry?.version === EXTENSION_VERSION
+                      ? "Already installed"
+                      : `Install v${selectedVersion || "…"}`}
+                </button>
+                {installError && (
+                  <p className="mt-1.5 text-[11px] text-destructive">{installError}</p>
+                )}
+              </>
+            )}
+          </section>
+        )}
 
         <section className="rounded-xl border border-white/10 bg-card/60 p-3">
           <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
