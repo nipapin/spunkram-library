@@ -24,6 +24,8 @@
 
 ```bash
 npm run release:patch          # bump patch → zxp → git push + tag → R2 upload
+npm run release:minor          # bump minor
+npm run release:major          # bump major
 npm run release                # текущая version из package.json
 npm run release:dry            # показать шаги без выполнения
 npm run release -- --no-upload # только git (если webhook уже заливает ZXP)
