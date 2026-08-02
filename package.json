@@ -1,7 +1,7 @@
 {
   "name": "com.spunkramlibrary.cep",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,11 @@
     "zip": "rimraf dist/* && tsc -p \"tsconfig-build.json\" && cross-env ZIP_PACKAGE=true vite build --watch false",
     "serve": "cross-env SERVE_PANEL=true vite preview",
     "symlink": "cross-env BOLT_ACTION=symlink vite",
-    "delsymlink": "cross-env BOLT_ACTION=delsymlink vite"
+    "delsymlink": "cross-env BOLT_ACTION=delsymlink vite",
+    "release": "node scripts/release.mjs",
+    "release:dry": "node scripts/release.mjs --dry-run",
+    "release:patch": "node scripts/release.mjs --bump=patch",
+    "release:minor": "node scripts/release.mjs --bump=minor"
   },
   "dependencies": {
     "blurhash": "^2.0.5",

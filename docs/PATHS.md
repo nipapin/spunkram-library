@@ -8,6 +8,19 @@
 | **Исходный проект (Spunkram Beta CEP)** | `C:\Users\nipap\AppData\Roaming\Adobe\CEP\extensions\Spunkram Beta` |
 | **Сервер (Motionflow next-app)** | `C:\Users\nipap\Documents\motionflow\next-app\` |
 
+## Release / auto-update
+
+Из корня CEP:
+
+```bash
+npm run release:patch          # bump patch → zxp → git push + tag → R2 upload
+npm run release                # текущая version из package.json
+npm run release:dry            # показать шаги без выполнения
+npm run release -- --no-upload # только git (если webhook уже заливает ZXP)
+```
+
+Нужен `next-app/.env` с R2 (или `NEXT_APP_ROOT` если путь другой). После upload: `GET https://motionflow.pro/api/cep/update`.
+
 ## Полезные ориентиры в исходном проекте
 
 | Тема | Файл |

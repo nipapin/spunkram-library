@@ -17,6 +17,7 @@ import { PanelUIProvider, usePanelUI } from "@/lib/panel-ui-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { fetchUpdateInfo, isRemoteNewer } from "@/api/update";
 import { applyExtensionUpdate } from "@/utils/extension-update";
+import { ensureFfmpeg } from "@/utils/ffmpeg";
 import { version as LOCAL_VERSION } from "../../shared/shared";
 import {
   loadInstalledPack,
@@ -340,6 +341,16 @@ function AppShell() {
   useEffect(() => {
     reloadPackList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Prefetch ffmpeg into userdata on panel start (not on first Captions use).
+  useEffect(() => {
+    ensureFfmpeg().catch((err) => {
+      console.warn(
+        "[spunkram] ffmpeg download failed:",
+        err instanceof Error ? err.message : err,
+      );
+    });
   }, []);
 
   useEffect(() => {
