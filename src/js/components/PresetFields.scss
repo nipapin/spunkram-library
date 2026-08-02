@@ -1,0 +1,242 @@
+.preset-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preset-fields__name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.preset-fields__name {
+  display: inline-block;
+  min-width: 0;
+  flex: 1;
+  max-width: 180px;
+  background: var(--bg-input);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  color: var(--accent);
+  font-family: var(--font-family);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  outline: none;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    border-color: var(--border-input);
+    color: var(--text-dim);
+  }
+}
+
+.preset-fields__name-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.preset-fields__save-as,
+.preset-fields__reset {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  gap: 5px;
+}
+
+.preset-fields__save-as {
+  border-style: dashed;
+}
+
+.preset-fields__reset {
+  opacity: 0.9;
+}
+
+.preset-fields__params {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+// ───────────────────────── collapse groups ─────────────────────────
+
+.preset-fields__collapse {
+  background: var(--card-gradient);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.preset-fields__collapse--depth-1,
+.preset-fields__collapse--depth-2,
+.preset-fields__collapse--depth-3 {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.preset-fields__collapse-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+  padding: 9px 11px;
+  background: transparent;
+  border: 0;
+  color: var(--text-body);
+  cursor: pointer;
+  font-family: var(--font-family);
+  text-align: left;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+.preset-fields__collapse-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.preset-fields__collapse--depth-0 > .preset-fields__collapse-head .preset-fields__collapse-title {
+  color: var(--text-body);
+  font-size: 12px;
+}
+
+.preset-fields__collapse-chevron {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  transition: transform 0.15s ease;
+  transform: rotate(-90deg);
+}
+
+.preset-fields__collapse-chevron--open {
+  transform: rotate(0deg);
+}
+
+.preset-fields__collapse-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+// ───────────────────────── param rows ─────────────────────────
+
+.preset-fields__param {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 28px;
+}
+
+.preset-fields__param--toggle {
+  padding: 2px 0;
+}
+
+.preset-fields__param--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.preset-fields__param-label {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  width: 90px;
+}
+
+.preset-fields__param-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.preset-fields__slider-row {
+  gap: 10px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.preset-fields__slider-row .range {
+  flex: 1;
+}
+
+.preset-fields__slider-row .preset-fields__param-label {
+  width: 90px;
+}
+
+.preset-fields__slider-row .scrub-number {
+  flex-shrink: 0;
+  min-width: 44px;
+}
+
+.preset-fields__hex-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.preset-fields__number {
+  width: 72px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  color: var(--text-body);
+  font-family: var(--font-family);
+  font-size: 12px;
+  padding: 5px 7px;
+  outline: none;
+
+  &:focus {
+    border-color: var(--accent);
+  }
+
+  // прячем стрелки number input — мешают в узкой панели
+  appearance: textfield;
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+}
+
+.preset-fields__unit {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.preset-fields__point {
+  display: flex;
+  gap: 6px;
+}
+
+.preset-fields__point-axis {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  font-size: 10.5px;
+  color: var(--text-faint);
+
+  .scrub-number {
+    justify-content: flex-start;
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
+    border-radius: var(--radius-sm);
+    padding: 4px 7px;
+  }
+}

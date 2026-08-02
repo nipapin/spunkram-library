@@ -1,0 +1,641 @@
+.ai-tools-scope {
+// Общие примитивы взамен MUI-компонентов. Один файл, импортируется один раз
+// из index.scss — каждый компонент подключает только свой собственный .scss
+// с версткой, специфичной для него.
+// ───────────────────────── base reset ─────────────────────────
+// CEP/CEF показывает default focus-outline на кликнутых кнопках (в обычном
+// браузере это не так заметно) — без явного сброса он остаётся висеть
+// после клика и выглядит как рамка вокруг табов/кнопок.
+
+button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+button,
+input,
+select,
+textarea {
+  outline: none;
+}
+
+// ───────────────────────── buttons ─────────────────────────
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color .12s, background-color .12s;
+
+  &:hover:not(:disabled) {
+    border-color: var(--text-faint);
+  }
+
+  &:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+  }
+}
+
+.btn--primary {
+  height: 46px;
+  border: 0;
+  border-radius: var(--radius-xl);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--accent-gradient);
+
+  &:hover:not(:disabled) {
+    background: var(--accent-gradient-hover);
+  }
+
+  &:disabled {
+    color: #ffffffb0;
+    background: var(--accent-gradient-disabled);
+  }
+}
+
+.btn--ghost {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+
+  &:hover:not(:disabled) {
+    border-color: var(--text-faint);
+    color: var(--text-primary);
+    background: #ffffff0a;
+  }
+}
+
+// та же форма/высота, что и btn--primary, но нейтральный фон — для пары
+// "второстепенное / основное" действие в один ряд (напр. Add Markers / Copy Chapters)
+.btn--secondary {
+  height: 46px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-xl);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--surface-active);
+
+  &:hover:not(:disabled) {
+    border-color: var(--text-faint);
+    background: var(--bg-input);
+  }
+
+  &:disabled {
+    color: var(--text-dim);
+  }
+}
+
+.btn--full {
+  width: 100%;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background-color .12s, color .12s;
+
+  &:hover:not(:disabled) {
+    background: #ffffff0f;
+    color: var(--text-primary);
+  }
+
+  &:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+  }
+}
+
+// ───────────────────────── card / chip ─────────────────────────
+
+.card {
+  background: var(--card-gradient);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xxl);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.chip__label {
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ───────────────────────── tabs ─────────────────────────
+
+.tabs {
+  display: flex;
+  background: var(--bg-tabbar);
+  flex-shrink: 0;
+}
+
+.tab {
+  flex: 1;
+  padding: 11px 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  font-family: var(--font-family);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color .12s, background-color .12s, border-color .12s;
+}
+
+.tab--active {
+  color: var(--text-primary);
+  background: var(--bg-panel);
+  border-bottom-color: var(--accent);
+}
+
+// ───────────────────────── segmented control (toggle group) ─────────────────────────
+
+.segmented {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--bg-tabbar);
+  border-radius: var(--radius-md);
+}
+
+.segmented__btn {
+  flex: 1;
+  padding: 6px 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-family: var(--font-family);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color .12s, border-color .12s, color .12s;
+}
+
+.segmented__btn--active {
+  background: var(--surface-segmented);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+// ───────────────────────── toggle switch ─────────────────────────
+
+.toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.toggle input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.toggle__track {
+  position: absolute;
+  inset: 0;
+  background: var(--border-strong);
+  border-radius: 10px;
+  transition: background-color .15s;
+}
+
+.toggle input:checked ~ .toggle__track {
+  background: var(--accent);
+}
+
+.toggle__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  transition: transform .15s, background-color .15s;
+}
+
+.toggle input:checked ~ .toggle__thumb {
+  background: #ffffff;
+  transform: translateX(14px);
+}
+
+// ───────────────────────── button group (individually-bordered row) ─────────────────────────
+// Sentences/Words/Custom, Pop-in/Slide-up/Fade, Top/Center/Bottom, Left/Center/Right —
+// каждая кнопка своя рамка/фон, в отличие от .segmented (общий трек).
+
+.btn-group {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-group__item {
+  flex: 1;
+  text-align: center;
+  padding: 8px 0;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  border: 1.5px solid transparent;
+  color: var(--text-dim);
+  font-family: var(--font-family);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .12s, border-color .12s, color .12s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+// заливка акцентом целиком (Sentences/Words/Custom, sort-теги)
+.btn-group__item--active-fill {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+// подсветка рамкой (Pop-in/Slide-up/Fade в редакторе стиля)
+.btn-group__item--active-outline {
+  background: var(--surface-active);
+  border-color: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+// белая рамка (Top/Center/Bottom, Left/Center/Right)
+.btn-group__item--active-mono {
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+// ───────────────────────── chip toggle (small pill filter) ─────────────────────────
+
+.chip-toggle {
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family);
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  border: 0;
+  white-space: nowrap;
+  transition: background-color .12s, color .12s;
+}
+
+.chip-toggle--active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+// ───────────────────────── color field (swatch + hex) ─────────────────────────
+
+.color-field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  padding: 6px 9px;
+}
+
+.color-field input[type="color"] {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.color-field--compact {
+  padding: 5px 9px;
+}
+
+.color-field__hex {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: 12px;
+}
+
+// ───────────────────────── thin scroll (horizontal chip strips / grid) ─────────────────────────
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.thin-scroll::-webkit-scrollbar {
+  display: none;
+  width: 6px;
+  height: 6px;
+}
+
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+// ───────────────────────── text field ─────────────────────────
+
+.field {
+  height: 30px;
+  padding: 0 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: 11.5px;
+  font-weight: 600;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+}
+
+textarea.field {
+  height: auto;
+  padding: 8px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+// ───────────────────────── labeled row (bordered card with content + control) ─────────────────────────
+
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+}
+
+.field-row__label {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ───────────────────────── select ─────────────────────────
+
+.select-wrap {
+  position: relative;
+  display: flex;
+}
+
+.select {
+  width: 100%;
+  height: 30px;
+  padding: 0 28px 0 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+}
+
+.select-wrap__icon {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+// ───────────────────────── range slider ─────────────────────────
+
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 0;
+    margin-top: -5px;
+    box-shadow: 0 0 0 1px var(--accent-ring);
+  }
+
+  &::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: transparent;
+  }
+}
+
+// ───────────────────────── fullscreen modal (Dialog replacement) ─────────────────────────
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-page);
+  overflow: auto;
+}
+
+// ───────────────────────── context menu ─────────────────────────
+
+.menu {
+  position: fixed;
+  z-index: 1100;
+  min-width: 170px;
+  padding: 4px 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px #00000066;
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #ffffff0f;
+  }
+
+  &:disabled {
+    opacity: .4;
+    cursor: not-allowed;
+  }
+}
+
+// ───────────────────────── spinner ─────────────────────────
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #ffffff40;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+// ───────────────────────── indeterminate progress bar ─────────────────────────
+
+.progress-bar {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  overflow: hidden;
+}
+
+.progress-bar__fill {
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: indeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+
+// ───────────────────────── tooltip (CSS-only, via data-tooltip) ─────────────────────────
+
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000000;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 1200;
+}
+}

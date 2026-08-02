@@ -1,0 +1,167 @@
+.chapters-tab {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+// ───────────────────────── landing ─────────────────────────
+
+.chapters-tab--landing {
+  padding: 16px;
+  gap: 12px;
+}
+
+.chapters-tab__landing-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.chapters-tab__intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 18px 16px;
+}
+
+.chapters-tab__intro-icon {
+  color: var(--accent);
+}
+
+.chapters-tab__intro-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.chapters-tab__intro-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.chapters-tab__landing-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chapters-tab__lang-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  color: var(--text-dim);
+}
+
+.chapters-tab__lang-row .select {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  padding: 5px 6px;
+  background: var(--bg-input-dark);
+  font-size: 11.5px;
+}
+
+.chapters-tab__generate-btn.btn--primary {
+  min-width: 0;
+}
+
+// ───────────────────────── results ─────────────────────────
+
+.chapters-tab__back {
+  flex-shrink: 0;
+  align-self: center;
+  margin: 0 4px 0 8px;
+  color: var(--text-dim);
+
+  &:hover {
+    color: var(--text-body);
+  }
+}
+
+.chapters-tab__header-title {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--text-primary);
+}
+
+.chapters-tab__results-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.chapters-tab__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.chapters-tab__section-label {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: .07em;
+}
+
+.chapters-tab__section-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chapters-tab__add-btn.btn--ghost {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 10.5px;
+  border-radius: var(--radius-md);
+}
+
+.chapters-tab__icon-action.btn--ghost {
+  height: 26px;
+  width: 26px;
+  padding: 0;
+  border-radius: var(--radius-md);
+}
+
+.chapters-tab__warning {
+  margin: 0 0 8px;
+  padding: 7px 9px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.chapters-tab__hint {
+  margin: 4px 0 0;
+  font-size: 10.5px;
+  color: var(--text-ghost);
+}
+
+.chapters-tab__results-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.chapters-tab__markers-btn.btn--secondary,
+.chapters-tab__copy-btn.btn--primary {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+}

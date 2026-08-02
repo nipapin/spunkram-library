@@ -1,0 +1,50 @@
+.scrub-number {
+  display: inline-flex;
+  align-items: center;
+  min-width: 36px;
+  justify-content: flex-end;
+  cursor: ew-resize;
+  user-select: none;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+
+  &:hover {
+    background: var(--accent-soft);
+  }
+}
+
+.scrub-number--editing {
+  cursor: text;
+  background: var(--bg-input);
+  border: 1px solid var(--accent);
+  padding: 0 4px;
+}
+
+.scrub-number__value {
+  white-space: nowrap;
+}
+
+.scrub-number__input {
+  width: 48px;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--text-body);
+  font-family: var(--font-family);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  padding: 2px 0;
+}
+
+.scrub-number__suffix {
+  margin-left: 2px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+}

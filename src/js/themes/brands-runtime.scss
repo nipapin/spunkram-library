@@ -1,0 +1,12 @@
+// Both brands as CSS-variable scopes — loaded in DEV for flyout switching.
+@use "./gal" as gal;
+@use "./spunkram" as spunk;
+@use "./css-vars" as cv;
+
+:root[data-brand="gal"] {
+  @include cv.emit-tokens(gal.$tokens);
+}
+
+:root[data-brand="spunkram"] {
+  @include cv.emit-tokens(spunk.$tokens);
+}

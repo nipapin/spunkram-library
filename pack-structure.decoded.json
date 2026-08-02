@@ -1,0 +1,2177 @@
+{
+  "_meta": {
+    "source": "C:\\Users\\nipap\\Pictures\\Stocks\\Wedding Package - PR__1780066532811\\Wedding Package for Premiere Pro.spunkram",
+    "decodedAt": "2026-08-01T00:55:04.782Z",
+    "note": "Decoded Atom/Spunkram pack (settings + full structure).",
+    "groupLevelFieldsFound": [
+      "change_auto_size_sequence",
+      "custom_assets_folder",
+      "custom_preview_res_thumbnail",
+      "custom_source_type",
+      "group_resize_properties",
+      "preview[].custom_args",
+      "preview[].enabled",
+      "preview[].name",
+      "preview[].options",
+      "preview_name_instead_id"
+    ]
+  },
+  "settings": {
+    "main": {
+      "name": "Wedding Package",
+      "version": "1.0.0",
+      "required_app_version": "1.0.0",
+      "software_id": "PR",
+      "software_version": "CC23",
+      "engine_pack": "_COMPOSER",
+      "inside_security": "",
+      "required_purchase_code": true,
+      "cc_author_username": "SpunkramTemp"
+    },
+    "inside_option_sets": {
+      "use_webm_preview": true,
+      "files_protection_method": "BIN_AX",
+      "source_type": "FULL_PROJECT",
+      "auto_size_sequence": "ALL_ITEMS",
+      "auto_size_footage": "ALL_ITEMS",
+      "customizer_control_range": {
+        "Slider": [
+          -2000,
+          2000
+        ],
+        "Slider 2": [
+          0,
+          200
+        ]
+      }
+    },
+    "stylization": {
+      "header_color_hex": "#EF0BA2"
+    }
+  },
+  "structure": {
+    "Transitions": {
+      "Bokeh": {
+        "Fast": {
+          "preview": {
+            "TRN_BKH 01": {
+              "enabled": true,
+              "name": "Bokeh Transition Fast - 01",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 02": {
+              "enabled": true,
+              "name": "Bokeh Transition Fast - 02",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 03": {
+              "enabled": true,
+              "name": "Bokeh Transition Fast - 03",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 04": {
+              "enabled": true,
+              "name": "Bokeh Transition Fast - 04",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 05": {
+              "enabled": true,
+              "name": "Bokeh Transition Fast - 05",
+              "options": false,
+              "custom_args": {}
+            }
+          },
+          "preview_name_instead_id": true,
+          "custom_assets_folder": "Bokeh Transitions"
+        },
+        "Normal": {
+          "preview": {
+            "TRN_BKH 01": {
+              "enabled": true,
+              "name": "Bokeh Transition - 01",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 02": {
+              "enabled": true,
+              "name": "Bokeh Transition - 02",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 03": {
+              "enabled": true,
+              "name": "Bokeh Transition - 03",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 04": {
+              "enabled": true,
+              "name": "Bokeh Transition - 04",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 05": {
+              "enabled": true,
+              "name": "Bokeh Transition - 05",
+              "options": false,
+              "custom_args": {}
+            }
+          },
+          "preview_name_instead_id": true,
+          "custom_assets_folder": "Bokeh Transitions"
+        }
+      },
+      "Leaks": {
+        "Fast": {
+          "preview": {
+            "TRN_BKH 01": {
+              "enabled": true,
+              "name": "Leaks Transition Fast - 21",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 02": {
+              "enabled": true,
+              "name": "Leaks Transition Fast - 22",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 03": {
+              "enabled": true,
+              "name": "Leaks Transition Fast - 23",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 04": {
+              "enabled": true,
+              "name": "Leaks Transition Fast - 24",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 05": {
+              "enabled": true,
+              "name": "Leaks Transition Fast - 25",
+              "options": false,
+              "custom_args": {}
+            }
+          },
+          "preview_name_instead_id": true,
+          "custom_assets_folder": "Leaks Transitions"
+        },
+        "Normal": {
+          "preview": {
+            "TRN_BKH 01": {
+              "enabled": true,
+              "name": "Leaks Transition - 21",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 02": {
+              "enabled": true,
+              "name": "Leaks Transition - 22",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 03": {
+              "enabled": true,
+              "name": "Leaks Transition - 23",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 04": {
+              "enabled": true,
+              "name": "Leaks Transition - 24",
+              "options": false,
+              "custom_args": {}
+            },
+            "TRN_BKH 05": {
+              "enabled": true,
+              "name": "Leaks Transition - 25",
+              "options": false,
+              "custom_args": {}
+            }
+          },
+          "preview_name_instead_id": true,
+          "custom_assets_folder": "Leaks Transitions"
+        }
+      },
+      "Camera": {
+        "preview": {
+          "TRNS_CAM 01": {
+            "enabled": true,
+            "name": "Camera Transition 04",
+            "options": false,
+            "custom_args": {}
+          },
+          "TRNS_CAM 02": {
+            "enabled": true,
+            "name": "Camera Transition 06",
+            "options": false,
+            "custom_args": {}
+          },
+          "TRNS_CAM 03": {
+            "enabled": true,
+            "name": "Camera Transition 08",
+            "options": false,
+            "custom_args": {}
+          },
+          "TRNS_CAM 04": {
+            "enabled": true,
+            "name": "Camera Transition 10",
+            "options": false,
+            "custom_args": {}
+          },
+          "TRNS_CAM 05": {
+            "enabled": true,
+            "name": "Camera Transition 15",
+            "options": false,
+            "custom_args": {}
+          },
+          "TRNS_CAM 06": {
+            "enabled": true,
+            "name": "Camera Transition 17",
+            "options": false,
+            "custom_args": {}
+          },
+          "TRNS_CAM 07": {
+            "enabled": true,
+            "name": "Camera Transition 20",
+            "options": false,
+            "custom_args": {}
+          },
+          "TRNS_CAM 08": {
+            "enabled": true,
+            "name": "Camera Transition 26",
+            "options": false,
+            "custom_args": {}
+          },
+          "TRNS_CAM 09": {
+            "enabled": true,
+            "name": "Camera Transition 27",
+            "options": false,
+            "custom_args": {}
+          },
+          "TRNS_CAM 10": {
+            "enabled": true,
+            "name": "Camera Transition 30",
+            "options": false,
+            "custom_args": {}
+          }
+        },
+        "preview_name_instead_id": true,
+        "custom_assets_folder": "Camera Transitions"
+      },
+      "Prismatic Flares": {
+        "preview": {
+          "PRSFLAR 01": {
+            "enabled": true,
+            "name": "Prismatic Flares Slow 01",
+            "options": false,
+            "custom_args": {}
+          },
+          "PRSFLAR 02": {
+            "enabled": true,
+            "name": "Prismatic Flares Slow 02",
+            "options": false,
+            "custom_args": {}
+          },
+          "PRSFLAR 03": {
+            "enabled": true,
+            "name": "Prismatic Flares Slow 03",
+            "options": false,
+            "custom_args": {}
+          },
+          "PRSFLAR 04": {
+            "enabled": true,
+            "name": "Prismatic Flares Slow 04",
+            "options": false,
+            "custom_args": {}
+          },
+          "PRSFLAR 05": {
+            "enabled": true,
+            "name": "Prismatic Flares Slow 05",
+            "options": false,
+            "custom_args": {}
+          },
+          "PRSFLAR 06": {
+            "enabled": true,
+            "name": "Prismatic Flares Slow 06",
+            "options": false,
+            "custom_args": {}
+          },
+          "PRSFLAR 07": {
+            "enabled": true,
+            "name": "Prismatic Flares Slow 07",
+            "options": false,
+            "custom_args": {}
+          },
+          "PRSFLAR 08": {
+            "enabled": true,
+            "name": "Prismatic Flares Slow 08",
+            "options": false,
+            "custom_args": {}
+          },
+          "PRSFLAR 09": {
+            "enabled": true,
+            "name": "Prismatic Flares Slow 09",
+            "options": false,
+            "custom_args": {}
+          },
+          "PRSFLAR 10": {
+            "enabled": true,
+            "name": "Prismatic Flares Slow 10",
+            "options": false,
+            "custom_args": {}
+          }
+        },
+        "preview_name_instead_id": true,
+        "custom_assets_folder": "Prismatic Flares Transitions"
+      }
+    },
+    "Effects": {
+      "Prismatic Effect": {
+        "preview": {
+          "FX_PRISM_01": {
+            "enabled": true,
+            "name": "Prismatic Effect - 11",
+            "options": false,
+            "custom_args": {}
+          },
+          "FX_PRISM_02": {
+            "enabled": true,
+            "name": "Prismatic Effect - 12",
+            "options": false,
+            "custom_args": {}
+          },
+          "FX_PRISM_03": {
+            "enabled": true,
+            "name": "Prismatic Effect - 13",
+            "options": false,
+            "custom_args": {}
+          },
+          "FX_PRISM_04": {
+            "enabled": true,
+            "name": "Prismatic Effect - 14",
+            "options": false,
+            "custom_args": {}
+          },
+          "FX_PRISM_05": {
+            "enabled": true,
+            "name": "Prismatic Effect - 15",
+            "options": false,
+            "custom_args": {}
+          },
+          "FX_PRISM_06": {
+            "enabled": true,
+            "name": "Prismatic Effect - 16",
+            "options": false,
+            "custom_args": {}
+          },
+          "FX_PRISM_07": {
+            "enabled": true,
+            "name": "Prismatic Effect - 17",
+            "options": false,
+            "custom_args": {}
+          },
+          "FX_PRISM_08": {
+            "enabled": true,
+            "name": "Prismatic Effect - 18",
+            "options": false,
+            "custom_args": {}
+          },
+          "FX_PRISM_09": {
+            "enabled": true,
+            "name": "Prismatic Effect - 19",
+            "options": false,
+            "custom_args": {}
+          },
+          "FX_PRISM_10": {
+            "enabled": true,
+            "name": "Prismatic Effect - 20",
+            "options": false,
+            "custom_args": {}
+          }
+        },
+        "custom_assets_folder": "Prismatic Effect",
+        "preview_name_instead_id": true
+      },
+      "Light Leaks": {
+        "preview": {
+          "LL 01": {
+            "enabled": true,
+            "name": "Light Leaks 01",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Screen",
+              "duration_ticks": 152409600000000
+            }
+          },
+          "LL 02": {
+            "enabled": true,
+            "name": "Light Leaks 02",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Screen",
+              "duration_ticks": 152409600000000
+            }
+          },
+          "LL 03": {
+            "enabled": true,
+            "name": "Light Leaks 03",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Screen",
+              "duration_ticks": 152409600000000
+            }
+          },
+          "LL 04": {
+            "enabled": true,
+            "name": "Light Leaks 04",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Screen",
+              "duration_ticks": 152409600000000
+            }
+          },
+          "LL 05": {
+            "enabled": true,
+            "name": "Light Leaks 05",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Screen",
+              "duration_ticks": 152409600000000
+            }
+          },
+          "LL 06": {
+            "enabled": true,
+            "name": "Light Leaks 06",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Screen",
+              "duration_ticks": 152409600000000
+            }
+          },
+          "LL 07": {
+            "enabled": true,
+            "name": "Light Leaks 07",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Screen",
+              "duration_ticks": 152409600000000
+            }
+          },
+          "LL 08": {
+            "enabled": true,
+            "name": "Light Leaks 08",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Screen",
+              "duration_ticks": 152409600000000
+            }
+          },
+          "LL 09": {
+            "enabled": true,
+            "name": "Light Leaks 09",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Screen",
+              "duration_ticks": 152409600000000
+            }
+          },
+          "LL 10": {
+            "enabled": true,
+            "name": "Light Leaks 10",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Screen",
+              "duration_ticks": 152409600000000
+            }
+          }
+        },
+        "custom_source_type": "MOGRT",
+        "preview_name_instead_id": true,
+        "change_auto_size_sequence": "NONE",
+        "group_resize_properties": {
+          "Width": 3840,
+          "Height": 2160
+        }
+      },
+      "Bokeh": {
+        "preview": {
+          "BOKEH 01": {
+            "enabled": true,
+            "name": "Bokeh Light Leaks 01",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Linear Dodge",
+              "duration_ticks": 2540160000000
+            }
+          },
+          "BOKEH 02": {
+            "enabled": true,
+            "name": "Bokeh Light Leaks 02",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Linear Dodge",
+              "duration_ticks": 2540160000000
+            }
+          },
+          "BOKEH 03": {
+            "enabled": true,
+            "name": "Bokeh Light Leaks 03",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Linear Dodge",
+              "duration_ticks": 2540160000000
+            }
+          },
+          "BOKEH 04": {
+            "enabled": true,
+            "name": "Bokeh Light Leaks 04",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Linear Dodge",
+              "duration_ticks": 2540160000000
+            }
+          },
+          "BOKEH 05": {
+            "enabled": true,
+            "name": "Bokeh Light Leaks 05",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Linear Dodge",
+              "duration_ticks": 2540160000000
+            }
+          },
+          "BOKEH 06": {
+            "enabled": true,
+            "name": "Bokeh Light Leaks 06",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Linear Dodge",
+              "duration_ticks": 2540160000000
+            }
+          },
+          "BOKEH 07": {
+            "enabled": true,
+            "name": "Bokeh Light Leaks 07",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Linear Dodge",
+              "duration_ticks": 2540160000000
+            }
+          },
+          "BOKEH 08": {
+            "enabled": true,
+            "name": "Bokeh Light Leaks 08",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Linear Dodge",
+              "duration_ticks": 2540160000000
+            }
+          },
+          "BOKEH 09": {
+            "enabled": true,
+            "name": "Bokeh Light Leaks 09",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Linear Dodge",
+              "duration_ticks": 2540160000000
+            }
+          },
+          "BOKEH 10": {
+            "enabled": true,
+            "name": "Bokeh Light Leaks 10",
+            "options": false,
+            "custom_args": {
+              "layer_blendmode": "Linear Dodge",
+              "duration_ticks": 2540160000000
+            }
+          }
+        },
+        "custom_source_type": "MOGRT",
+        "preview_name_instead_id": true,
+        "change_auto_size_sequence": "NONE",
+        "group_resize_properties": {
+          "Width": 3840,
+          "Height": 2160
+        }
+      },
+      "Camera Overlays": {
+        "preview": {
+          "CAM 01": {
+            "enabled": true,
+            "name": "Camera Overlay 06",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 2540160000000
+            }
+          },
+          "CAM 02": {
+            "enabled": true,
+            "name": "Camera Overlay 07",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 2540160000000
+            }
+          },
+          "CAM 03": {
+            "enabled": true,
+            "name": "Camera Overlay 09",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 2540160000000
+            }
+          },
+          "CAM 04": {
+            "enabled": true,
+            "name": "Camera Overlay 14",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 2540160000000
+            }
+          },
+          "CAM 05": {
+            "enabled": true,
+            "name": "Camera Overlay 15",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 2540160000000
+            }
+          },
+          "CAM 06": {
+            "enabled": true,
+            "name": "Camera Overlay 21",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 2540160000000
+            }
+          },
+          "CAM 07": {
+            "enabled": true,
+            "name": "Camera Overlay 22",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 2540160000000
+            }
+          },
+          "CAM 08": {
+            "enabled": true,
+            "name": "Camera Overlay 24",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 2540160000000
+            }
+          },
+          "CAM 09": {
+            "enabled": true,
+            "name": "Camera Overlay 25",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 2540160000000
+            }
+          },
+          "CAM 10": {
+            "enabled": true,
+            "name": "Camera Overlay 30",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 2540160000000
+            }
+          }
+        },
+        "custom_source_type": "MOGRT",
+        "preview_name_instead_id": true,
+        "change_auto_size_sequence": "NONE",
+        "group_resize_properties": {
+          "Width": 3840,
+          "Height": 2160
+        }
+      }
+    },
+    "Color Presets": {
+      "Warm": {
+        "preview": {
+          "CP_WARM 01": {
+            "enabled": true,
+            "name": "Wedding Warm Color Preset - 01",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_WARM 02": {
+            "enabled": true,
+            "name": "Wedding Warm Color Preset - 02",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_WARM 03": {
+            "enabled": true,
+            "name": "Wedding Warm Color Preset - 03",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_WARM 04": {
+            "enabled": true,
+            "name": "Wedding Warm Color Preset - 04",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_WARM 05": {
+            "enabled": true,
+            "name": "Wedding Warm Color Preset - 05",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_WARM 06": {
+            "enabled": true,
+            "name": "Wedding Warm Color Preset - 06",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_WARM 07": {
+            "enabled": true,
+            "name": "Wedding Warm Color Preset - 07",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_WARM 08": {
+            "enabled": true,
+            "name": "Wedding Warm Color Preset - 08",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_WARM 09": {
+            "enabled": true,
+            "name": "Wedding Warm Color Preset - 09",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_WARM 10": {
+            "enabled": true,
+            "name": "Wedding Warm Color Preset - 10",
+            "options": false,
+            "custom_args": {}
+          }
+        },
+        "preview_name_instead_id": true
+      },
+      "Cold": {
+        "preview": {
+          "CP_COLD 01": {
+            "enabled": true,
+            "name": "Wedding Cold Color Preset - 01",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_COLD 02": {
+            "enabled": true,
+            "name": "Wedding Cold Color Preset - 02",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_COLD 03": {
+            "enabled": true,
+            "name": "Wedding Cold Color Preset - 03",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_COLD 04": {
+            "enabled": true,
+            "name": "Wedding Cold Color Preset - 04",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_COLD 05": {
+            "enabled": true,
+            "name": "Wedding Cold Color Preset - 05",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_COLD 06": {
+            "enabled": true,
+            "name": "Wedding Cold Color Preset - 06",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_COLD 07": {
+            "enabled": true,
+            "name": "Wedding Cold Color Preset - 07",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_COLD 08": {
+            "enabled": true,
+            "name": "Wedding Cold Color Preset - 08",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_COLD 09": {
+            "enabled": true,
+            "name": "Wedding Cold Color Preset - 09",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_COLD 10": {
+            "enabled": true,
+            "name": "Wedding Cold Color Preset - 10",
+            "options": false,
+            "custom_args": {}
+          }
+        },
+        "preview_name_instead_id": true
+      },
+      "Colorful": {
+        "preview": {
+          "CP_CLF 01": {
+            "enabled": true,
+            "name": "Wedding Colorful Color Preset - 01",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_CLF 02": {
+            "enabled": true,
+            "name": "Wedding Colorful Color Preset - 02",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_CLF 03": {
+            "enabled": true,
+            "name": "Wedding Colorful Color Preset - 03",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_CLF 04": {
+            "enabled": true,
+            "name": "Wedding Colorful Color Preset - 04",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_CLF 05": {
+            "enabled": true,
+            "name": "Wedding Colorful Color Preset - 05",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_CLF 06": {
+            "enabled": true,
+            "name": "Wedding Colorful Color Preset - 06",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_CLF 07": {
+            "enabled": true,
+            "name": "Wedding Colorful Color Preset - 07",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_CLF 08": {
+            "enabled": true,
+            "name": "Wedding Colorful Color Preset - 08",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_CLF 09": {
+            "enabled": true,
+            "name": "Wedding Colorful Color Preset - 09",
+            "options": false,
+            "custom_args": {}
+          },
+          "CP_CLF 10": {
+            "enabled": true,
+            "name": "Wedding Colorful Color Preset - 10",
+            "options": false,
+            "custom_args": {}
+          }
+        },
+        "preview_name_instead_id": true
+      }
+    },
+    "Titles": {
+      "Basic": {
+        "preview": {
+          "WBT 01": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 01",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 02": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 02",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 03": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 03",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 04": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 04",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 05": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 05",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 06": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 06",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 07": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 07",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 08": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 08",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 09": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 09",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 10": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 10",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 11": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 11",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 12": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 12",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 13": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 13",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 14": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 14",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 15": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 15",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 16": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 16",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 17": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 17",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 18": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 18",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 19": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 19",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 20": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 20",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 21": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 21",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 22": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 22",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 23": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 23",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 24": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 24",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 25": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 25",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 26": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 26",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 27": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 27",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 28": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 28",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 29": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 29",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 30": {
+            "enabled": true,
+            "name": "Basic Wedding Title - 30",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 31": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 31",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 32": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 32",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 33": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 33",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 34": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 34",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 35": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 35",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 36": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 36",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 37": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 37",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 38": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 38",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 39": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 39",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 40": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 40",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 41": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 41",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 42": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 42",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 43": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 43",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 44": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 44",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 45": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 45",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 46": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 46",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 47": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 47",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 48": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 48",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 49": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 49",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WBT 50": {
+            "enabled": false,
+            "name": "Basic Wedding Title - 50",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          }
+        },
+        "custom_source_type": "MOGRT",
+        "preview_name_instead_id": true
+      },
+      "Romantic": {
+        "preview": {
+          "WRT 01": {
+            "enabled": true,
+            "name": "Romantic Wedding Title 01",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 02": {
+            "enabled": true,
+            "name": "Romantic Wedding Title 02",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 03": {
+            "enabled": true,
+            "name": "Romantic Wedding Title 03",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 04": {
+            "enabled": true,
+            "name": "Romantic Wedding Title 04",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 05": {
+            "enabled": true,
+            "name": "Romantic Wedding Title 05",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 06": {
+            "enabled": true,
+            "name": "Romantic Wedding Title 06",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 07": {
+            "enabled": true,
+            "name": "Romantic Wedding Title 07",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 08": {
+            "enabled": true,
+            "name": "Romantic Wedding Title 08",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 09": {
+            "enabled": true,
+            "name": "Romantic Wedding Title 09",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 10": {
+            "enabled": true,
+            "name": "Romantic Wedding Title 10",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 11": {
+            "enabled": false,
+            "name": "Romantic Wedding Title 11",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 12": {
+            "enabled": false,
+            "name": "Romantic Wedding Title 12",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 13": {
+            "enabled": false,
+            "name": "Romantic Wedding Title 13",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 14": {
+            "enabled": false,
+            "name": "Romantic Wedding Title 14",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WRT 15": {
+            "enabled": false,
+            "name": "Romantic Wedding Title 15",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          }
+        },
+        "custom_source_type": "MOGRT",
+        "preview_name_instead_id": true
+      },
+      "Elegant": {
+        "preview": {
+          "WET 01": {
+            "enabled": true,
+            "name": "Elegant Title 01",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 02": {
+            "enabled": true,
+            "name": "Elegant Title 02",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 03": {
+            "enabled": true,
+            "name": "Elegant Title 03",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 04": {
+            "enabled": true,
+            "name": "Elegant Title 04",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 05": {
+            "enabled": true,
+            "name": "Elegant Title 05",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 06": {
+            "enabled": true,
+            "name": "Elegant Title 06",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 07": {
+            "enabled": true,
+            "name": "Elegant Title 07",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 08": {
+            "enabled": true,
+            "name": "Elegant Title 08",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 09": {
+            "enabled": true,
+            "name": "Elegant Title 09",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 10": {
+            "enabled": true,
+            "name": "Elegant Title 10",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 11": {
+            "enabled": false,
+            "name": "Elegant Title 11",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 12": {
+            "enabled": false,
+            "name": "Elegant Title 12",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 13": {
+            "enabled": false,
+            "name": "Elegant Title 13",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 14": {
+            "enabled": false,
+            "name": "Elegant Title 14",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 15": {
+            "enabled": false,
+            "name": "Elegant Title 15",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 16": {
+            "enabled": false,
+            "name": "Elegant Title 16",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 17": {
+            "enabled": false,
+            "name": "Elegant Title 17",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 18": {
+            "enabled": false,
+            "name": "Elegant Title 18",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 19": {
+            "enabled": false,
+            "name": "Elegant Title 19",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 20": {
+            "enabled": false,
+            "name": "Elegant Title 20",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 21": {
+            "enabled": false,
+            "name": "Elegant Title 21",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 22": {
+            "enabled": false,
+            "name": "Elegant Title 22",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 23": {
+            "enabled": false,
+            "name": "Elegant Title 23",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 24": {
+            "enabled": false,
+            "name": "Elegant Title 24",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 25": {
+            "enabled": false,
+            "name": "Elegant Title 25",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 26": {
+            "enabled": false,
+            "name": "Elegant Title 26",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 27": {
+            "enabled": false,
+            "name": "Elegant Title 27",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 28": {
+            "enabled": false,
+            "name": "Elegant Title 28",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 29": {
+            "enabled": false,
+            "name": "Elegant Title 29",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "WET 30": {
+            "enabled": false,
+            "name": "Elegant Title 30",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          }
+        },
+        "custom_source_type": "MOGRT",
+        "preview_name_instead_id": true
+      }
+    },
+    "Lower Thirds": {
+      "preview": {
+        "LT 01": {
+          "enabled": true,
+          "name": "Wedding Lower Third 01",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 02": {
+          "enabled": true,
+          "name": "Wedding Lower Third 02",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 03": {
+          "enabled": true,
+          "name": "Wedding Lower Third 03",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 04": {
+          "enabled": true,
+          "name": "Wedding Lower Third 04",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 05": {
+          "enabled": true,
+          "name": "Wedding Lower Third 05",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 06": {
+          "enabled": true,
+          "name": "Wedding Lower Third 06",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 07": {
+          "enabled": true,
+          "name": "Wedding Lower Third 07",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 08": {
+          "enabled": true,
+          "name": "Wedding Lower Third 08",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 09": {
+          "enabled": true,
+          "name": "Wedding Lower Third 09",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 10": {
+          "enabled": true,
+          "name": "Wedding Lower Third 10",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 11": {
+          "enabled": true,
+          "name": "Wedding Lower Third 11",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 12": {
+          "enabled": true,
+          "name": "Wedding Lower Third 12",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 13": {
+          "enabled": true,
+          "name": "Wedding Lower Third 13",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 14": {
+          "enabled": true,
+          "name": "Wedding Lower Third 14",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 15": {
+          "enabled": true,
+          "name": "Wedding Lower Third 15",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 16": {
+          "enabled": true,
+          "name": "Wedding Lower Third 16",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 17": {
+          "enabled": true,
+          "name": "Wedding Lower Third 17",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 18": {
+          "enabled": true,
+          "name": "Wedding Lower Third 18",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 19": {
+          "enabled": true,
+          "name": "Wedding Lower Third 19",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 20": {
+          "enabled": true,
+          "name": "Wedding Lower Third 20",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 21": {
+          "enabled": true,
+          "name": "Wedding Lower Third 21",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 22": {
+          "enabled": true,
+          "name": "Wedding Lower Third 22",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 23": {
+          "enabled": true,
+          "name": "Wedding Lower Third 23",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 24": {
+          "enabled": true,
+          "name": "Wedding Lower Third 24",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 25": {
+          "enabled": true,
+          "name": "Wedding Lower Third 25",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 26": {
+          "enabled": true,
+          "name": "Wedding Lower Third 26",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 27": {
+          "enabled": true,
+          "name": "Wedding Lower Third 27",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 28": {
+          "enabled": true,
+          "name": "Wedding Lower Third 28",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 29": {
+          "enabled": true,
+          "name": "Wedding Lower Third 29",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        },
+        "LT 30": {
+          "enabled": true,
+          "name": "Wedding Lower Third 30",
+          "options": false,
+          "custom_args": {
+            "duration_ticks": 3810240000000
+          }
+        }
+      },
+      "custom_source_type": "MOGRT",
+      "preview_name_instead_id": true
+    },
+    "Slides": {
+      "Minimalistic": {
+        "preview": {
+          "SL_MIN 01": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 01",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 02": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 02",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 03": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 03",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 04": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 04",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 05": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 05",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 06": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 06",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 07": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 07",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 08": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 08",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 09": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 09",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 10": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 10",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 11": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 11",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 12": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 12",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 13": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 13",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 14": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 14",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          },
+          "SL_MIN 15": {
+            "enabled": true,
+            "name": "Wedding Minimalistic Slide 15",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 5080320000000
+            }
+          }
+        },
+        "custom_source_type": "MOGRT",
+        "preview_name_instead_id": true
+      }
+    },
+    "Stories": {
+      "Minimalistic": {
+        "preview": {
+          "STR_MIN 01": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 01",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 02": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 02",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 03": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 03",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 04": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 04",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 05": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 05",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 06": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 06",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 07": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 07",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 08": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 08",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 09": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 09",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 10": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 10",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 11": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 11",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 12": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 12",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 13": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 13",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 14": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 14",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          },
+          "STR_MIN 15": {
+            "enabled": true,
+            "name": "Minimalistic Wedding Story 15",
+            "options": false,
+            "custom_args": {
+              "duration_ticks": 3810240000000
+            }
+          }
+        },
+        "custom_preview_res_thumbnail": "VERTICAL",
+        "custom_source_type": "MOGRT",
+        "preview_name_instead_id": true
+      }
+    }
+  }
+}

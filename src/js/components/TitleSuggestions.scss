@@ -1,0 +1,49 @@
+.title-suggestions {
+  margin-bottom: 16px;
+}
+
+.title-suggestions__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.title-suggestions__regenerate.btn--ghost {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 10.5px;
+  border-radius: var(--radius-md);
+}
+
+.title-suggestions__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title-suggestions__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.title-suggestions__input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-input);
+  background: var(--bg-input-dark);
+  color: var(--text-primary);
+  font-weight: 600;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+}
+
+.title-suggestions__copy {
+  flex-shrink: 0;
+}

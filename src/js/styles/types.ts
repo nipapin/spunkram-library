@@ -1,0 +1,115 @@
+import type { ControlValues, MogrtDefinition } from "../presets/types";
+
+export type CaptionProjectFile = "mogrt" | "aep" | "definition";
+
+/** Caption из GET /api/captions (плоская запись с категорией). */
+export interface CaptionCatalogEntry {
+  id: string;
+  name: string;
+  slug: string;
+  categoryName: string;
+  categorySlug: string;
+  previewImageUrl: string | null;
+  previewVideoUrl: string | null;
+  files: {
+    mogrt: boolean;
+    aep: boolean;
+    definition: boolean;
+  };
+}
+
+export interface CaptionCatalogCategory {
+  name: string;
+  slug: string;
+  captions: CaptionCatalogEntry[];
+}
+
+export interface CaptionCatalogResponse {
+  rootConfigured: boolean;
+  categories: CaptionCatalogCategory[];
+}
+
+/** @deprecated alias — раньше был flat style catalog */
+export type CaptionStyleCatalogItem = CaptionCatalogEntry;
+
+export interface StylePreviewColors {
+  text?: string;
+  highlight?: string;
+  background?: string;
+}
+
+/**
+ * Источник пресета в UI:
+ * - catalog — есть в каталоге, пакет ещё не скачан
+ * - downloaded — серверный пакет лежит в AppData
+ * - user — локальная пользовательская копия / Save as New
+ */
+export type PresetSource = "catalog" | "downloaded" | "user";
+
+export type PresetOrigin = { name: string; values: ControlValues };
+
+/** Пресет в UI / локальном стейте. */
+export interface StylePreset {
+  id: string;
+  name: string;
+  favorite: boolean;
+  /** id на сервере (`Category/Caption Folder`). */
+  styleId: string;
+  /** версия/метка локального пакета (downloadedAt). */
+  styleVersion: string;
+  source: PresetSource;
+  values: ControlValues;
+  origin: PresetOrigin;
+  /** на сервере версия новее локальной (сейчас не используется — у API нет version). */
+  updateAvailable?: boolean;
+  preview?: StylePreviewColors;
+  categoryName?: string;
+  /** Пока — имя категории; позже придут с сервера. */
+  tags?: string[];
+  previewImageUrl?: string | null;
+  previewVideoUrl?: string | null;
+  files?: CaptionCatalogEntry["files"];
+}
+
+/** manifest.json скачанного пакета в AppData/styles/{safeId}/ */
+export interface LocalStyleManifest {
+  id: string;
+  name: string;
+  version: string;
+  downloadedAt: string;
+  files: {
+    definition?: string;
+    aep?: string;
+    mogrt?: string;
+  };
+}
+
+/** Полный пакет после скачивания / чтения с диска. */
+export interface LocalStylePackage {
+  manifest: LocalStyleManifest;
+  definition: MogrtDefinition;
+  dir: string;
+}
+
+/** Локальный UI-стейт (выбор, избранное, user-пресеты, правки скачанных). */
+export interface StylesLocalState {
+  version: number;
+  selectedPresetId: string;
+  favorites: Record<string, boolean>;
+  userPresets: StylePreset[];
+  /** Сохранённые правки скачанных серверных пресетов (ключ = styleId). */
+  downloadedEdits: Record<string, StylePreset>;
+}
+
+export type StylesSyncStatus = "idle" | "loading" | "ready" | "error";
+
+export interface StylesSyncResult {
+  presets: StylePreset[];
+  definitions: Record<string, MogrtDefinition>;
+  catalog: CaptionCatalogEntry[];
+  categories: CaptionCatalogCategory[];
+  selectedPresetId: string;
+  error?: string;
+}
+
+export const EMPTY_DEFINITION: MogrtDefinition = { clientControls: [] };

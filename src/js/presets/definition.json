@@ -1,0 +1,898 @@
+{
+  "aelibCompliantVersion": "201710",
+  "apiVersion": "1.9",
+  "authorApp": "aefx",
+  "authorID": "",
+  "capsuleID": "46d8af74-cd63-43b5-b1bb-04bbe7f70b53",
+  "capsuleName": "Base Caption",
+  "capsuleNameLocalized": { "strDB": [{ "localeString": "en_US", "str": "Base Caption" }] },
+  "capsuleTags": [],
+  "clientControls": [
+    {
+      "canAnimate": true,
+      "groupexpanded": true,
+      "id": "e72e7e42-ce76-4907-9160-795a8a27963e",
+      "type": 10,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Text" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": ["a4d98fb2-0362-48fd-8e10-5fe84145a773", "3386c5c5-585f-4df7-a652-66de88449217"]
+    },
+    {
+      "canAnimate": true,
+      "groupexpanded": false,
+      "id": "3386c5c5-585f-4df7-a652-66de88449217",
+      "type": 10,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Base" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": [
+        "d11df408-8858-4a10-95d0-53d1ef21dcff",
+        "f0c5304e-a3b8-4d82-b8d8-0b01544b9355",
+        "aa686173-cf53-4467-9e24-76a14a7dcb7c",
+        "83104fa3-efa2-4d77-8947-655df922b109"
+      ]
+    },
+    {
+      "canAnimate": true,
+      "id": "d11df408-8858-4a10-95d0-53d1ef21dcff",
+      "type": 4,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Fill" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": [0.018362168222665787, 0.78039216995239258, 0.48454529047012329, 1]
+    },
+    {
+      "canAnimate": true,
+      "id": "83104fa3-efa2-4d77-8947-655df922b109",
+      "type": 4,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Stroke" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": [1, 1, 1, 1]
+    },
+    {
+      "canAnimate": true,
+      "id": "f0c5304e-a3b8-4d82-b8d8-0b01544b9355",
+      "max": 100,
+      "min": 0,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Stroke Width" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 0
+    },
+    {
+      "canAnimate": true,
+      "id": "aa686173-cf53-4467-9e24-76a14a7dcb7c",
+      "max": 100,
+      "min": 0,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Opacity" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 100
+    },
+    {
+      "canAnimate": true,
+      "groupexpanded": true,
+      "id": "a4d98fb2-0362-48fd-8e10-5fe84145a773",
+      "type": 10,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Spacing" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": ["da3db975-fcfb-4b52-8f22-98e58e0dc6b0", "eaa6d202-7eb2-4cd8-93e2-6d6d63ebd765"]
+    },
+    {
+      "canAnimate": true,
+      "id": "eaa6d202-7eb2-4cd8-93e2-6d6d63ebd765",
+      "max": 50,
+      "min": -50,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Tracking" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 0
+    },
+    {
+      "canAnimate": true,
+      "id": "da3db975-fcfb-4b52-8f22-98e58e0dc6b0",
+      "max": 100,
+      "min": -100,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Spacing" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 0
+    },
+    {
+      "canAnimate": true,
+      "groupexpanded": true,
+      "id": "8a7fc0f6-8b69-4c32-ba93-7a82c0004a23",
+      "type": 10,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Background" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": [
+        "000bd452-b7a3-4001-8e21-75b892f3b666",
+        "55759e7f-2d06-407d-bd14-1d6078360be2",
+        "fe2c2b23-4525-45c8-a0bd-015870ea1b81",
+        "612ce348-d432-4019-9432-ec5b491899f8",
+        "da1c725d-e8ce-4bd8-8198-a709ac0c4d18",
+        "e3c3d7bc-759e-4b7c-be07-942ee894864b",
+        "7430e118-5be3-44e2-8f79-e83726cd05b7",
+        "3be8f372-2d28-4d10-87b2-d4b06bc17f7e"
+      ]
+    },
+    {
+      "canAnimate": true,
+      "id": "7430e118-5be3-44e2-8f79-e83726cd05b7",
+      "type": 1,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Enable" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": true
+    },
+    {
+      "canAnimate": true,
+      "id": "612ce348-d432-4019-9432-ec5b491899f8",
+      "type": 4,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Fill" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": [0.22968094050884247, 0.13464051485061646, 0.40392157435417175, 1]
+    },
+    {
+      "canAnimate": true,
+      "id": "da1c725d-e8ce-4bd8-8198-a709ac0c4d18",
+      "type": 4,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Stroke" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": [1, 1, 1, 1]
+    },
+    {
+      "canAnimate": true,
+      "id": "e3c3d7bc-759e-4b7c-be07-942ee894864b",
+      "max": 100,
+      "min": 0,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Stroke Width" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 0
+    },
+    {
+      "canAnimate": true,
+      "id": "fe2c2b23-4525-45c8-a0bd-015870ea1b81",
+      "max": 100,
+      "min": 0,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Roundness" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 0
+    },
+    {
+      "canAnimate": true,
+      "id": "000bd452-b7a3-4001-8e21-75b892f3b666",
+      "max": 100,
+      "min": 0,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Padding X" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 40
+    },
+    {
+      "canAnimate": true,
+      "id": "55759e7f-2d06-407d-bd14-1d6078360be2",
+      "max": 100,
+      "min": 0,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Padding Y" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 20
+    },
+    {
+      "canAnimate": true,
+      "id": "3be8f372-2d28-4d10-87b2-d4b06bc17f7e",
+      "max": 100,
+      "min": 0,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Opacity" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 100
+    },
+    {
+      "canAnimate": true,
+      "groupexpanded": true,
+      "id": "345c74db-8090-442d-8e1e-c7754e72b272",
+      "type": 10,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Highlight" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": [
+        "83127550-c081-4051-bd37-a22b1319ea77",
+        "ff8a7924-41c7-4f2f-aab8-4e63ab058b7f",
+        "f2292423-f41f-44d6-bb71-efa000e934d2",
+        "ca4b4ce4-f825-4d77-922f-8c8633ad9f17",
+        "80a56406-054b-4085-978f-e8e97b928a81"
+      ]
+    },
+    {
+      "canAnimate": true,
+      "id": "ca4b4ce4-f825-4d77-922f-8c8633ad9f17",
+      "type": 1,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Enable" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": true
+    },
+    {
+      "canAnimate": true,
+      "id": "83127550-c081-4051-bd37-a22b1319ea77",
+      "type": 4,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Fill" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": [1, 0, 0.82352954149246216, 1]
+    },
+    {
+      "canAnimate": true,
+      "id": "ff8a7924-41c7-4f2f-aab8-4e63ab058b7f",
+      "type": 4,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Stroke" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": [1, 1, 1, 1]
+    },
+    {
+      "canAnimate": true,
+      "id": "f2292423-f41f-44d6-bb71-efa000e934d2",
+      "max": 100,
+      "min": 0,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Stroke Width" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 0
+    },
+    {
+      "canAnimate": true,
+      "groupexpanded": true,
+      "id": "80a56406-054b-4085-978f-e8e97b928a81",
+      "type": 10,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Background" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": [
+        "d3efb41b-f1ba-4370-a8a0-ec82e4ab600a",
+        "fdc6dc5d-f232-4ae8-acd4-85ac7596967f",
+        "104d1846-f870-4ca9-81a0-280023a09077",
+        "a53f4efb-bb8b-44c9-9430-3118d7c16390",
+        "bf7eb6e0-cf82-4f57-b42a-582ce36fcba4",
+        "0bb97d08-9cb5-4c5c-9a1b-d508b9b59232"
+      ]
+    },
+    {
+      "canAnimate": true,
+      "id": "fdc6dc5d-f232-4ae8-acd4-85ac7596967f",
+      "type": 1,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Enable" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": true
+    },
+    {
+      "canAnimate": true,
+      "id": "d3efb41b-f1ba-4370-a8a0-ec82e4ab600a",
+      "type": 4,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Fill" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": [0, 1, 0.65882366895675659, 1]
+    },
+    {
+      "canAnimate": true,
+      "id": "104d1846-f870-4ca9-81a0-280023a09077",
+      "max": 100,
+      "min": -50,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Padding X" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 19.800000000000001
+    },
+    {
+      "canAnimate": true,
+      "id": "a53f4efb-bb8b-44c9-9430-3118d7c16390",
+      "max": 100,
+      "min": -50,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Padding Y" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 20.300000000000001
+    },
+    {
+      "canAnimate": true,
+      "id": "bf7eb6e0-cf82-4f57-b42a-582ce36fcba4",
+      "max": 100,
+      "min": 0,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Roundness" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 0
+    },
+    {
+      "canAnimate": true,
+      "id": "0bb97d08-9cb5-4c5c-9a1b-d508b9b59232",
+      "max": 100,
+      "min": 0,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Opacity" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 100
+    },
+    {
+      "canAnimate": true,
+      "groupexpanded": false,
+      "id": "e0e67e8e-b00d-476d-9dfa-39f79e8339bb",
+      "type": 10,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Global" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": ["b80fe1e5-1126-452f-aa65-c6627a18f908", "c868dc23-cf41-42e9-8d9d-9004e7571f56"]
+    },
+    {
+      "canAnimate": true,
+      "id": "c868dc23-cf41-42e9-8d9d-9004e7571f56",
+      "type": 5,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Control Position" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": { "x": 960, "y": 864 }
+    },
+    {
+      "canAnimate": true,
+      "id": "b80fe1e5-1126-452f-aa65-c6627a18f908",
+      "max": 300,
+      "min": 0,
+      "type": 2,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Scale" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": 100
+    },
+    {
+      "canAnimate": true,
+      "groupexpanded": false,
+      "id": "6c84d2e6-35c0-460b-8c5d-001d0ac954d3",
+      "type": 10,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "System" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": ["501d0fff-9e71-4b49-9b29-1419866a6135", "afac0c17-5ca3-42c0-9cab-7e8723b7f311", "a627739a-60f1-4c40-a861-7026f59244c1"]
+    },
+    {
+      "alternateRectInfo": { "compId": -1, "isEnabled": false, "layerId": -1 },
+      "canAnimate": true,
+      "fonteditinfo": {
+        "capPropFontEdit": false,
+        "capPropFontFauxStyleEdit": false,
+        "capPropFontSizeEdit": false,
+        "fontEditValue": "Montserrat-Bold",
+        "fontFSAllCapsValue": false,
+        "fontFSBoldValue": false,
+        "fontFSItalicValue": false,
+        "fontFSSmallCapsValue": false,
+        "fontSizeEditValue": 100
+      },
+      "id": "501d0fff-9e71-4b49-9b29-1419866a6135",
+      "type": 6,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Main text" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": { "strDB": [{ "localeString": "en_US", "str": "captions text\rtwo rows" }] }
+    },
+    {
+      "alternateRectInfo": { "compId": -1, "isEnabled": false, "layerId": -1 },
+      "canAnimate": true,
+      "fonteditinfo": {
+        "capPropFontEdit": false,
+        "capPropFontFauxStyleEdit": false,
+        "capPropFontSizeEdit": false,
+        "fontEditValue": "Montserrat-Bold",
+        "fontFSAllCapsValue": false,
+        "fontFSBoldValue": false,
+        "fontFSItalicValue": false,
+        "fontFSSmallCapsValue": false,
+        "fontSizeEditValue": 100
+      },
+      "id": "a627739a-60f1-4c40-a861-7026f59244c1",
+      "type": 6,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "Highlight text" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": { "strDB": [{ "localeString": "en_US", "str": "captions text\rtwo rows" }] }
+    },
+    {
+      "alternateRectInfo": { "compId": -1, "isEnabled": false, "layerId": -1 },
+      "canAnimate": true,
+      "fonteditinfo": {
+        "capPropFontEdit": false,
+        "capPropFontFauxStyleEdit": false,
+        "capPropFontSizeEdit": false,
+        "fontEditValue": "Montserrat-ExtraLight",
+        "fontFSAllCapsValue": false,
+        "fontFSBoldValue": false,
+        "fontFSItalicValue": false,
+        "fontFSSmallCapsValue": false,
+        "fontSizeEditValue": 100
+      },
+      "id": "afac0c17-5ca3-42c0-9cab-7e8723b7f311",
+      "type": 6,
+      "uiName": { "strDB": [{ "localeString": "en_US", "str": "timings" }] },
+      "uiSuffix": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "uiToolTip": { "strDB": [{ "localeString": "en_US", "str": "" }] },
+      "value": {
+        "strDB": [
+          {
+            "localeString": "en_US",
+            "str": "[\r  {\r    \"text\": \"captions\",\r    \"timestamp\": [4.12, 4.36]\r  },\r  {\r    \"text\": \"text\",\r    \"timestamp\": [4.36, 4.88]\r  },\r  {\r    \"text\": \"two\",\r    \"timestamp\": [4.88, 5]\r  },\r  {\r    \"text\": \"rows\",\r    \"timestamp\": [5, 5.20]\r  }\r]"
+          }
+        ]
+      }
+    }
+  ],
+  "description": "",
+  "internalEffectsOnlyVersion": "0",
+  "licenseID": "",
+  "mobileCompatibilityVersion": "201904",
+  "platformSupport": ["ppro"],
+  "responsiveDesignVersion": "0",
+  "sourceInfoLocalized": {
+    "en_US": {
+      "alphachanneltype": 1,
+      "alphamattecolorb": 0,
+      "alphamattecolorg": 0,
+      "alphamattecolorr": 0,
+      "anywhereassetrequestinfo": {
+        "mAssetInfo": { "mAssetIdentifier": "", "mProductionIdentifier": "", "mProductionRevision": "" },
+        "mServerConnectInfo": { "mAuthToken": "", "mEARPort": "", "mUserName": "" }
+      },
+      "anywhereproductionrequestinfo": {
+        "mProductionInfo": { "mDisplayName": "", "mProductionIdentifier": "", "mRevision": "" },
+        "mServerConnectInfo": { "mAuthToken": "", "mEARPort": "", "mUserName": "" }
+      },
+      "appspecificsourceinfo": "{\"applicationID\":\"AfterEffects\",\"artisanQuality\":0,\"capsuleparamvalues\":{\"capParamValues\":[]},\"downSampleX\":1,\"downSampleY\":1,\"enableMenaIndic\":false,\"fieldType\":4,\"flatArtisanOptions\":[0,0,0,1,0,0,0,0,0,0,0,0],\"needsToPatchSourceForDownsample\":false,\"renderguidelayers\":false,\"stretchFactor\":1,\"stretchOffset\":0,\"useAELib\":false,\"version\":10}",
+      "audiochannellayout": [{ "channellabel": 100 }, { "channellabel": 101 }],
+      "audiosamplerate": { "ticksperframe": 5292000 },
+      "capsuleparams": {
+        "capParams": [
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": ["a4d98fb2-0362-48fd-8e10-5fe84145a773", "3386c5c5-585f-4df7-a652-66de88449217"],
+            "capPropGroupExpanded": true,
+            "capPropMatchName": "e72e7e42-ce76-4907-9160-795a8a27963e",
+            "capPropType": 8,
+            "capPropUIName": "Text"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [
+              "d11df408-8858-4a10-95d0-53d1ef21dcff",
+              "f0c5304e-a3b8-4d82-b8d8-0b01544b9355",
+              "aa686173-cf53-4467-9e24-76a14a7dcb7c",
+              "83104fa3-efa2-4d77-8947-655df922b109"
+            ],
+            "capPropGroupExpanded": false,
+            "capPropMatchName": "3386c5c5-585f-4df7-a652-66de88449217",
+            "capPropType": 8,
+            "capPropUIName": "Base"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [0.018362168222665787, 0.78039216995239258, 0.48454529047012329, 1],
+            "capPropMatchName": "d11df408-8858-4a10-95d0-53d1ef21dcff",
+            "capPropType": 3,
+            "capPropUIName": "Fill"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [1, 1, 1, 1],
+            "capPropMatchName": "83104fa3-efa2-4d77-8947-655df922b109",
+            "capPropType": 3,
+            "capPropUIName": "Stroke"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 0,
+            "capPropMatchName": "f0c5304e-a3b8-4d82-b8d8-0b01544b9355",
+            "capPropMax": 100,
+            "capPropMin": 0,
+            "capPropType": 1,
+            "capPropUIName": "Stroke Width"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 100,
+            "capPropMatchName": "aa686173-cf53-4467-9e24-76a14a7dcb7c",
+            "capPropMax": 100,
+            "capPropMin": 0,
+            "capPropType": 1,
+            "capPropUIName": "Opacity"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": ["da3db975-fcfb-4b52-8f22-98e58e0dc6b0", "eaa6d202-7eb2-4cd8-93e2-6d6d63ebd765"],
+            "capPropGroupExpanded": true,
+            "capPropMatchName": "a4d98fb2-0362-48fd-8e10-5fe84145a773",
+            "capPropType": 8,
+            "capPropUIName": "Spacing"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 0,
+            "capPropMatchName": "eaa6d202-7eb2-4cd8-93e2-6d6d63ebd765",
+            "capPropMax": 50,
+            "capPropMin": -50,
+            "capPropType": 1,
+            "capPropUIName": "Tracking"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 0,
+            "capPropMatchName": "da3db975-fcfb-4b52-8f22-98e58e0dc6b0",
+            "capPropMax": 100,
+            "capPropMin": -100,
+            "capPropType": 1,
+            "capPropUIName": "Spacing"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [
+              "000bd452-b7a3-4001-8e21-75b892f3b666",
+              "55759e7f-2d06-407d-bd14-1d6078360be2",
+              "fe2c2b23-4525-45c8-a0bd-015870ea1b81",
+              "612ce348-d432-4019-9432-ec5b491899f8",
+              "da1c725d-e8ce-4bd8-8198-a709ac0c4d18",
+              "e3c3d7bc-759e-4b7c-be07-942ee894864b",
+              "7430e118-5be3-44e2-8f79-e83726cd05b7",
+              "3be8f372-2d28-4d10-87b2-d4b06bc17f7e"
+            ],
+            "capPropGroupExpanded": true,
+            "capPropMatchName": "8a7fc0f6-8b69-4c32-ba93-7a82c0004a23",
+            "capPropType": 8,
+            "capPropUIName": "Background"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": true,
+            "capPropMatchName": "7430e118-5be3-44e2-8f79-e83726cd05b7",
+            "capPropType": 2,
+            "capPropUIName": "Enable"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [0.22968094050884247, 0.13464051485061646, 0.40392157435417175, 1],
+            "capPropMatchName": "612ce348-d432-4019-9432-ec5b491899f8",
+            "capPropType": 3,
+            "capPropUIName": "Fill"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [1, 1, 1, 1],
+            "capPropMatchName": "da1c725d-e8ce-4bd8-8198-a709ac0c4d18",
+            "capPropType": 3,
+            "capPropUIName": "Stroke"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 0,
+            "capPropMatchName": "e3c3d7bc-759e-4b7c-be07-942ee894864b",
+            "capPropMax": 100,
+            "capPropMin": 0,
+            "capPropType": 1,
+            "capPropUIName": "Stroke Width"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 0,
+            "capPropMatchName": "fe2c2b23-4525-45c8-a0bd-015870ea1b81",
+            "capPropMax": 100,
+            "capPropMin": 0,
+            "capPropType": 1,
+            "capPropUIName": "Roundness"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 40,
+            "capPropMatchName": "000bd452-b7a3-4001-8e21-75b892f3b666",
+            "capPropMax": 100,
+            "capPropMin": 0,
+            "capPropType": 1,
+            "capPropUIName": "Padding X"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 20,
+            "capPropMatchName": "55759e7f-2d06-407d-bd14-1d6078360be2",
+            "capPropMax": 100,
+            "capPropMin": 0,
+            "capPropType": 1,
+            "capPropUIName": "Padding Y"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 100,
+            "capPropMatchName": "3be8f372-2d28-4d10-87b2-d4b06bc17f7e",
+            "capPropMax": 100,
+            "capPropMin": 0,
+            "capPropType": 1,
+            "capPropUIName": "Opacity"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [
+              "83127550-c081-4051-bd37-a22b1319ea77",
+              "ff8a7924-41c7-4f2f-aab8-4e63ab058b7f",
+              "f2292423-f41f-44d6-bb71-efa000e934d2",
+              "ca4b4ce4-f825-4d77-922f-8c8633ad9f17",
+              "80a56406-054b-4085-978f-e8e97b928a81"
+            ],
+            "capPropGroupExpanded": true,
+            "capPropMatchName": "345c74db-8090-442d-8e1e-c7754e72b272",
+            "capPropType": 8,
+            "capPropUIName": "Highlight"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": true,
+            "capPropMatchName": "ca4b4ce4-f825-4d77-922f-8c8633ad9f17",
+            "capPropType": 2,
+            "capPropUIName": "Enable"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [1, 0, 0.82352954149246216, 1],
+            "capPropMatchName": "83127550-c081-4051-bd37-a22b1319ea77",
+            "capPropType": 3,
+            "capPropUIName": "Fill"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [1, 1, 1, 1],
+            "capPropMatchName": "ff8a7924-41c7-4f2f-aab8-4e63ab058b7f",
+            "capPropType": 3,
+            "capPropUIName": "Stroke"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 0,
+            "capPropMatchName": "f2292423-f41f-44d6-bb71-efa000e934d2",
+            "capPropMax": 100,
+            "capPropMin": 0,
+            "capPropType": 1,
+            "capPropUIName": "Stroke Width"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [
+              "d3efb41b-f1ba-4370-a8a0-ec82e4ab600a",
+              "fdc6dc5d-f232-4ae8-acd4-85ac7596967f",
+              "104d1846-f870-4ca9-81a0-280023a09077",
+              "a53f4efb-bb8b-44c9-9430-3118d7c16390",
+              "bf7eb6e0-cf82-4f57-b42a-582ce36fcba4",
+              "0bb97d08-9cb5-4c5c-9a1b-d508b9b59232"
+            ],
+            "capPropGroupExpanded": true,
+            "capPropMatchName": "80a56406-054b-4085-978f-e8e97b928a81",
+            "capPropType": 8,
+            "capPropUIName": "Background"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": true,
+            "capPropMatchName": "fdc6dc5d-f232-4ae8-acd4-85ac7596967f",
+            "capPropType": 2,
+            "capPropUIName": "Enable"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [0, 1, 0.65882366895675659, 1],
+            "capPropMatchName": "d3efb41b-f1ba-4370-a8a0-ec82e4ab600a",
+            "capPropType": 3,
+            "capPropUIName": "Fill"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 19.800000000000001,
+            "capPropMatchName": "104d1846-f870-4ca9-81a0-280023a09077",
+            "capPropMax": 100,
+            "capPropMin": -50,
+            "capPropType": 1,
+            "capPropUIName": "Padding X"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 20.300000000000001,
+            "capPropMatchName": "a53f4efb-bb8b-44c9-9430-3118d7c16390",
+            "capPropMax": 100,
+            "capPropMin": -50,
+            "capPropType": 1,
+            "capPropUIName": "Padding Y"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 0,
+            "capPropMatchName": "bf7eb6e0-cf82-4f57-b42a-582ce36fcba4",
+            "capPropMax": 100,
+            "capPropMin": 0,
+            "capPropType": 1,
+            "capPropUIName": "Roundness"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 100,
+            "capPropMatchName": "0bb97d08-9cb5-4c5c-9a1b-d508b9b59232",
+            "capPropMax": 100,
+            "capPropMin": 0,
+            "capPropType": 1,
+            "capPropUIName": "Opacity"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": ["b80fe1e5-1126-452f-aa65-c6627a18f908", "c868dc23-cf41-42e9-8d9d-9004e7571f56"],
+            "capPropGroupExpanded": false,
+            "capPropMatchName": "e0e67e8e-b00d-476d-9dfa-39f79e8339bb",
+            "capPropType": 8,
+            "capPropUIName": "Global"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [960, 864],
+            "capPropMatchName": "c868dc23-cf41-42e9-8d9d-9004e7571f56",
+            "capPropType": 6,
+            "capPropUIName": "Control Position"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDecimals": 0,
+            "capPropDefault": 100,
+            "capPropMatchName": "b80fe1e5-1126-452f-aa65-c6627a18f908",
+            "capPropMax": 300,
+            "capPropMin": 0,
+            "capPropType": 1,
+            "capPropUIName": "Scale"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": [
+              "501d0fff-9e71-4b49-9b29-1419866a6135",
+              "afac0c17-5ca3-42c0-9cab-7e8723b7f311",
+              "a627739a-60f1-4c40-a861-7026f59244c1"
+            ],
+            "capPropGroupExpanded": false,
+            "capPropMatchName": "6c84d2e6-35c0-460b-8c5d-001d0ac954d3",
+            "capPropType": 8,
+            "capPropUIName": "System"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": "captions text\rtwo rows",
+            "capPropFontEdit": false,
+            "capPropFontFauxStyleEdit": false,
+            "capPropFontSizeEdit": false,
+            "capPropMatchName": "501d0fff-9e71-4b49-9b29-1419866a6135",
+            "capPropTextRunCount": 1,
+            "capPropType": 0,
+            "capPropUIName": "Main text",
+            "fontEditValue": ["Montserrat-Bold"],
+            "fontFSAllCapsValue": [false],
+            "fontFSBoldValue": [false],
+            "fontFSItalicValue": [false],
+            "fontFSSmallCapsValue": [false],
+            "fontSizeEditValue": [100],
+            "fontTextRunLength": [22],
+            "textEditValue": "captions text\rtwo rows"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": "captions text\rtwo rows",
+            "capPropFontEdit": false,
+            "capPropFontFauxStyleEdit": false,
+            "capPropFontSizeEdit": false,
+            "capPropMatchName": "a627739a-60f1-4c40-a861-7026f59244c1",
+            "capPropTextRunCount": 1,
+            "capPropType": 0,
+            "capPropUIName": "Highlight text",
+            "fontEditValue": ["Montserrat-Bold"],
+            "fontFSAllCapsValue": [false],
+            "fontFSBoldValue": [false],
+            "fontFSItalicValue": [false],
+            "fontFSSmallCapsValue": [false],
+            "fontSizeEditValue": [100],
+            "fontTextRunLength": [22],
+            "textEditValue": "captions text\rtwo rows"
+          },
+          {
+            "capPropAnimatable": false,
+            "capPropDefault": "[\r  {\r    \"text\": \"captions\",\r    \"timestamp\": [4.12, 4.36]\r  },\r  {\r    \"text\": \"text\",\r    \"timestamp\": [4.36, 4.88]\r  },\r  {\r    \"text\": \"two\",\r    \"timestamp\": [4.88, 5]\r  },\r  {\r    \"text\": \"rows\",\r    \"timestamp\": [5, 5.20]\r  }\r]",
+            "capPropFontEdit": false,
+            "capPropFontFauxStyleEdit": false,
+            "capPropFontSizeEdit": false,
+            "capPropMatchName": "afac0c17-5ca3-42c0-9cab-7e8723b7f311",
+            "capPropTextRunCount": 1,
+            "capPropType": 0,
+            "capPropUIName": "timings",
+            "fontEditValue": ["Montserrat-ExtraLight"],
+            "fontFSAllCapsValue": [false],
+            "fontFSBoldValue": [false],
+            "fontFSItalicValue": [false],
+            "fontFSSmallCapsValue": [false],
+            "fontSizeEditValue": [100],
+            "fontTextRunLength": [235],
+            "textEditValue": "[\r  {\r    \"text\": \"captions\",\r    \"timestamp\": [4.12, 4.36]\r  },\r  {\r    \"text\": \"text\",\r    \"timestamp\": [4.36, 4.88]\r  },\r  {\r    \"text\": \"two\",\r    \"timestamp\": [4.88, 5]\r  },\r  {\r    \"text\": \"rows\",\r    \"timestamp\": [5, 5.20]\r  }\r]"
+          }
+        ]
+      },
+      "colorSpace": { "baseColorProfile": { "colorProfileName": "BT.709 RGB Full" }, "baseProfileType": 1 },
+      "currenttime": { "scale": 1, "value": 0 },
+      "duration": { "scale": 1, "value": 60 },
+      "enableLogColorManagement": false,
+      "fieldtype": 4,
+      "framerate": { "ticksperframe": 10160640000 },
+      "framesize": { "size": { "x": 1920, "y": 1080 }, "topleft": { "x": 0, "y": 0 } },
+      "hasFrozenUnstretchableRegions": false,
+      "hasaudio": false,
+      "hasvideo": true,
+      "id": "00000a46-0000-0000-0000-000000000000",
+      "initialcontentstate": "dc81b51f-e462-0139-79f4-09a1b6392b43",
+      "inpoint": { "scale": 1, "value": -400000 },
+      "isdropframe": true,
+      "ismedia": false,
+      "isxmpwritable": false,
+      "mediaproducerdescription": "",
+      "missingassets": { "missAssetsPropMissingFonts": [], "missAssetsPropMissingFootage": [], "missAssetsPropMissingPlugins": [] },
+      "name": "Base Caption",
+      "nativefieldtype": 4,
+      "outpoint": { "scale": 1, "value": -400000 },
+      "parentprojectfile": "C:\\Users\\nipap\\AppData\\Local\\Temp\\aegraphic\\4fcec2df-9c94-4dbb-899f-f41a198dfc05\\aemogrtFiles\\",
+      "pixelaspectratio": { "denominator": 1, "numerator": 1 },
+      "pixelformatlist": [
+        { "fourcc": 1650946625, "properties": 532772 },
+        { "fourcc": 1634887490, "properties": 524580 }
+      ],
+      "starttime": { "scale": 1, "value": 0 },
+      "supportsvideorenderingsessions": true,
+      "teamProjectName": "",
+      "workinpoint": { "scale": 1, "value": 0 },
+      "workoutpoint": { "scale": 1, "value": 60 }
+    }
+  },
+  "typekitOnlyVersion": "0",
+  "usedCompRenderers": ["ADBE Escher"],
+  "usedEffects": ["ADBE Checkbox Control", "ADBE Slider Control"],
+  "usedFileTypes": [],
+  "usedFontsLocalized": { "en_US": [] }
+}

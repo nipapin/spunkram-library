@@ -1,0 +1,2413 @@
+{
+    "text": " I am very proud to announce you guys our very own Premiere Pro and After Effects plugin Odin Pro. Adding it to Premiere Pro and After Effects it's like giving it steroids. It will enhance your editing skills like no other plugin does without the side effects. With high quality transitions like zooms, warp effects, split, arcane and film burns you don't need another transition again. These can be applied by simply picking the one you like and dragging it into the timeline. There you go. All transitions come with sound effects by default. If you don't want them, simply toggle the sound effects button here. Next, motion graphics. Everything from lower thirds, title animations, timers, and even text messages and tweets, everything you can imagine. They are applied the same way as transitions. You just drag them into the timeline. Then you can select them and adjust everything you want in the properties panel. You'll also get weather widgets, phone call animations, everything you can imagine. Next, title animations. These right here are all customizable title animations that you can again drag into the timeline, adjust it in the properties panel and boom, there you go. You've got some awesome typography slides, cool shapes, animated backgrounds from gradients to shapes, digital effects and lines, everything. Next up are the effects and overlays. You'll get high quality film looks with aspect ratios included, VHS effects, scratches, grains, everything. You've got glitch effects, bad signal, aberrations, leaks, camera shakes and it doesn't stop there. Sound effects. You can sound design any video with the sound effects included in this plugin. You can preview them before importing which is awesome. Odin Pro also works in After Effects in the exact same way. The plugin is updated constantly with new transitions, new effects, new motion graphics. It is constantly being refreshed so you'll always find something new. Also there's a free version. No trial with more than 50 free transitions, effects, motion graphics, no watermarks, completely for free. Download Odin Pro now for both Windows and MacOS.",
+    "chunks": [
+      {
+        "text": " I",
+        "timestamp": [
+          0,
+          0.1
+        ]
+      },
+      {
+        "text": " am",
+        "timestamp": [
+          0.1,
+          0.26
+        ]
+      },
+      {
+        "text": " very",
+        "timestamp": [
+          0.26,
+          0.46
+        ]
+      },
+      {
+        "text": " proud",
+        "timestamp": [
+          0.46,
+          0.86
+        ]
+      },
+      {
+        "text": " to",
+        "timestamp": [
+          0.86,
+          1.06
+        ]
+      },
+      {
+        "text": " announce",
+        "timestamp": [
+          1.06,
+          1.3
+        ]
+      },
+      {
+        "text": " you",
+        "timestamp": [
+          1.3,
+          1.54
+        ]
+      },
+      {
+        "text": " guys",
+        "timestamp": [
+          1.54,
+          1.72
+        ]
+      },
+      {
+        "text": " our",
+        "timestamp": [
+          1.72,
+          2.1
+        ]
+      },
+      {
+        "text": " very",
+        "timestamp": [
+          2.1,
+          2.5
+        ]
+      },
+      {
+        "text": " own",
+        "timestamp": [
+          2.5,
+          2.82
+        ]
+      },
+      {
+        "text": " Premiere",
+        "timestamp": [
+          2.82,
+          3.1
+        ]
+      },
+      {
+        "text": " Pro",
+        "timestamp": [
+          3.1,
+          3.38
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          3.38,
+          3.68
+        ]
+      },
+      {
+        "text": " After",
+        "timestamp": [
+          3.68,
+          4.06
+        ]
+      },
+      {
+        "text": " Effects",
+        "timestamp": [
+          4.06,
+          4.34
+        ]
+      },
+      {
+        "text": " plugin",
+        "timestamp": [
+          4.34,
+          4.68
+        ]
+      },
+      {
+        "text": " Odin",
+        "timestamp": [
+          4.68,
+          5.6
+        ]
+      },
+      {
+        "text": " Pro.",
+        "timestamp": [
+          5.6,
+          6.16
+        ]
+      },
+      {
+        "text": " Adding",
+        "timestamp": [
+          6.16,
+          6.46
+        ]
+      },
+      {
+        "text": " it",
+        "timestamp": [
+          6.46,
+          6.66
+        ]
+      },
+      {
+        "text": " to",
+        "timestamp": [
+          6.66,
+          6.8
+        ]
+      },
+      {
+        "text": " Premiere",
+        "timestamp": [
+          6.8,
+          7.08
+        ]
+      },
+      {
+        "text": " Pro",
+        "timestamp": [
+          7.08,
+          7.42
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          7.42,
+          7.7
+        ]
+      },
+      {
+        "text": " After",
+        "timestamp": [
+          7.7,
+          7.94
+        ]
+      },
+      {
+        "text": " Effects",
+        "timestamp": [
+          7.94,
+          8.3
+        ]
+      },
+      {
+        "text": " it's",
+        "timestamp": [
+          8.3,
+          8.58
+        ]
+      },
+      {
+        "text": " like",
+        "timestamp": [
+          8.58,
+          8.78
+        ]
+      },
+      {
+        "text": " giving",
+        "timestamp": [
+          8.78,
+          9.28
+        ]
+      },
+      {
+        "text": " it",
+        "timestamp": [
+          9.28,
+          9.5
+        ]
+      },
+      {
+        "text": " steroids.",
+        "timestamp": [
+          9.5,
+          10.28
+        ]
+      },
+      {
+        "text": " It",
+        "timestamp": [
+          10.28,
+          10.46
+        ]
+      },
+      {
+        "text": " will",
+        "timestamp": [
+          10.46,
+          10.62
+        ]
+      },
+      {
+        "text": " enhance",
+        "timestamp": [
+          10.62,
+          11.06
+        ]
+      },
+      {
+        "text": " your",
+        "timestamp": [
+          11.06,
+          11.36
+        ]
+      },
+      {
+        "text": " editing",
+        "timestamp": [
+          11.36,
+          11.7
+        ]
+      },
+      {
+        "text": " skills",
+        "timestamp": [
+          11.7,
+          12
+        ]
+      },
+      {
+        "text": " like",
+        "timestamp": [
+          12,
+          12.38
+        ]
+      },
+      {
+        "text": " no",
+        "timestamp": [
+          12.38,
+          12.7
+        ]
+      },
+      {
+        "text": " other",
+        "timestamp": [
+          12.7,
+          13.16
+        ]
+      },
+      {
+        "text": " plugin",
+        "timestamp": [
+          13.16,
+          13.6
+        ]
+      },
+      {
+        "text": " does",
+        "timestamp": [
+          13.6,
+          13.88
+        ]
+      },
+      {
+        "text": " without",
+        "timestamp": [
+          13.88,
+          14.5
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          14.5,
+          14.76
+        ]
+      },
+      {
+        "text": " side",
+        "timestamp": [
+          14.76,
+          14.98
+        ]
+      },
+      {
+        "text": " effects.",
+        "timestamp": [
+          14.98,
+          15.46
+        ]
+      },
+      {
+        "text": " With",
+        "timestamp": [
+          15.46,
+          15.68
+        ]
+      },
+      {
+        "text": " high",
+        "timestamp": [
+          15.68,
+          15.96
+        ]
+      },
+      {
+        "text": " quality",
+        "timestamp": [
+          15.96,
+          16.36
+        ]
+      },
+      {
+        "text": " transitions",
+        "timestamp": [
+          16.36,
+          17
+        ]
+      },
+      {
+        "text": " like",
+        "timestamp": [
+          17,
+          17.5
+        ]
+      },
+      {
+        "text": " zooms,",
+        "timestamp": [
+          17.5,
+          18.08
+        ]
+      },
+      {
+        "text": " warp",
+        "timestamp": [
+          18.08,
+          18.4
+        ]
+      },
+      {
+        "text": " effects,",
+        "timestamp": [
+          18.4,
+          19.02
+        ]
+      },
+      {
+        "text": " split,",
+        "timestamp": [
+          19.02,
+          19.6
+        ]
+      },
+      {
+        "text": " arcane",
+        "timestamp": [
+          19.6,
+          20.26
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          20.26,
+          20.44
+        ]
+      },
+      {
+        "text": " film",
+        "timestamp": [
+          20.44,
+          20.84
+        ]
+      },
+      {
+        "text": " burns",
+        "timestamp": [
+          20.84,
+          21.12
+        ]
+      },
+      {
+        "text": " you",
+        "timestamp": [
+          21.12,
+          21.52
+        ]
+      },
+      {
+        "text": " don't",
+        "timestamp": [
+          21.52,
+          21.96
+        ]
+      },
+      {
+        "text": " need",
+        "timestamp": [
+          21.96,
+          22.16
+        ]
+      },
+      {
+        "text": " another",
+        "timestamp": [
+          22.16,
+          22.46
+        ]
+      },
+      {
+        "text": " transition",
+        "timestamp": [
+          22.46,
+          23.04
+        ]
+      },
+      {
+        "text": " again.",
+        "timestamp": [
+          23.04,
+          23.6
+        ]
+      },
+      {
+        "text": " These",
+        "timestamp": [
+          23.6,
+          23.86
+        ]
+      },
+      {
+        "text": " can",
+        "timestamp": [
+          23.86,
+          24.06
+        ]
+      },
+      {
+        "text": " be",
+        "timestamp": [
+          24.06,
+          24.26
+        ]
+      },
+      {
+        "text": " applied",
+        "timestamp": [
+          24.26,
+          24.54
+        ]
+      },
+      {
+        "text": " by",
+        "timestamp": [
+          24.54,
+          24.9
+        ]
+      },
+      {
+        "text": " simply",
+        "timestamp": [
+          24.9,
+          25.28
+        ]
+      },
+      {
+        "text": " picking",
+        "timestamp": [
+          25.28,
+          25.68
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          25.68,
+          25.88
+        ]
+      },
+      {
+        "text": " one",
+        "timestamp": [
+          25.88,
+          26.08
+        ]
+      },
+      {
+        "text": " you",
+        "timestamp": [
+          26.08,
+          26.18
+        ]
+      },
+      {
+        "text": " like",
+        "timestamp": [
+          26.18,
+          26.5
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          26.5,
+          26.78
+        ]
+      },
+      {
+        "text": " dragging",
+        "timestamp": [
+          26.78,
+          27.16
+        ]
+      },
+      {
+        "text": " it",
+        "timestamp": [
+          27.16,
+          27.44
+        ]
+      },
+      {
+        "text": " into",
+        "timestamp": [
+          27.44,
+          27.62
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          27.62,
+          27.74
+        ]
+      },
+      {
+        "text": " timeline.",
+        "timestamp": [
+          27.74,
+          28.28
+        ]
+      },
+      {
+        "text": " There",
+        "timestamp": [
+          28.28,
+          29.86
+        ]
+      },
+      {
+        "text": " you",
+        "timestamp": [
+          29.86,
+          30.06
+        ]
+      },
+      {
+        "text": " go.",
+        "timestamp": [
+          30.06,
+          30.34
+        ]
+      },
+      {
+        "text": " All",
+        "timestamp": [
+          30.34,
+          30.54
+        ]
+      },
+      {
+        "text": " transitions",
+        "timestamp": [
+          30.54,
+          31.12
+        ]
+      },
+      {
+        "text": " come",
+        "timestamp": [
+          31.12,
+          31.56
+        ]
+      },
+      {
+        "text": " with",
+        "timestamp": [
+          31.56,
+          31.84
+        ]
+      },
+      {
+        "text": " sound",
+        "timestamp": [
+          31.84,
+          32.14
+        ]
+      },
+      {
+        "text": " effects",
+        "timestamp": [
+          32.14,
+          32.42
+        ]
+      },
+      {
+        "text": " by",
+        "timestamp": [
+          32.42,
+          32.68
+        ]
+      },
+      {
+        "text": " default.",
+        "timestamp": [
+          32.68,
+          33.28
+        ]
+      },
+      {
+        "text": " If",
+        "timestamp": [
+          33.28,
+          33.38
+        ]
+      },
+      {
+        "text": " you",
+        "timestamp": [
+          33.38,
+          33.5
+        ]
+      },
+      {
+        "text": " don't",
+        "timestamp": [
+          33.5,
+          33.82
+        ]
+      },
+      {
+        "text": " want",
+        "timestamp": [
+          33.82,
+          34
+        ]
+      },
+      {
+        "text": " them,",
+        "timestamp": [
+          34,
+          34.3
+        ]
+      },
+      {
+        "text": " simply",
+        "timestamp": [
+          34.3,
+          34.64
+        ]
+      },
+      {
+        "text": " toggle",
+        "timestamp": [
+          34.64,
+          34.98
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          34.98,
+          35.2
+        ]
+      },
+      {
+        "text": " sound",
+        "timestamp": [
+          35.2,
+          35.52
+        ]
+      },
+      {
+        "text": " effects",
+        "timestamp": [
+          35.52,
+          35.78
+        ]
+      },
+      {
+        "text": " button",
+        "timestamp": [
+          35.78,
+          36.14
+        ]
+      },
+      {
+        "text": " here.",
+        "timestamp": [
+          36.14,
+          36.76
+        ]
+      },
+      {
+        "text": " Next,",
+        "timestamp": [
+          36.76,
+          37.32
+        ]
+      },
+      {
+        "text": " motion",
+        "timestamp": [
+          37.32,
+          37.7
+        ]
+      },
+      {
+        "text": " graphics.",
+        "timestamp": [
+          37.7,
+          38.54
+        ]
+      },
+      {
+        "text": " Everything",
+        "timestamp": [
+          38.54,
+          38.92
+        ]
+      },
+      {
+        "text": " from",
+        "timestamp": [
+          38.92,
+          39.32
+        ]
+      },
+      {
+        "text": " lower",
+        "timestamp": [
+          39.32,
+          39.66
+        ]
+      },
+      {
+        "text": " thirds,",
+        "timestamp": [
+          39.66,
+          40.28
+        ]
+      },
+      {
+        "text": " title",
+        "timestamp": [
+          40.28,
+          40.52
+        ]
+      },
+      {
+        "text": " animations,",
+        "timestamp": [
+          40.52,
+          41.36
+        ]
+      },
+      {
+        "text": " timers,",
+        "timestamp": [
+          41.36,
+          41.9
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          41.9,
+          42.16
+        ]
+      },
+      {
+        "text": " even",
+        "timestamp": [
+          42.16,
+          42.5
+        ]
+      },
+      {
+        "text": " text",
+        "timestamp": [
+          42.5,
+          42.88
+        ]
+      },
+      {
+        "text": " messages",
+        "timestamp": [
+          42.88,
+          43.32
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          43.32,
+          43.56
+        ]
+      },
+      {
+        "text": " tweets,",
+        "timestamp": [
+          43.56,
+          44.12
+        ]
+      },
+      {
+        "text": " everything",
+        "timestamp": [
+          44.12,
+          44.5
+        ]
+      },
+      {
+        "text": " you",
+        "timestamp": [
+          44.5,
+          44.82
+        ]
+      },
+      {
+        "text": " can",
+        "timestamp": [
+          44.82,
+          44.98
+        ]
+      },
+      {
+        "text": " imagine.",
+        "timestamp": [
+          44.98,
+          45.48
+        ]
+      },
+      {
+        "text": " They",
+        "timestamp": [
+          45.48,
+          45.66
+        ]
+      },
+      {
+        "text": " are",
+        "timestamp": [
+          45.66,
+          45.88
+        ]
+      },
+      {
+        "text": " applied",
+        "timestamp": [
+          45.88,
+          46.28
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          46.28,
+          46.56
+        ]
+      },
+      {
+        "text": " same",
+        "timestamp": [
+          46.56,
+          46.86
+        ]
+      },
+      {
+        "text": " way",
+        "timestamp": [
+          46.86,
+          47.06
+        ]
+      },
+      {
+        "text": " as",
+        "timestamp": [
+          47.06,
+          47.2
+        ]
+      },
+      {
+        "text": " transitions.",
+        "timestamp": [
+          47.2,
+          47.78
+        ]
+      },
+      {
+        "text": " You",
+        "timestamp": [
+          47.78,
+          47.9
+        ]
+      },
+      {
+        "text": " just",
+        "timestamp": [
+          47.9,
+          48.16
+        ]
+      },
+      {
+        "text": " drag",
+        "timestamp": [
+          48.16,
+          48.54
+        ]
+      },
+      {
+        "text": " them",
+        "timestamp": [
+          48.54,
+          48.86
+        ]
+      },
+      {
+        "text": " into",
+        "timestamp": [
+          48.86,
+          49.08
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          49.08,
+          49.22
+        ]
+      },
+      {
+        "text": " timeline.",
+        "timestamp": [
+          49.22,
+          49.74
+        ]
+      },
+      {
+        "text": " Then",
+        "timestamp": [
+          49.74,
+          49.92
+        ]
+      },
+      {
+        "text": " you",
+        "timestamp": [
+          49.92,
+          50.04
+        ]
+      },
+      {
+        "text": " can",
+        "timestamp": [
+          50.04,
+          50.18
+        ]
+      },
+      {
+        "text": " select",
+        "timestamp": [
+          50.18,
+          50.58
+        ]
+      },
+      {
+        "text": " them",
+        "timestamp": [
+          50.58,
+          50.82
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          50.82,
+          51.12
+        ]
+      },
+      {
+        "text": " adjust",
+        "timestamp": [
+          51.12,
+          51.46
+        ]
+      },
+      {
+        "text": " everything",
+        "timestamp": [
+          51.46,
+          52.12
+        ]
+      },
+      {
+        "text": " you",
+        "timestamp": [
+          52.12,
+          52.48
+        ]
+      },
+      {
+        "text": " want",
+        "timestamp": [
+          52.48,
+          52.8
+        ]
+      },
+      {
+        "text": " in",
+        "timestamp": [
+          52.8,
+          52.94
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          52.94,
+          53.04
+        ]
+      },
+      {
+        "text": " properties",
+        "timestamp": [
+          53.04,
+          53.48
+        ]
+      },
+      {
+        "text": " panel.",
+        "timestamp": [
+          53.48,
+          54.06
+        ]
+      },
+      {
+        "text": " You'll",
+        "timestamp": [
+          54.06,
+          54.9
+        ]
+      },
+      {
+        "text": " also",
+        "timestamp": [
+          54.9,
+          55.1
+        ]
+      },
+      {
+        "text": " get",
+        "timestamp": [
+          55.1,
+          55.3
+        ]
+      },
+      {
+        "text": " weather",
+        "timestamp": [
+          55.3,
+          55.76
+        ]
+      },
+      {
+        "text": " widgets,",
+        "timestamp": [
+          55.76,
+          56.4
+        ]
+      },
+      {
+        "text": " phone",
+        "timestamp": [
+          56.4,
+          56.58
+        ]
+      },
+      {
+        "text": " call",
+        "timestamp": [
+          56.58,
+          56.9
+        ]
+      },
+      {
+        "text": " animations,",
+        "timestamp": [
+          56.9,
+          57.74
+        ]
+      },
+      {
+        "text": " everything",
+        "timestamp": [
+          57.74,
+          58.12
+        ]
+      },
+      {
+        "text": " you",
+        "timestamp": [
+          58.12,
+          58.42
+        ]
+      },
+      {
+        "text": " can",
+        "timestamp": [
+          58.42,
+          58.58
+        ]
+      },
+      {
+        "text": " imagine.",
+        "timestamp": [
+          58.58,
+          59.22
+        ]
+      },
+      {
+        "text": " Next,",
+        "timestamp": [
+          59.22,
+          59.64
+        ]
+      },
+      {
+        "text": " title",
+        "timestamp": [
+          59.64,
+          59.98
+        ]
+      },
+      {
+        "text": " animations.",
+        "timestamp": [
+          59.98,
+          60.74
+        ]
+      },
+      {
+        "text": " These",
+        "timestamp": [
+          60.74,
+          60.96
+        ]
+      },
+      {
+        "text": " right",
+        "timestamp": [
+          60.96,
+          61.26
+        ]
+      },
+      {
+        "text": " here",
+        "timestamp": [
+          61.26,
+          61.58
+        ]
+      },
+      {
+        "text": " are",
+        "timestamp": [
+          61.58,
+          61.9
+        ]
+      },
+      {
+        "text": " all",
+        "timestamp": [
+          61.9,
+          62.24
+        ]
+      },
+      {
+        "text": " customizable",
+        "timestamp": [
+          62.24,
+          62.84
+        ]
+      },
+      {
+        "text": " title",
+        "timestamp": [
+          62.84,
+          63.3
+        ]
+      },
+      {
+        "text": " animations",
+        "timestamp": [
+          63.3,
+          63.78
+        ]
+      },
+      {
+        "text": " that",
+        "timestamp": [
+          63.78,
+          64.12
+        ]
+      },
+      {
+        "text": " you",
+        "timestamp": [
+          64.12,
+          64.28
+        ]
+      },
+      {
+        "text": " can",
+        "timestamp": [
+          64.28,
+          64.48
+        ]
+      },
+      {
+        "text": " again",
+        "timestamp": [
+          64.48,
+          64.76
+        ]
+      },
+      {
+        "text": " drag",
+        "timestamp": [
+          64.76,
+          65.14
+        ]
+      },
+      {
+        "text": " into",
+        "timestamp": [
+          65.14,
+          65.52
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          65.52,
+          65.72
+        ]
+      },
+      {
+        "text": " timeline,",
+        "timestamp": [
+          65.72,
+          66.24
+        ]
+      },
+      {
+        "text": " adjust",
+        "timestamp": [
+          66.24,
+          66.6
+        ]
+      },
+      {
+        "text": " it",
+        "timestamp": [
+          66.6,
+          66.92
+        ]
+      },
+      {
+        "text": " in",
+        "timestamp": [
+          66.92,
+          67.04
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          67.04,
+          67.08
+        ]
+      },
+      {
+        "text": " properties",
+        "timestamp": [
+          67.08,
+          67.42
+        ]
+      },
+      {
+        "text": " panel",
+        "timestamp": [
+          67.42,
+          67.82
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          67.82,
+          68.28
+        ]
+      },
+      {
+        "text": " boom,",
+        "timestamp": [
+          68.28,
+          68.92
+        ]
+      },
+      {
+        "text": " there",
+        "timestamp": [
+          68.92,
+          69.18
+        ]
+      },
+      {
+        "text": " you",
+        "timestamp": [
+          69.18,
+          69.38
+        ]
+      },
+      {
+        "text": " go.",
+        "timestamp": [
+          69.38,
+          69.76
+        ]
+      },
+      {
+        "text": " You've",
+        "timestamp": [
+          69.76,
+          71.8
+        ]
+      },
+      {
+        "text": " got",
+        "timestamp": [
+          71.8,
+          72
+        ]
+      },
+      {
+        "text": " some",
+        "timestamp": [
+          72,
+          72.2
+        ]
+      },
+      {
+        "text": " awesome",
+        "timestamp": [
+          72.2,
+          72.72
+        ]
+      },
+      {
+        "text": " typography",
+        "timestamp": [
+          72.72,
+          73.36
+        ]
+      },
+      {
+        "text": " slides,",
+        "timestamp": [
+          73.36,
+          74.04
+        ]
+      },
+      {
+        "text": " cool",
+        "timestamp": [
+          74.04,
+          74.32
+        ]
+      },
+      {
+        "text": " shapes,",
+        "timestamp": [
+          74.32,
+          75.16
+        ]
+      },
+      {
+        "text": " animated",
+        "timestamp": [
+          75.16,
+          75.64
+        ]
+      },
+      {
+        "text": " backgrounds",
+        "timestamp": [
+          75.64,
+          76.3
+        ]
+      },
+      {
+        "text": " from",
+        "timestamp": [
+          76.3,
+          76.68
+        ]
+      },
+      {
+        "text": " gradients",
+        "timestamp": [
+          76.68,
+          77.32
+        ]
+      },
+      {
+        "text": " to",
+        "timestamp": [
+          77.32,
+          77.62
+        ]
+      },
+      {
+        "text": " shapes,",
+        "timestamp": [
+          77.62,
+          78.16
+        ]
+      },
+      {
+        "text": " digital",
+        "timestamp": [
+          78.16,
+          78.44
+        ]
+      },
+      {
+        "text": " effects",
+        "timestamp": [
+          78.44,
+          78.94
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          78.94,
+          79.28
+        ]
+      },
+      {
+        "text": " lines,",
+        "timestamp": [
+          79.28,
+          80.04
+        ]
+      },
+      {
+        "text": " everything.",
+        "timestamp": [
+          80.04,
+          80.86
+        ]
+      },
+      {
+        "text": " Next",
+        "timestamp": [
+          80.86,
+          81.28
+        ]
+      },
+      {
+        "text": " up",
+        "timestamp": [
+          81.28,
+          81.5
+        ]
+      },
+      {
+        "text": " are",
+        "timestamp": [
+          81.5,
+          81.74
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          81.74,
+          81.94
+        ]
+      },
+      {
+        "text": " effects",
+        "timestamp": [
+          81.94,
+          82.32
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          82.32,
+          82.66
+        ]
+      },
+      {
+        "text": " overlays.",
+        "timestamp": [
+          82.66,
+          83.64
+        ]
+      },
+      {
+        "text": " You'll",
+        "timestamp": [
+          83.64,
+          83.92
+        ]
+      },
+      {
+        "text": " get",
+        "timestamp": [
+          83.92,
+          84.14
+        ]
+      },
+      {
+        "text": " high",
+        "timestamp": [
+          84.14,
+          84.4
+        ]
+      },
+      {
+        "text": " quality",
+        "timestamp": [
+          84.4,
+          84.86
+        ]
+      },
+      {
+        "text": " film",
+        "timestamp": [
+          84.86,
+          85.28
+        ]
+      },
+      {
+        "text": " looks",
+        "timestamp": [
+          85.28,
+          85.58
+        ]
+      },
+      {
+        "text": " with",
+        "timestamp": [
+          85.58,
+          85.98
+        ]
+      },
+      {
+        "text": " aspect",
+        "timestamp": [
+          85.98,
+          86.44
+        ]
+      },
+      {
+        "text": " ratios",
+        "timestamp": [
+          86.44,
+          86.82
+        ]
+      },
+      {
+        "text": " included,",
+        "timestamp": [
+          86.82,
+          87.72
+        ]
+      },
+      {
+        "text": " VHS",
+        "timestamp": [
+          87.72,
+          88.24
+        ]
+      },
+      {
+        "text": " effects,",
+        "timestamp": [
+          88.24,
+          88.88
+        ]
+      },
+      {
+        "text": " scratches,",
+        "timestamp": [
+          88.88,
+          89.74
+        ]
+      },
+      {
+        "text": " grains,",
+        "timestamp": [
+          89.74,
+          90.42
+        ]
+      },
+      {
+        "text": " everything.",
+        "timestamp": [
+          90.42,
+          91.16
+        ]
+      },
+      {
+        "text": " You've",
+        "timestamp": [
+          91.16,
+          91.42
+        ]
+      },
+      {
+        "text": " got",
+        "timestamp": [
+          91.42,
+          91.66
+        ]
+      },
+      {
+        "text": " glitch",
+        "timestamp": [
+          91.66,
+          92.02
+        ]
+      },
+      {
+        "text": " effects,",
+        "timestamp": [
+          92.02,
+          92.66
+        ]
+      },
+      {
+        "text": " bad",
+        "timestamp": [
+          92.66,
+          92.96
+        ]
+      },
+      {
+        "text": " signal,",
+        "timestamp": [
+          92.96,
+          93.8
+        ]
+      },
+      {
+        "text": " aberrations,",
+        "timestamp": [
+          93.8,
+          94.72
+        ]
+      },
+      {
+        "text": " leaks,",
+        "timestamp": [
+          94.72,
+          95.38
+        ]
+      },
+      {
+        "text": " camera",
+        "timestamp": [
+          95.38,
+          95.68
+        ]
+      },
+      {
+        "text": " shakes",
+        "timestamp": [
+          95.68,
+          96.04
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          96.04,
+          96.4
+        ]
+      },
+      {
+        "text": " it",
+        "timestamp": [
+          96.4,
+          96.56
+        ]
+      },
+      {
+        "text": " doesn't",
+        "timestamp": [
+          96.56,
+          97
+        ]
+      },
+      {
+        "text": " stop",
+        "timestamp": [
+          97,
+          97.22
+        ]
+      },
+      {
+        "text": " there.",
+        "timestamp": [
+          97.22,
+          97.7
+        ]
+      },
+      {
+        "text": " Sound",
+        "timestamp": [
+          97.7,
+          98
+        ]
+      },
+      {
+        "text": " effects.",
+        "timestamp": [
+          98,
+          98.5
+        ]
+      },
+      {
+        "text": " You",
+        "timestamp": [
+          98.5,
+          98.7
+        ]
+      },
+      {
+        "text": " can",
+        "timestamp": [
+          98.7,
+          98.86
+        ]
+      },
+      {
+        "text": " sound",
+        "timestamp": [
+          98.86,
+          99.18
+        ]
+      },
+      {
+        "text": " design",
+        "timestamp": [
+          99.18,
+          99.4
+        ]
+      },
+      {
+        "text": " any",
+        "timestamp": [
+          99.4,
+          99.84
+        ]
+      },
+      {
+        "text": " video",
+        "timestamp": [
+          99.84,
+          100.24
+        ]
+      },
+      {
+        "text": " with",
+        "timestamp": [
+          100.24,
+          100.6
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          100.6,
+          100.68
+        ]
+      },
+      {
+        "text": " sound",
+        "timestamp": [
+          100.68,
+          101.02
+        ]
+      },
+      {
+        "text": " effects",
+        "timestamp": [
+          101.02,
+          101.28
+        ]
+      },
+      {
+        "text": " included",
+        "timestamp": [
+          101.28,
+          101.7
+        ]
+      },
+      {
+        "text": " in",
+        "timestamp": [
+          101.7,
+          101.98
+        ]
+      },
+      {
+        "text": " this",
+        "timestamp": [
+          101.98,
+          102.1
+        ]
+      },
+      {
+        "text": " plugin.",
+        "timestamp": [
+          102.1,
+          102.56
+        ]
+      },
+      {
+        "text": " You",
+        "timestamp": [
+          102.56,
+          102.7
+        ]
+      },
+      {
+        "text": " can",
+        "timestamp": [
+          102.7,
+          102.84
+        ]
+      },
+      {
+        "text": " preview",
+        "timestamp": [
+          102.84,
+          103.24
+        ]
+      },
+      {
+        "text": " them",
+        "timestamp": [
+          103.24,
+          103.5
+        ]
+      },
+      {
+        "text": " before",
+        "timestamp": [
+          103.5,
+          103.82
+        ]
+      },
+      {
+        "text": " importing",
+        "timestamp": [
+          103.82,
+          104.52
+        ]
+      },
+      {
+        "text": " which",
+        "timestamp": [
+          104.52,
+          106.58
+        ]
+      },
+      {
+        "text": " is",
+        "timestamp": [
+          106.58,
+          106.8
+        ]
+      },
+      {
+        "text": " awesome.",
+        "timestamp": [
+          106.8,
+          107.28
+        ]
+      },
+      {
+        "text": " Odin",
+        "timestamp": [
+          107.28,
+          107.48
+        ]
+      },
+      {
+        "text": " Pro",
+        "timestamp": [
+          107.48,
+          107.7
+        ]
+      },
+      {
+        "text": " also",
+        "timestamp": [
+          107.7,
+          108.16
+        ]
+      },
+      {
+        "text": " works",
+        "timestamp": [
+          108.16,
+          108.62
+        ]
+      },
+      {
+        "text": " in",
+        "timestamp": [
+          108.62,
+          108.78
+        ]
+      },
+      {
+        "text": " After",
+        "timestamp": [
+          108.78,
+          109.1
+        ]
+      },
+      {
+        "text": " Effects",
+        "timestamp": [
+          109.1,
+          109.42
+        ]
+      },
+      {
+        "text": " in",
+        "timestamp": [
+          109.42,
+          109.74
+        ]
+      },
+      {
+        "text": " the",
+        "timestamp": [
+          109.74,
+          109.84
+        ]
+      },
+      {
+        "text": " exact",
+        "timestamp": [
+          109.84,
+          110.26
+        ]
+      },
+      {
+        "text": " same",
+        "timestamp": [
+          110.26,
+          110.56
+        ]
+      },
+      {
+        "text": " way.",
+        "timestamp": [
+          110.56,
+          111.08
+        ]
+      },
+      {
+        "text": " The",
+        "timestamp": [
+          111.08,
+          111.16
+        ]
+      },
+      {
+        "text": " plugin",
+        "timestamp": [
+          111.16,
+          111.44
+        ]
+      },
+      {
+        "text": " is",
+        "timestamp": [
+          111.44,
+          111.62
+        ]
+      },
+      {
+        "text": " updated",
+        "timestamp": [
+          111.62,
+          112
+        ]
+      },
+      {
+        "text": " constantly",
+        "timestamp": [
+          112,
+          112.76
+        ]
+      },
+      {
+        "text": " with",
+        "timestamp": [
+          112.76,
+          113.1
+        ]
+      },
+      {
+        "text": " new",
+        "timestamp": [
+          113.1,
+          113.24
+        ]
+      },
+      {
+        "text": " transitions,",
+        "timestamp": [
+          113.24,
+          113.98
+        ]
+      },
+      {
+        "text": " new",
+        "timestamp": [
+          113.98,
+          114.18
+        ]
+      },
+      {
+        "text": " effects,",
+        "timestamp": [
+          114.18,
+          114.78
+        ]
+      },
+      {
+        "text": " new",
+        "timestamp": [
+          114.78,
+          115
+        ]
+      },
+      {
+        "text": " motion",
+        "timestamp": [
+          115,
+          115.42
+        ]
+      },
+      {
+        "text": " graphics.",
+        "timestamp": [
+          115.42,
+          116.06
+        ]
+      },
+      {
+        "text": " It",
+        "timestamp": [
+          116.06,
+          116.22
+        ]
+      },
+      {
+        "text": " is",
+        "timestamp": [
+          116.22,
+          116.4
+        ]
+      },
+      {
+        "text": " constantly",
+        "timestamp": [
+          116.4,
+          116.94
+        ]
+      },
+      {
+        "text": " being",
+        "timestamp": [
+          116.94,
+          117.3
+        ]
+      },
+      {
+        "text": " refreshed",
+        "timestamp": [
+          117.3,
+          117.74
+        ]
+      },
+      {
+        "text": " so",
+        "timestamp": [
+          117.74,
+          118.02
+        ]
+      },
+      {
+        "text": " you'll",
+        "timestamp": [
+          118.02,
+          118.22
+        ]
+      },
+      {
+        "text": " always",
+        "timestamp": [
+          118.22,
+          118.48
+        ]
+      },
+      {
+        "text": " find",
+        "timestamp": [
+          118.48,
+          118.86
+        ]
+      },
+      {
+        "text": " something",
+        "timestamp": [
+          118.86,
+          119.22
+        ]
+      },
+      {
+        "text": " new.",
+        "timestamp": [
+          119.22,
+          119.64
+        ]
+      },
+      {
+        "text": " Also",
+        "timestamp": [
+          119.64,
+          119.9
+        ]
+      },
+      {
+        "text": " there's",
+        "timestamp": [
+          119.9,
+          120.58
+        ]
+      },
+      {
+        "text": " a",
+        "timestamp": [
+          120.58,
+          120.7
+        ]
+      },
+      {
+        "text": " free",
+        "timestamp": [
+          120.7,
+          120.94
+        ]
+      },
+      {
+        "text": " version.",
+        "timestamp": [
+          120.94,
+          121.44
+        ]
+      },
+      {
+        "text": " No",
+        "timestamp": [
+          121.44,
+          121.76
+        ]
+      },
+      {
+        "text": " trial",
+        "timestamp": [
+          121.76,
+          122.12
+        ]
+      },
+      {
+        "text": " with",
+        "timestamp": [
+          122.12,
+          122.64
+        ]
+      },
+      {
+        "text": " more",
+        "timestamp": [
+          122.64,
+          122.88
+        ]
+      },
+      {
+        "text": " than",
+        "timestamp": [
+          122.88,
+          123.1
+        ]
+      },
+      {
+        "text": " 50",
+        "timestamp": [
+          123.1,
+          123.54
+        ]
+      },
+      {
+        "text": " free",
+        "timestamp": [
+          123.54,
+          123.88
+        ]
+      },
+      {
+        "text": " transitions,",
+        "timestamp": [
+          123.88,
+          124.68
+        ]
+      },
+      {
+        "text": " effects,",
+        "timestamp": [
+          124.68,
+          125.26
+        ]
+      },
+      {
+        "text": " motion",
+        "timestamp": [
+          125.26,
+          125.54
+        ]
+      },
+      {
+        "text": " graphics,",
+        "timestamp": [
+          125.54,
+          126.2
+        ]
+      },
+      {
+        "text": " no",
+        "timestamp": [
+          126.2,
+          126.42
+        ]
+      },
+      {
+        "text": " watermarks,",
+        "timestamp": [
+          126.42,
+          127.28
+        ]
+      },
+      {
+        "text": " completely",
+        "timestamp": [
+          127.28,
+          127.74
+        ]
+      },
+      {
+        "text": " for",
+        "timestamp": [
+          127.74,
+          128.06
+        ]
+      },
+      {
+        "text": " free.",
+        "timestamp": [
+          128.06,
+          128.44
+        ]
+      },
+      {
+        "text": " Download",
+        "timestamp": [
+          128.44,
+          128.72
+        ]
+      },
+      {
+        "text": " Odin",
+        "timestamp": [
+          128.72,
+          129.3
+        ]
+      },
+      {
+        "text": " Pro",
+        "timestamp": [
+          129.3,
+          129.48
+        ]
+      },
+      {
+        "text": " now",
+        "timestamp": [
+          129.48,
+          129.74
+        ]
+      },
+      {
+        "text": " for",
+        "timestamp": [
+          129.74,
+          130.16
+        ]
+      },
+      {
+        "text": " both",
+        "timestamp": [
+          130.16,
+          130.4
+        ]
+      },
+      {
+        "text": " Windows",
+        "timestamp": [
+          130.4,
+          130.82
+        ]
+      },
+      {
+        "text": " and",
+        "timestamp": [
+          130.82,
+          131.18
+        ]
+      },
+      {
+        "text": " MacOS.",
+        "timestamp": [
+          131.18,
+          132.06
+        ]
+      }
+    ]
+  }

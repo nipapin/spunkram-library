@@ -1,0 +1,8 @@
+@use "sass:map";
+
+/// Emit a brand token map as CSS custom properties.
+@mixin emit-tokens($tokens) {
+  @each $name, $value in $tokens {
+    --#{$name}: #{$value};
+  }
+}

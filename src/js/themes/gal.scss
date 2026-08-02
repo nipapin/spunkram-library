@@ -1,0 +1,107 @@
+// Brand: Gal - from Gal Toolkit MAX reference
+// Accent magenta #C31F93, surfaces #222, header purple/blue nebula
+
+// backgrounds
+$bg-page: #151518;
+$bg-panel: #151518;
+$card-gradient: linear-gradient(180deg, #2d2d2d, #252525);
+$bg-header: linear-gradient(105deg, #32034e 0%, #5b1a74 28%, #6626b4 55%, #6a47d1 78%, #6a7bec 100%);
+$bg-tabbar: #151518;
+$bg-input: #2d2d2d;
+$bg-input-dark: #1a1a1a;
+$bg-modal: #1a1a1a;
+$surface-active: #2d2d2d;
+$surface-segmented: #333333;
+$caption-editing-bg: linear-gradient(180deg, #2d2d2d, #252525);
+$caption-highlight-bg: linear-gradient(180deg, #3a1a35, #2a1528);
+
+// borders
+$border: rgba(255, 255, 255, 0.06);
+$border-card: rgba(255, 255, 255, 0.06);
+$border-input: rgba(255, 255, 255, 0.08);
+$border-strong: #3a3a3a;
+$border-hover: rgba(255, 255, 255, 0.14);
+
+// text
+$text-primary: #ffffff;
+$text-body: #e8e8e8;
+$text-secondary: #b4b4b4;
+$text-muted: #6c6c6c;
+$text-dim: #6c6c6c;
+$text-faint: #555555;
+$text-ghost: #444444;
+
+// accent (CTA) — toolkit magenta / hot purple
+$accent: #c31f93;
+$accent-2: #a21baa;
+$accent-hover: #d42aa5;
+$accent-soft: rgba(195, 31, 147, 0.14);
+$accent-glow: rgba(195, 31, 147, 0.38);
+$accent-ring: rgba(195, 31, 147, 0.22);
+$accent-gradient: linear-gradient(90deg, #{$accent} 0%, #{$accent-2} 100%);
+$accent-gradient-hover: linear-gradient(90deg, #d42aa5 0%, #b41d9d 100%);
+$accent-gradient-disabled: linear-gradient(90deg, #7a2860 0%, #5c2464 100%);
+
+// status
+$success: #4ade80;
+$highlight: #ffe14d;
+$highlight-border: rgba(255, 225, 77, 0.35);
+$error: #ed553b;
+$error-soft: #f0a0a0;
+
+// radii — pill-friendly like toolkit tabs
+$radius-sm: 6px;
+$radius-md: 8px;
+$radius-lg: 10px;
+$radius-xl: 12px;
+$radius-xxl: 14px;
+
+// type
+$font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+$tokens: (
+  "bg-page": $bg-page,
+  "bg-panel": $bg-panel,
+  "card-gradient": $card-gradient,
+  "bg-header": $bg-header,
+  "bg-tabbar": $bg-tabbar,
+  "bg-input": $bg-input,
+  "bg-input-dark": $bg-input-dark,
+  "bg-modal": $bg-modal,
+  "surface-active": $surface-active,
+  "surface-segmented": $surface-segmented,
+  "caption-editing-bg": $caption-editing-bg,
+  "caption-highlight-bg": $caption-highlight-bg,
+  "border": $border,
+  "border-card": $border-card,
+  "border-input": $border-input,
+  "border-strong": $border-strong,
+  "border-hover": $border-hover,
+  "text-primary": $text-primary,
+  "text-body": $text-body,
+  "text-secondary": $text-secondary,
+  "text-muted": $text-muted,
+  "text-dim": $text-dim,
+  "text-faint": $text-faint,
+  "text-ghost": $text-ghost,
+  "accent": $accent,
+  "accent-2": $accent-2,
+  "accent-hover": $accent-hover,
+  "accent-soft": $accent-soft,
+  "accent-glow": $accent-glow,
+  "accent-ring": $accent-ring,
+  "accent-gradient": $accent-gradient,
+  "accent-gradient-hover": $accent-gradient-hover,
+  "accent-gradient-disabled": $accent-gradient-disabled,
+  "success": $success,
+  "highlight": $highlight,
+  "highlight-border": $highlight-border,
+  "error": $error,
+  "error-soft": $error-soft,
+  "radius-sm": $radius-sm,
+  "radius-md": $radius-md,
+  "radius-lg": $radius-lg,
+  "radius-xl": $radius-xl,
+  "radius-xxl": $radius-xxl,
+  "font-family": $font-family,
+);

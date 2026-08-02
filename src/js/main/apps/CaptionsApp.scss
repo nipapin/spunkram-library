@@ -1,0 +1,39 @@
+.app-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-page);
+  overflow: hidden;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 12px;
+  flex-shrink: 0;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
+  color: var(--accent);
+}
+
+.app-header__title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  color: var(--text-primary);
+}
+
+.error-banner {
+  padding: 4px 8px;
+  background: var(--error);
+}
+
+.error-banner__text {
+  margin: 0;
+  font-size: 10px;
+  color: #ffffff;
+}

@@ -1,0 +1,4 @@
+// доп. стили к .color-field из _ui.scss — hex input уже там
+.color-field__hex {
+  text-transform: lowercase;
+}

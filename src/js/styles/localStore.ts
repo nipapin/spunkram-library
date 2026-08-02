@@ -1,0 +1,205 @@
+import { fs, path } from "../lib/cep/node";
+import type { MogrtDefinition } from "../presets/types";
+import { ensureDir, getLocalStatePath, getStylePackageDir, getStylesDir, getStylesRoot } from "./paths";
+import type { LocalStyleManifest, LocalStylePackage, StylesLocalState, StylePreset } from "./types";
+
+export const LOCAL_STATE_VERSION = 1;
+
+const emptyState = (): StylesLocalState => ({
+  version: LOCAL_STATE_VERSION,
+  selectedPresetId: "",
+  favorites: {},
+  userPresets: [],
+  downloadedEdits: {},
+});
+
+const isCepFs = () => typeof window !== "undefined" && typeof (window as Window & { cep?: unknown }).cep !== "undefined";
+
+const readJson = <T>(filePath: string): T | null => {
+  if (!isCepFs() || !fs.existsSync?.(filePath)) return null;
+  try {
+    const raw = fs.readFileSync(filePath, { encoding: "utf-8" });
+    return JSON.parse(String(raw)) as T;
+  } catch {
+    return null;
+  }
+};
+
+const writeJson = (filePath: string, data: unknown): boolean => {
+  if (!isCepFs() || !fs.writeFileSync) return false;
+  try {
+    const dir = path.dirname(filePath);
+    ensureDir(dir);
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), { encoding: "utf-8" });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** Fallback для браузерного vite-preview без CEP Node. */
+const MEMORY_KEY = "aitools-cep-styles-state";
+const MEMORY_PACKAGES_KEY = "aitools-cep-style-packages";
+
+type MemoryPackages = Record<
+  string,
+  { manifest: LocalStyleManifest; definition: MogrtDefinition }
+>;
+
+const readMemoryState = (): StylesLocalState => {
+  try {
+    const raw = localStorage.getItem(MEMORY_KEY);
+    if (!raw) return emptyState();
+    const parsed = JSON.parse(raw) as Partial<StylesLocalState>;
+    if (parsed.version !== LOCAL_STATE_VERSION) return emptyState();
+    return {
+      version: LOCAL_STATE_VERSION,
+      selectedPresetId: parsed.selectedPresetId ?? "",
+      favorites: parsed.favorites ?? {},
+      userPresets: Array.isArray(parsed.userPresets) ? parsed.userPresets : [],
+      downloadedEdits: parsed.downloadedEdits ?? {},
+    };
+  } catch {
+    return emptyState();
+  }
+};
+
+const writeMemoryState = (state: StylesLocalState) => {
+  localStorage.setItem(MEMORY_KEY, JSON.stringify(state));
+};
+
+const readMemoryPackages = (): MemoryPackages => {
+  try {
+    const raw = localStorage.getItem(MEMORY_PACKAGES_KEY);
+    return raw ? (JSON.parse(raw) as MemoryPackages) : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeMemoryPackages = (packages: MemoryPackages) => {
+  localStorage.setItem(MEMORY_PACKAGES_KEY, JSON.stringify(packages));
+};
+
+export const loadLocalState = (): StylesLocalState => {
+  const filePath = getLocalStatePath();
+  if (!filePath) return readMemoryState();
+  const root = getStylesRoot();
+  if (root) ensureDir(root);
+  const fromDisk = readJson<StylesLocalState>(filePath);
+  if (!fromDisk || fromDisk.version !== LOCAL_STATE_VERSION) return emptyState();
+  return {
+    version: LOCAL_STATE_VERSION,
+    selectedPresetId: fromDisk.selectedPresetId ?? "",
+    favorites: fromDisk.favorites ?? {},
+    userPresets: Array.isArray(fromDisk.userPresets) ? fromDisk.userPresets : [],
+    downloadedEdits: fromDisk.downloadedEdits ?? {},
+  };
+};
+
+export const saveLocalState = (state: StylesLocalState): void => {
+  const filePath = getLocalStatePath();
+  if (!filePath) {
+    writeMemoryState(state);
+    return;
+  }
+  writeJson(filePath, state);
+};
+
+export const listLocalPackageIds = (): string[] => {
+  const dir = getStylesDir();
+  if (!dir || !isCepFs() || !fs.existsSync?.(dir) || !fs.readdirSync) {
+    return Object.keys(readMemoryPackages());
+  }
+  try {
+    return fs.readdirSync(dir).filter((name) => {
+      try {
+        return fs.statSync(path.join(dir, name)).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return [];
+  }
+};
+
+export const loadLocalPackage = (styleId: string): LocalStylePackage | null => {
+  const dir = getStylePackageDir(styleId);
+  if (!dir || !isCepFs()) {
+    const mem = readMemoryPackages()[styleId];
+    if (!mem) return null;
+    return { manifest: mem.manifest, definition: mem.definition, dir: `memory://${styleId}` };
+  }
+  const manifestPath = path.join(dir, "manifest.json");
+  const manifest = readJson<LocalStyleManifest>(manifestPath);
+  if (!manifest) return null;
+  const defName = manifest.files?.definition || "definitions.json";
+  const definition = readJson<MogrtDefinition>(path.join(dir, defName));
+  // definition на сервере не публичный — пакет может содержать только .mogrt/.aep
+  return {
+    manifest,
+    definition: definition?.clientControls ? definition : { clientControls: [] },
+    dir,
+  };
+};
+
+export const saveLocalPackage = (
+  manifest: LocalStyleManifest,
+  definition: MogrtDefinition,
+  assets?: { aep?: ArrayBuffer | Uint8Array; mogrt?: ArrayBuffer | Uint8Array },
+): LocalStylePackage | null => {
+  const dir = getStylePackageDir(manifest.id);
+  if (!dir || !isCepFs()) {
+    const packages = readMemoryPackages();
+    packages[manifest.id] = { manifest, definition };
+    writeMemoryPackages(packages);
+    return { manifest, definition, dir: `memory://${manifest.id}` };
+  }
+
+  if (!ensureDir(dir)) return null;
+
+  writeJson(path.join(dir, "manifest.json"), manifest);
+  if (manifest.files.definition) {
+    writeJson(path.join(dir, manifest.files.definition), definition);
+  }
+
+  if (assets?.aep && manifest.files.aep) {
+    fs.writeFileSync(path.join(dir, manifest.files.aep), new Uint8Array(assets.aep));
+  }
+  if (assets?.mogrt && manifest.files.mogrt) {
+    fs.writeFileSync(path.join(dir, manifest.files.mogrt), new Uint8Array(assets.mogrt));
+  }
+
+  return { manifest, definition, dir };
+};
+
+export const removeLocalPackage = (styleId: string): void => {
+  const dir = getStylePackageDir(styleId);
+  if (!dir || !isCepFs() || !fs.existsSync?.(dir)) {
+    const packages = readMemoryPackages();
+    delete packages[styleId];
+    writeMemoryPackages(packages);
+    return;
+  }
+  try {
+    fs.rmSync?.(dir, { recursive: true, force: true });
+  } catch {
+    // ignore
+  }
+};
+
+export const upsertUserPreset = (preset: StylePreset): void => {
+  const state = loadLocalState();
+  const idx = state.userPresets.findIndex((p) => p.id === preset.id);
+  if (idx >= 0) state.userPresets[idx] = preset;
+  else state.userPresets.push(preset);
+  saveLocalState(state);
+};
+
+export const removeUserPreset = (presetId: string): void => {
+  const state = loadLocalState();
+  state.userPresets = state.userPresets.filter((p) => p.id !== presetId);
+  if (state.selectedPresetId === presetId) state.selectedPresetId = "";
+  saveLocalState(state);
+};

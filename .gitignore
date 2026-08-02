@@ -1,0 +1,14 @@
+node_modules
+.DS_Store
+dist
+dist-ssr
+*.local
+dist
+yarn-error.log
+.media
+
+# Heavy runtime binaries — downloaded from CDN after install (see utils/ffmpeg.ts)
+src/js/lib/bin/win/*
+!src/js/lib/bin/win/.gitkeep
+src/js/lib/bin/mac/*
+!src/js/lib/bin/mac/.gitkeep

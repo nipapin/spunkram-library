@@ -1,0 +1,55 @@
+/* Panel-specific overrides — global look comes from globals.css (Tailwind) */
+
+::-webkit-scrollbar {
+  width: 8px;
+  -webkit-appearance: always;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* CEP Chromium has no accent-color — style range via WebKit thumbs */
+.thumb-size-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(var(--secondary), 1);
+  outline: none;
+}
+
+.thumb-size-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(var(--secondary), 1);
+}
+
+.thumb-size-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 999px;
+  background: rgb(var(--primary));
+  border: none;
+  cursor: pointer;
+}
+
+.thumb-size-range:focus {
+  outline: none;
+}
+
+.thumb-size-range:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px rgba(var(--primary), 0.35);
+}
