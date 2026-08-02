@@ -23,15 +23,17 @@
 Из корня CEP:
 
 ```bash
-npm run release:patch          # bump patch → zxp → git push + tag → R2 upload
+npm run release:patch          # bump patch → zxp → git push + tag → R2 latest.json
 npm run release:minor          # bump minor
 npm run release:major          # bump major
+npm run release:beta           # 0.4.2 → 0.4.3-beta.1 → R2 beta.json (tester-only)
 npm run release                # текущая version из package.json
 npm run release:dry            # показать шаги без выполнения
 npm run release -- --no-upload # только git (если webhook уже заливает ZXP)
 ```
 
 Нужен `next-app/.env` с R2 (или `NEXT_APP_ROOT` если путь другой). После upload: `GET https://motionflow.pro/api/cep/update`.
+Beta видна только `basepackagehelp@gmail.com` (после логина в CEP). Промоут beta → stable: `npm run release:patch` (с `x.y.z-beta.N` снимет `-beta` → `x.y.z`).
 
 ## Полезные ориентиры в исходном проекте
 

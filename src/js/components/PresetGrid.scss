@@ -47,35 +47,56 @@
 }
 
 .preset-grid__icon-btn--active {
-  background: var(--surface-active);
-  border-color: var(--accent);
-  color: var(--highlight);
+  background: var(--accent-gradient);
+  border-color: rgba(106, 83, 248, 0.6);
+  color: #fcfcfc;
+  box-shadow: 0 2px 8px rgba(106, 83, 248, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .preset-grid__tags {
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
   overflow-x: auto;
   padding-bottom: 2px;
 }
 
-.preset-grid__tag-chip {
+/* Higher specificity than `.ai-tools-scope button { padding:0; background:none }` */
+.ai-tools-scope button.preset-grid__tag-chip,
+button.preset-grid__tag-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  box-sizing: border-box;
+  margin: 0;
   cursor: pointer;
-  border: 1px solid var(--border-card);
-  background: var(--card-gradient);
-  color: var(--text-dim);
+  border: 1px solid rgba(106, 83, 248, 0.35);
   border-radius: 999px;
-  padding: 4px 10px;
+  padding: 8px 14px;
   font-size: 11px;
-  font-family: var(--font-family);
+  font-family: inherit;
   font-weight: 600;
+  line-height: 1;
+  color: #c8cad6;
+  background: rgba(106, 83, 248, 0.18);
+  box-shadow: none;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
 }
 
-.preset-grid__tag-chip--active {
-  border-color: var(--accent);
-  color: var(--highlight);
-  background: var(--surface-active);
+.ai-tools-scope button.preset-grid__tag-chip:hover:not(.preset-grid__tag-chip--active),
+button.preset-grid__tag-chip:hover:not(.preset-grid__tag-chip--active) {
+  border-color: rgba(106, 83, 248, 0.55);
+  color: #f0f1f7;
+  background: rgba(106, 83, 248, 0.28);
+}
+
+.ai-tools-scope button.preset-grid__tag-chip--active,
+button.preset-grid__tag-chip--active {
+  border-color: rgba(106, 83, 248, 0.85);
+  color: #ffffff;
+  background: linear-gradient(180deg, #6a53f8 0%, rgba(106, 83, 248, 0.75) 100%);
+  box-shadow: 0 4px 12px rgba(106, 83, 248, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .preset-grid__card-tags {
@@ -146,9 +167,10 @@
   position: relative;
   width: 100%;
   aspect-ratio: 2 / 1;
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(17, 20, 37, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .preset-grid__thumb,
@@ -167,7 +189,7 @@
   justify-content: center;
   font-size: 15px;
   font-weight: 800;
-  color: var(--highlight);
+  color: var(--accent);
   background: #111;
 }
 
@@ -178,7 +200,7 @@
   flex-direction: column;
   background: transparent;
   border: 0;
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
   padding: 0;
   /* CEP Chromium: outline ignores border-radius and paints outside the
      scrollport (gets clipped). box-shadow follows the same radius as the card. */
@@ -187,16 +209,25 @@
   transition: opacity 0.12s, box-shadow 0.12s;
 }
 
+.preset-grid__card:hover:not(.preset-grid__card--active) .preset-grid__media {
+  border-color: rgba(106, 83, 248, 0.4);
+}
+
 .preset-grid__card:hover:not(.preset-grid__card--active) {
-  opacity: 0.92;
+  opacity: 0.96;
+}
+
+.preset-grid__card--active .preset-grid__media {
+  border-color: rgba(106, 83, 248, 0.6);
+  box-shadow: 0 0 0 1px rgba(106, 83, 248, 0.5);
 }
 
 .preset-grid__card--active {
-  box-shadow: 0 0 0 2px var(--accent);
+  box-shadow: none;
 }
 
-.preset-grid__card--active:hover {
-  box-shadow: 0 0 0 2px var(--accent-hover);
+.preset-grid__card--active:hover .preset-grid__media {
+  border-color: rgba(106, 83, 248, 0.75);
 }
 
 .preset-grid__fav {
@@ -217,7 +248,7 @@
 }
 
 .preset-grid__fav--on {
-  color: var(--highlight);
+  color: var(--accent);
 }
 
 .preset-grid__chip {
@@ -225,18 +256,24 @@
   top: 6px;
   left: 6px;
   z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--text-primary);
-  background: rgba(0, 0, 0, 0.55);
+  line-height: 1;
+  color: rgba(240, 241, 247, 0.95);
+  background: rgba(106, 83, 248, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 5px 10px;
   max-width: calc(100% - 40px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .preset-grid__name {

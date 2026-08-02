@@ -274,11 +274,14 @@ Token обязан позволять серверу узнать `client` (clai
 
 ## 5. Extension update + ffmpeg (public)
 
-**No auth.** Used by the CEP panel for auto-update and runtime ffmpeg download.
+Used by the CEP panel for auto-update and runtime ffmpeg download.
 
 ### 5.1 `GET /api/cep/update`
 
-Returns the current Spunkram release manifest (from R2 `public/downloads/spunkram/latest.json`):
+Returns the Spunkram release manifest.
+
+- **Stable (everyone):** R2 `public/downloads/spunkram/latest.json`
+- **Beta (allowlisted only):** if `Authorization: Bearer …` resolves to a beta-tester email (`basepackagehelp@gmail.com`, or `SPUNKRAM_BETA_EMAILS`), and `beta.json` is newer than stable, that manifest is returned instead (`channel: "beta"`).
 
 ```json
 {
@@ -286,6 +289,7 @@ Returns the current Spunkram release manifest (from R2 `public/downloads/spunkra
   "zxpUrl": "https://cdn.motionflow.pro/public/downloads/spunkram/0.1.0/spunkram.zxp",
   "changelog": "## 0.1.0\n- …",
   "publishedAt": "2026-08-02T12:00:00.000Z",
+  "channel": "stable",
   "ffmpeg": {
     "win": "https://cdn.motionflow.pro/public/downloads/ffmpeg/win/ffmpeg.exe",
     "mac": "https://cdn.motionflow.pro/public/downloads/ffmpeg/mac/ffmpeg-mac.zip"
@@ -302,7 +306,8 @@ Before the first published release, `version` / `zxpUrl` may be `null`; `ffmpeg`
 | `public/downloads/ffmpeg/win/ffmpeg.exe` | Windows ffmpeg |
 | `public/downloads/ffmpeg/mac/ffmpeg-mac.zip` | macOS ffmpeg archive |
 | `public/downloads/spunkram/{version}/spunkram.zxp` | Signed extension package |
-| `public/downloads/spunkram/latest.json` | Manifest consumed by `/api/cep/update` |
+| `public/downloads/spunkram/latest.json` | Stable manifest for `/api/cep/update` |
+| `public/downloads/spunkram/beta.json` | Beta manifest (gated by email) |
 
 CEP downloads ffmpeg into userdata (not the extension folder) so ZXP overwrite updates do not delete it.
 
@@ -310,7 +315,8 @@ CEP downloads ffmpeg into userdata (not the extension folder) so ZXP overwrite u
 
 - Verify `X-Hub-Signature-256` with `GITHUB_WEBHOOK_SECRET`
 - Optional filter: `GITHUB_SPUNKRAM_REPO` (`org/repo`)
-- On `release` `published` / `edited`: download `.zxp` asset → R2 → refresh `latest.json`
+- On `release` `published` / `edited`: download `.zxp` asset → R2
+- Prerelease / tag containing `-beta` → `beta.json`; otherwise `latest.json`
 - Optional `GITHUB_TOKEN` if release assets need auth
 
 ### 5.4 Upload scripts (next-app)
@@ -318,12 +324,20 @@ CEP downloads ffmpeg into userdata (not the extension folder) so ZXP overwrite u
 ```bash
 node --env-file=.env scripts/upload-spunkram-ffmpeg.mjs --win=…/ffmpeg.exe --mac=…/ffmpeg-mac.zip
 node --env-file=.env scripts/upload-spunkram-zxp.mjs --zxp=./dist/zxp/com.spunkramlibrary.cep.zxp --version=0.1.0
+node --env-file=.env scripts/upload-spunkram-zxp.mjs --zxp=./x.zxp --version=0.1.1-beta.1 --channel=beta
+```
+
+CEP:
+
+```bash
+npm run release:beta   # bump x.y.z-beta.N → upload beta.json only
+npm run release:patch  # from beta: promote to stable core; from stable: +patch → latest.json
 ```
 
 ### 5.5 CEP client behaviour
 
-1. On panel start → `GET /api/cep/update`
-2. If remote version > local (`package.json` / manifest) → banner
+1. After sign-in → `GET /api/cep/update` (Bearer when available)
+2. If remote version > local (`package.json` / manifest) → banner (beta labeled for testers)
 3. User clicks Update → download ZXP → unpack over `csi.getSystemPath("extension")` → `location.reload()`
 
 ---

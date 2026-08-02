@@ -1,59 +1,62 @@
-// Brand: Spunkram — dark purple accent (default)
+// Brand: Spunkram — matches main panel Tailwind tokens (globals.css)
+// --primary: 106, 83, 248  →  #6a53f8
+// --background: 7, 10, 23  →  #070a17
+// --card: 17, 20, 37       →  #111425
 
 // backgrounds
-$bg-page: linear-gradient(180deg, #101014, #0c0c10);
-$bg-panel: #17171b;
-$card-gradient: linear-gradient(180deg, #1c1c24, #181820);
-$bg-header: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
-$bg-tabbar: #17171b;
-$bg-input: #26262f;
-$bg-input-dark: #14141a;
-$bg-modal: #0d0d10;
-$surface-active: #252534;
-$surface-segmented: #2a2a33;
-$caption-editing-bg: linear-gradient(180deg, #232330, #1e1e29);
-$caption-highlight-bg: linear-gradient(180deg, #2a2740, #201f2c);
+$bg-page: #070a17;
+$bg-panel: #111425;
+$card-gradient: linear-gradient(180deg, #15192c, #111425);
+$bg-header: rgba(17, 20, 37, 0.92);
+$bg-tabbar: rgba(17, 20, 37, 0.7);
+$bg-input: #1e2235;
+$bg-input-dark: #0f1220;
+$bg-modal: #070a17;
+$surface-active: #1e2235;
+$surface-segmented: linear-gradient(180deg, #6a53f8, rgba(106, 83, 248, 0.7));
+$caption-editing-bg: linear-gradient(180deg, #1a1e32, #15192c);
+$caption-highlight-bg: linear-gradient(180deg, #252048, #1a1e32);
 
 // borders
-$border: rgba(255, 255, 255, 0.055);
-$border-card: rgba(255, 255, 255, 0.055);
-$border-input: rgba(255, 255, 255, 0.07);
-$border-strong: #33333c;
-$border-hover: rgba(255, 255, 255, 0.12);
+$border: rgba(255, 255, 255, 0.08);
+$border-card: rgba(255, 255, 255, 0.1);
+$border-input: rgba(255, 255, 255, 0.1);
+$border-strong: rgba(255, 255, 255, 0.14);
+$border-hover: rgba(255, 255, 255, 0.18);
 
 // text
-$text-primary: #f2f2f5;
-$text-body: #e8e8ec;
-$text-secondary: #c8c8d0;
-$text-muted: #8a8a93;
-$text-dim: #8a8a93;
-$text-faint: #6b6c76;
-$text-ghost: #5a5a63;
+$text-primary: #f0f1f7;
+$text-body: #e8e9f0;
+$text-secondary: #c8cad6;
+$text-muted: #8e91a1;
+$text-dim: #8e91a1;
+$text-faint: #6b6e7e;
+$text-ghost: #5a5d6c;
 
-// accent (CTA gradient)
-$accent: #8b7cf6;
-$accent-2: #6c5ce7;
-$accent-hover: #a496f7;
-$accent-soft: rgba(139, 124, 246, 0.12);
-$accent-glow: rgba(139, 124, 246, 0.35);
-$accent-ring: rgba(139, 124, 246, 0.18);
-$accent-gradient: linear-gradient(90deg, #{$accent} 0%, #{$accent-2} 100%);
-$accent-gradient-hover: linear-gradient(90deg, #7c6cf0 0%, #5c4cd7 100%);
-$accent-gradient-disabled: linear-gradient(90deg, #6a5dc0 0%, #55499f 100%);
+// accent (CTA) — same as extension --primary
+$accent: #6a53f8;
+$accent-2: #5742e0;
+$accent-hover: #7d69fa;
+$accent-soft: rgba(106, 83, 248, 0.12);
+$accent-glow: rgba(106, 83, 248, 0.4);
+$accent-ring: rgba(106, 83, 248, 0.6);
+$accent-gradient: linear-gradient(180deg, #6a53f8 0%, rgba(106, 83, 248, 0.72) 100%);
+$accent-gradient-hover: linear-gradient(180deg, #7d69fa 0%, rgba(106, 83, 248, 0.8) 100%);
+$accent-gradient-disabled: linear-gradient(180deg, #5544c4 0%, #46389e 100%);
 
 // status
 $success: #4ade80;
-$highlight: #ffe14d;
-$highlight-border: rgba(255, 225, 77, 0.35);
+$highlight: #6a53f8;
+$highlight-border: rgba(106, 83, 248, 0.45);
 $error: #ed553b;
 $error-soft: #f0a0a0;
 
-// radii
+// radii — closer to main --radius 0.75rem
 $radius-sm: 6px;
-$radius-md: 7px;
-$radius-lg: 8px;
-$radius-xl: 9px;
-$radius-xxl: 10px;
+$radius-md: 8px;
+$radius-lg: 10px;
+$radius-xl: 12px;
+$radius-xxl: 12px;
 
 // type
 $font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

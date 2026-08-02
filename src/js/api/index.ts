@@ -36,9 +36,12 @@ export {
   type CepMarketAction,
 } from "./cep-market";
 export {
+  fetchVoiceoverCatalog,
   fetchVoiceoverVoices,
   generateVoiceover,
   downloadVoiceoverFile,
   type VoiceoverVoice,
+  type VoiceoverLanguage,
+  type VoiceoverCatalog,
   type VoiceoverResult,
 } from "./voiceover";

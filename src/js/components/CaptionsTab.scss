@@ -167,10 +167,14 @@
 .captions-tab__back {
   flex-shrink: 0;
   align-self: center;
-  margin: 0 4px 0 8px;
+  margin: 0 2px 0 2px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
   color: var(--text-dim);
 
   &:hover {
     color: var(--text-body);
+    background: rgba(106, 83, 248, 0.12);
   }
 }

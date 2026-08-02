@@ -1,7 +1,7 @@
 /**
- * Voiceover (Minimax via Motionflow) — assumed contract until backend is ready:
- *   GET  /api/cep/voiceover/voices
- *   POST /api/generations/voiceover  { text, voice_id, speed? } → { audio_url, duration? }
+ * Voiceover (Minimax via Motionflow):
+ *   GET  /api/cep/voiceover/voices → { voices, languages }
+ *   POST /api/generations/voiceover  { text, voice_id, speed?, language_boost? }
  */
 import { apiUrl, GENERATIONS_ENDPOINTS, VOICEOVER_ENDPOINTS } from "./config";
 import { getUserIdentity } from "./user";
@@ -18,9 +18,13 @@ const MOCK_ENABLED =
 export type VoiceoverVoice = {
   id: string;
   name: string;
-  language?: string;
   gender?: string;
   preview_url?: string;
+};
+
+export type VoiceoverLanguage = {
+  id: string;
+  name: string;
 };
 
 export type VoiceoverResult = {
@@ -29,11 +33,34 @@ export type VoiceoverResult = {
   file_name?: string;
 };
 
+export type VoiceoverCatalog = {
+  voices: VoiceoverVoice[];
+  languages: VoiceoverLanguage[];
+};
+
+const FALLBACK_LANGUAGES: VoiceoverLanguage[] = [
+  { id: "Automatic", name: "Auto detect" },
+  { id: "English", name: "English" },
+  { id: "Russian", name: "Russian" },
+  { id: "Spanish", name: "Spanish" },
+  { id: "French", name: "French" },
+  { id: "German", name: "German" },
+  { id: "Portuguese", name: "Portuguese" },
+  { id: "Italian", name: "Italian" },
+  { id: "Ukrainian", name: "Ukrainian" },
+  { id: "Polish", name: "Polish" },
+  { id: "Chinese", name: "Chinese" },
+  { id: "Japanese", name: "Japanese" },
+  { id: "Korean", name: "Korean" },
+  { id: "Arabic", name: "Arabic" },
+  { id: "Hindi", name: "Hindi" },
+];
+
 const MOCK_VOICES: VoiceoverVoice[] = [
-  { id: "minimax-friendly-en", name: "Friendly English", language: "en", gender: "female" },
-  { id: "minimax-narrator-en", name: "Narrator English", language: "en", gender: "male" },
-  { id: "minimax-warm-ru", name: "Warm Russian", language: "ru", gender: "female" },
-  { id: "minimax-deep-ru", name: "Deep Russian", language: "ru", gender: "male" },
+  { id: "Friendly_Person", name: "Friendly Person", gender: "female" },
+  { id: "Deep_Voice_Man", name: "Deep Voice Man", gender: "male" },
+  { id: "Calm_Woman", name: "Calm Woman", gender: "female" },
+  { id: "Imposing_Manner", name: "Imposing Manner", gender: "male" },
 ];
 
 function authHeaders(): Record<string, string> {
@@ -46,27 +73,50 @@ function authHeaders(): Record<string, string> {
   return headers;
 }
 
-export async function fetchVoiceoverVoices(): Promise<VoiceoverVoice[]> {
+export async function fetchVoiceoverCatalog(): Promise<VoiceoverCatalog> {
   const result = await cepHttpRequest(apiUrl(VOICEOVER_ENDPOINTS.voices), {
     method: "GET",
     headers: authHeaders(),
   });
   if (result.ok) {
     try {
-      const parsed = JSON.parse(result.text) as { voices?: VoiceoverVoice[] } | VoiceoverVoice[];
-      const list = Array.isArray(parsed) ? parsed : parsed.voices;
-      if (Array.isArray(list) && list.length > 0) return list;
+      const parsed = JSON.parse(result.text) as {
+        voices?: VoiceoverVoice[];
+        languages?: VoiceoverLanguage[];
+      } | VoiceoverVoice[];
+      if (Array.isArray(parsed)) {
+        return {
+          voices: parsed,
+          languages: FALLBACK_LANGUAGES,
+        };
+      }
+      const voices = Array.isArray(parsed.voices) ? parsed.voices : [];
+      const languages =
+        Array.isArray(parsed.languages) && parsed.languages.length > 0
+          ? parsed.languages
+          : FALLBACK_LANGUAGES;
+      if (voices.length > 0) return { voices, languages };
     } catch {
       // fall through
     }
   }
-  return MOCK_ENABLED ? MOCK_VOICES : [];
+  if (MOCK_ENABLED) {
+    return { voices: MOCK_VOICES, languages: FALLBACK_LANGUAGES };
+  }
+  return { voices: [], languages: FALLBACK_LANGUAGES };
+}
+
+/** @deprecated Prefer fetchVoiceoverCatalog — kept for callers that only need voices. */
+export async function fetchVoiceoverVoices(): Promise<VoiceoverVoice[]> {
+  const catalog = await fetchVoiceoverCatalog();
+  return catalog.voices;
 }
 
 export async function generateVoiceover(input: {
   text: string;
   voice_id: string;
   speed?: number;
+  language_boost?: string;
 }): Promise<{ data?: VoiceoverResult; error?: string }> {
   const user = getUserIdentity();
   const result = await cepHttpRequest(apiUrl(GENERATIONS_ENDPOINTS.voiceover), {
@@ -76,6 +126,7 @@ export async function generateVoiceover(input: {
       text: input.text,
       voice_id: input.voice_id,
       speed: input.speed ?? 1,
+      language_boost: input.language_boost || "Automatic",
       email: user.email || undefined,
       userId: user.id || undefined,
       devToken: user.devToken || undefined,

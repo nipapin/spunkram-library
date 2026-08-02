@@ -14,6 +14,9 @@ const EXTRA_PACKS = [
   { id: "pack-100", amount: 100, price: 19 },
 ] as const;
 
+const ACCENT_PILL =
+  "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
+
 export function AiToolsList({
   monthly,
   extra,
@@ -35,7 +38,7 @@ export function AiToolsList({
 
   return (
     <div className="relative flex flex-col gap-3 p-2.5">
-      <div className="rounded-xl border border-primary/30 bg-primary/10 p-3">
+      <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 shadow-md shadow-primary/10 ring-1 ring-inset ring-white/5">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
             <Sparkles className="size-3.5 text-primary" strokeWidth={2.25} />
@@ -47,7 +50,7 @@ export function AiToolsList({
         <div className="mt-2.5 space-y-2">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-background/60">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-primary to-fuchsia-500 transition-all"
+              className="h-full rounded-full bg-gradient-to-r from-primary to-primary/70 transition-all"
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -64,7 +67,10 @@ export function AiToolsList({
               <button
                 type="button"
                 onClick={() => setShowExtra(true)}
-                className="flex items-center gap-0.5 rounded-full bg-primary/20 px-2.5 py-1 text-[10px] font-semibold text-primary transition-colors hover:bg-primary/30"
+                className={cn(
+                  "flex items-center gap-0.5 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-opacity hover:opacity-95",
+                  ACCENT_PILL,
+                )}
               >
                 <Plus className="size-3" strokeWidth={2.5} />
                 Add Extra
@@ -85,17 +91,22 @@ export function AiToolsList({
               disabled={disabled}
               onClick={() => onOpenTool(tool.id)}
               className={cn(
-                "flex items-center gap-3 rounded-xl border border-white/10 bg-card/60 px-3 py-3 text-left transition-colors",
-                disabled ? "cursor-not-allowed opacity-50" : "hover:border-primary/50 hover:bg-primary/10",
+                "group flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all",
+                "border-white/10 bg-card/60 shadow-sm ring-1 ring-inset ring-white/5",
+                disabled
+                  ? "cursor-not-allowed opacity-50"
+                  : "hover:border-primary/50 hover:bg-card/80 hover:shadow-md hover:shadow-primary/15",
               )}
             >
               <span
                 className={cn(
-                  "flex size-9 shrink-0 items-center justify-center rounded-lg",
-                  tool.soon ? "bg-secondary text-muted-foreground" : "bg-primary/20 text-primary",
+                  "flex size-9 shrink-0 items-center justify-center rounded-full transition-transform",
+                  tool.soon
+                    ? "bg-secondary text-muted-foreground"
+                    : cn(ACCENT_PILL, !disabled && "group-hover:scale-105"),
                 )}
               >
-                <Icon className="size-4.5" strokeWidth={2.25} />
+                <Icon className="size-4" strokeWidth={2.25} />
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="flex items-center gap-2">
@@ -115,7 +126,7 @@ export function AiToolsList({
 
       {showExtra && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xs rounded-xl border border-white/10 bg-card p-4 shadow-2xl">
+          <div className="w-full max-w-xs rounded-xl border border-white/10 bg-card p-4 shadow-2xl ring-1 ring-inset ring-white/5">
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
@@ -148,7 +159,12 @@ export function AiToolsList({
                 >
                   <span className="text-sm font-semibold text-foreground">{pack.amount}</span>
                   <span className="text-[9px] uppercase tracking-wide text-muted-foreground">gens</span>
-                  <span className="mt-1 rounded-full bg-primary/20 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                  <span
+                    className={cn(
+                      "mt-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                      ACCENT_PILL,
+                    )}
+                  >
                     ${pack.price}
                   </span>
                 </button>

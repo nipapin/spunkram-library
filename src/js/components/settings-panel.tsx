@@ -208,7 +208,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between gap-2 border-b border-white/5 px-2.5 py-2">
+      <div className="flex items-center gap-2 border-b border-white/5 px-2.5 py-2">
         <button
           type="button"
           onClick={onBack}
@@ -222,7 +222,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
           Settings
         </div>
         <span
-          className="rounded-full border border-white/10 bg-card/70 px-2 py-0.5 text-[10px] text-muted-foreground"
+          className="ml-auto rounded-full border border-white/10 bg-card/70 px-2 py-0.5 text-[10px] text-muted-foreground"
           title="Revision"
         >
           {EXTENSION_VERSION}

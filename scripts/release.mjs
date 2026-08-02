@@ -1,21 +1,24 @@
 #!/usr/bin/env node
 /**
  * Spunkram CEP release:
- *  1) optional version bump
+ *  1) optional version bump (stable or beta)
  *  2) npm run zxp
  *  3) git commit (if dirty) + push + tag + push tag
- *  4) upload ZXP → R2 (next-app script) → latest.json for /api/cep/update
+ *  4) upload ZXP → R2 (next-app script) → latest.json or beta.json
  *
  * Usage (from CEP repo root):
  *   npm run release
  *   npm run release -- --bump=patch
- *   npm run release -- --bump=minor --message="captions fix"
+ *   npm run release:beta              # 0.4.2 → 0.4.3-beta.1 (beta.json only)
  *   npm run release -- --dry-run
- *   npm run release -- --no-git          # build + upload only
- *   npm run release -- --no-upload       # git only (rely on GitHub webhook)
+ *   npm run release -- --no-git
+ *   npm run release -- --no-upload
  *
  * Env:
  *   NEXT_APP_ROOT  path to next-app (default: ../../next-app relative to this repo)
+ *
+ * Beta is only returned by GET /api/cep/update to allowlisted testers
+ * (basepackagehelp@gmail.com). Stable users keep seeing latest.json.
  */
 
 import { spawnSync } from "node:child_process";
@@ -32,6 +35,7 @@ const EXT_ID = "com.spunkramlibrary.cep";
 function parseArgs(argv) {
   const opts = {
     bump: null, // patch | minor | major
+    beta: false,
     message: "",
     dryRun: false,
     noGit: false,
@@ -43,10 +47,13 @@ function parseArgs(argv) {
     else if (arg === "--no-git") opts.noGit = true;
     else if (arg === "--no-upload") opts.noUpload = true;
     else if (arg === "--skip-build") opts.skipBuild = true;
+    else if (arg === "--beta") opts.beta = true;
     else if (arg.startsWith("--bump=")) opts.bump = arg.slice("--bump=".length);
     else if (arg.startsWith("--message=")) opts.message = arg.slice("--message=".length);
     else if (arg === "--help" || arg === "-h") {
-      console.log(`Usage: node scripts/release.mjs [--bump=patch|minor|major] [--message=…] [--dry-run] [--no-git] [--no-upload] [--skip-build]`);
+      console.log(
+        `Usage: node scripts/release.mjs [--bump=patch|minor|major] [--beta] [--message=…] [--dry-run] [--no-git] [--no-upload] [--skip-build]`,
+      );
       process.exit(0);
     } else {
       console.warn(`[release] ignoring unknown arg: ${arg}`);
@@ -54,6 +61,9 @@ function parseArgs(argv) {
   }
   if (opts.bump && !["patch", "minor", "major"].includes(opts.bump)) {
     throw new Error(`Invalid --bump=${opts.bump} (use patch|minor|major)`);
+  }
+  if (opts.beta && opts.bump) {
+    throw new Error("Use either --beta or --bump=…, not both");
   }
   return opts;
 }
@@ -96,8 +106,16 @@ function runCapture(cmd, args) {
   return (res.stdout || "").trim();
 }
 
+function coreVersion(version) {
+  return String(version || "")
+    .replace(/^v/i, "")
+    .replace(/-.*$/, "");
+}
+
 function bumpSemver(version, kind) {
-  const parts = version.replace(/^v/i, "").split(".").map((n) => parseInt(n, 10) || 0);
+  const parts = coreVersion(version)
+    .split(".")
+    .map((n) => parseInt(n, 10) || 0);
   while (parts.length < 3) parts.push(0);
   let [maj, min, pat] = parts;
   if (kind === "major") {
@@ -107,10 +125,28 @@ function bumpSemver(version, kind) {
   } else if (kind === "minor") {
     min += 1;
     pat = 0;
+  } else if (/-beta\.\d+$/i.test(version) && kind === "patch") {
+    // Promote beta → stable of the same core (0.4.3-beta.2 → 0.4.3)
+    return `${maj}.${min}.${pat}`;
   } else {
     pat += 1;
   }
   return `${maj}.${min}.${pat}`;
+}
+
+/** 0.4.2 → 0.4.3-beta.1 ; 0.4.3-beta.1 → 0.4.3-beta.2 */
+function bumpBeta(version) {
+  const m = String(version || "")
+    .replace(/^v/i, "")
+    .match(/^(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/i);
+  if (!m) {
+    throw new Error(`Cannot bump beta from version "${version}" (expected x.y.z or x.y.z-beta.N)`);
+  }
+  if (m[4] != null) {
+    return `${m[1]}.${m[2]}.${m[3]}-beta.${Number(m[4]) + 1}`;
+  }
+  const next = bumpSemver(`${m[1]}.${m[2]}.${m[3]}`, "patch");
+  return `${next}-beta.1`;
 }
 
 function readPkg() {
@@ -126,7 +162,6 @@ function writePkgVersion(version) {
 function changelogForVersion(version) {
   if (!existsSync(CHANGELOG_PATH)) return "";
   const text = readFileSync(CHANGELOG_PATH, "utf8");
-  // Prefer ## [x.y.z] or ## x.y.z section; else Unreleased body
   const escaped = version.replace(/\./g, "\\.");
   const sectionRe = new RegExp(
     `##\\s*\\[?${escaped}\\]?[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s|$)`,
@@ -158,14 +193,20 @@ function main() {
   const opts = parseArgs(process.argv);
   let version = readPkg().version;
 
-  if (opts.bump) {
+  if (opts.beta) {
+    const next = bumpBeta(version);
+    console.log(`[release] beta bump ${version} → ${next}`);
+    if (!opts.dryRun) writePkgVersion(next);
+    version = next;
+  } else if (opts.bump) {
     const next = bumpSemver(version, opts.bump);
     console.log(`[release] bump ${version} → ${next} (--bump=${opts.bump})`);
     if (!opts.dryRun) writePkgVersion(next);
     version = next;
   }
 
-  console.log(`[release] version=${version}`);
+  const uploadChannel = opts.beta || /-beta/i.test(version) ? "beta" : "stable";
+  console.log(`[release] version=${version} channel=${uploadChannel}`);
 
   if (!opts.skipBuild) {
     if (opts.dryRun) {
@@ -186,13 +227,12 @@ function main() {
     if (status) {
       const msg =
         opts.message ||
-        `release: v${version}`;
+        (uploadChannel === "beta" ? `release: v${version} (beta)` : `release: v${version}`);
       console.log(`[release] committing local changes…`);
       if (opts.dryRun) {
         console.log(`[release] dry-run: would git add/commit: ${msg}`);
       } else {
         run("git", ["add", "-A"]);
-        // Allow empty? no — only if something staged
         const staged = runCapture("git", ["diff", "--cached", "--name-only"]);
         if (staged) {
           run("git", ["commit", "-m", msg]);
@@ -208,7 +248,6 @@ function main() {
       console.log(`[release] dry-run: would git push && tag ${version} && push tag`);
     } else {
       run("git", ["push"]);
-      // Tag matches CI pattern "*.*.*" (no leading v)
       const existing = spawnSync("git", ["rev-parse", `refs/tags/${version}`], {
         cwd: ROOT,
         encoding: "utf8",
@@ -241,6 +280,7 @@ function main() {
       uploadScript,
       `--zxp=${zxpPath || path.join(ROOT, "dist", "zxp", `${EXT_ID}.zxp`)}`,
       `--version=${version}`,
+      `--channel=${uploadChannel}`,
     ];
     if (notes) uploadArgs.push(`--changelog=${notes}`);
 
@@ -250,15 +290,20 @@ function main() {
       if (!zxpPath || !existsSync(zxpPath)) {
         throw new Error(`Cannot upload: ZXP missing at ${zxpPath}`);
       }
-      console.log(`[release] uploading to R2 via next-app…`);
+      console.log(`[release] uploading to R2 via next-app (channel=${uploadChannel})…`);
       run("node", uploadArgs, { cwd: nextApp });
     }
   } else {
     console.log("[release] --no-upload: skip R2 (webhook can publish from GitHub Release)");
   }
 
-  console.log(`[release] done → v${version}`);
+  console.log(`[release] done → v${version} (${uploadChannel})`);
   console.log(`  check: https://motionflow.pro/api/cep/update`);
+  if (uploadChannel === "beta") {
+    console.log(
+      "  beta visible only to basepackagehelp@gmail.com (signed-in CEP with Bearer)",
+    );
+  }
 }
 
 try {

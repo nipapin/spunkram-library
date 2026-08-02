@@ -293,6 +293,7 @@ function AppShell() {
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [updateZxpUrl, setUpdateZxpUrl] = useState<string | null>(null);
   const [updateChangelog, setUpdateChangelog] = useState("");
+  const [updateChannel, setUpdateChannel] = useState<"stable" | "beta">("stable");
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateProgress, setUpdateProgress] = useState<string | undefined>();
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -353,19 +354,28 @@ function AppShell() {
     });
   }, []);
 
+  // Re-check after sign-in so beta testers get beta.json (Bearer required).
   useEffect(() => {
+    if (!authReady || !signedIn) return;
     let cancelled = false;
     fetchUpdateInfo().then((info) => {
       if (cancelled || !info?.version || !info.zxpUrl) return;
-      if (!isRemoteNewer(LOCAL_VERSION, info.version)) return;
+      if (!isRemoteNewer(LOCAL_VERSION, info.version)) {
+        setUpdateVersion(null);
+        setUpdateZxpUrl(null);
+        setUpdateChangelog("");
+        setUpdateChannel("stable");
+        return;
+      }
       setUpdateVersion(info.version);
       setUpdateZxpUrl(info.zxpUrl);
       setUpdateChangelog(typeof info.changelog === "string" ? info.changelog : "");
+      setUpdateChannel(info.channel === "beta" ? "beta" : "stable");
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authReady, signedIn]);
 
   const handleApplyUpdate = useCallback(async () => {
     if (!updateZxpUrl || !updateVersion || updateBusy) return;
@@ -493,6 +503,7 @@ function AppShell() {
           version={updateVersion}
           localVersion={LOCAL_VERSION}
           changelog={updateChangelog}
+          channel={updateChannel}
           busy={updateBusy}
           progressLabel={updateProgress}
           error={updateError}

@@ -22,13 +22,13 @@ export const GENERATIONS_ENDPOINTS = {
   credits: "/api/cep/generations",
   /**
    * POST — TTS voiceover (Minimax via Motionflow).
-   * Body: { text, voice_id, speed? }
+   * Body: { text, voice_id, speed?, language_boost? }
    */
   voiceover: "/api/generations/voiceover",
 } as const;
 
 export const VOICEOVER_ENDPOINTS = {
-  /** GET — available Minimax voices */
+  /** GET — Minimax voices + language_boost options */
   voices: "/api/cep/voiceover/voices",
 } as const;
 

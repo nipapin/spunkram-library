@@ -6,6 +6,8 @@ type Props = {
   version: string;
   localVersion?: string;
   changelog?: string;
+  /** When "beta", banner labels the update as a tester build. */
+  channel?: "stable" | "beta";
   busy: boolean;
   progressLabel?: string;
   error?: string | null;
@@ -33,6 +35,7 @@ export function UpdateBanner({
   version,
   localVersion,
   changelog = "",
+  channel = "stable",
   busy,
   progressLabel,
   error,
@@ -84,13 +87,17 @@ export function UpdateBanner({
 
           <div className="min-w-0 flex-1">
             <p className="text-[12px] font-semibold leading-tight text-foreground">
-              {busy ? "Updating Spunkram" : "Update available"}
+              {busy
+                ? "Updating Spunkram"
+                : channel === "beta"
+                  ? "Beta update available"
+                  : "Update available"}
             </p>
             <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
               {busy
                 ? progressLabel || `Installing v${version}…`
                 : localVersion
-                  ? `v${localVersion} → v${version}`
+                  ? `v${localVersion} → v${version}${channel === "beta" ? " (beta)" : ""}`
                   : `Version ${version} is ready`}
             </p>
           </div>
