@@ -292,10 +292,10 @@ function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [updateZxpUrl, setUpdateZxpUrl] = useState<string | null>(null);
+  const [updateChangelog, setUpdateChangelog] = useState("");
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateProgress, setUpdateProgress] = useState<string | undefined>();
   const [updateError, setUpdateError] = useState<string | null>(null);
-  const [updateDismissed, setUpdateDismissed] = useState(false);
 
   const applyPack = useCallback((meta: InstalledPackMeta) => {
     loadInstalledPack(meta)
@@ -360,6 +360,7 @@ function AppShell() {
       if (!isRemoteNewer(LOCAL_VERSION, info.version)) return;
       setUpdateVersion(info.version);
       setUpdateZxpUrl(info.zxpUrl);
+      setUpdateChangelog(typeof info.changelog === "string" ? info.changelog : "");
     });
     return () => {
       cancelled = true;
@@ -476,8 +477,7 @@ function AppShell() {
     );
   }
 
-  const showUpdateBanner =
-    Boolean(updateVersion && updateZxpUrl) && !updateDismissed;
+  const showUpdateBanner = Boolean(updateVersion && updateZxpUrl);
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
@@ -491,11 +491,12 @@ function AppShell() {
       {showUpdateBanner && updateVersion ? (
         <UpdateBanner
           version={updateVersion}
+          localVersion={LOCAL_VERSION}
+          changelog={updateChangelog}
           busy={updateBusy}
           progressLabel={updateProgress}
           error={updateError}
           onUpdate={handleApplyUpdate}
-          onDismiss={() => setUpdateDismissed(true)}
         />
       ) : null}
 
