@@ -403,6 +403,7 @@ Captions / chapters / voiceover: тот же Bearer; лимит и Spunkram-sub 
   "action": "voiceover.generate",
   "error": "Generation failed",
   "error_code": "TIMEOUT",
+  "severity": "error",
   "stack": "…",
   "extension_version": "0.4.4-beta.2",
   "host": { "appId": "PPRO", "appName": "Premiere Pro", "appVersion": "24.5" },
@@ -414,10 +415,24 @@ Captions / chapters / voiceover: тот же Bearer; лимит и Spunkram-sub 
 }
 ```
 
-**Response:** `202 { "ok": true }` после принятия (Telegram best-effort).  
+**Severity**
+
+| Level | Meaning | Telegram |
+|---|---|---|
+| `error` (default) | Irreversible failure of the intended action | yes |
+| `warning` | Recoverable / user guidance / degraded | no |
+| `info` | Diagnostics | no |
+
+Клиент шлёт на backend только `error`. `warning`/`info` остаются в `console` (dev).  
+Server также фильтрует: non-error → `202 { delivered: false }`.
+
+**Response:** `202 { "ok": true, "delivered": true|false }` после принятия (Telegram best-effort).  
 Rate limit: ~1 одинаковый report / мин на IP+action+error → `429 RATE_LIMITED`.
 
-Клиент: `src/js/lib/support/error-observer.ts` + `reportSupportError(action, err)` — не шлёт `UNAUTHORIZED` / `GENERATION_LIMIT_REACHED` / `SUBSCRIPTION_REQUIRED`.
+Клиент: `src/js/lib/support/error-observer.ts`  
+- `reportSupportError(action, err, { severity?, …extra })`  
+- `reportSupportWarning` / `reportSupportInfo`  
+Не шлёт entitlement/auth business codes и user-guidance («Open a sequence…»).
 
 ---
 

@@ -10,7 +10,11 @@ export {
 export {
   installGlobalHandlers,
   reportSupportError,
+  reportSupportWarning,
+  reportSupportInfo,
   type SupportExtra,
+  type SupportSeverity,
+  type SupportReportOptions,
 } from "./support";
 export { fetchGenerationsStatus, type GenerationsStatus } from "./credits";
 export {

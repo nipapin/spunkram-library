@@ -58,9 +58,16 @@ export async function applyPackItemToHost(
   }
 
   if (!fs.existsSync(resolved.file)) {
+    const msg = `Source file not found: ${path.basename(resolved.file)}`;
+    reportSupportError("pack.apply_item", msg, {
+      item: item.name,
+      reason: "SOURCE_MISSING",
+      ctype: resolved.ctype,
+      file: path.basename(resolved.file),
+    });
     return {
       ok: false,
-      message: `Source file not found: ${path.basename(resolved.file)}`,
+      message: msg,
     };
   }
 
