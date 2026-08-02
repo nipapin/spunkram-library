@@ -67,6 +67,12 @@ export default defineConfig({
     __APP_BRAND__: JSON.stringify("spunkram"),
     __CEP_DEV_ADMIN_TOKEN__: JSON.stringify(cepDevAdminToken),
     __CEP_API_MOCKS__: JSON.stringify(cepApiMocks),
+    // Inline so panel JS never touches bare `process` (CEP CEF / ExtendScript).
+    "process.env.SPUNKRAM_EXT_FLAVOR": JSON.stringify(
+      process.env.SPUNKRAM_EXT_FLAVOR || "",
+    ),
+    "process.env.ZXP_PACKAGE": JSON.stringify(process.env.ZXP_PACKAGE || ""),
+    "process.env.ZIP_PACKAGE": JSON.stringify(process.env.ZIP_PACKAGE || ""),
   },
   resolve: {
     alias: [
