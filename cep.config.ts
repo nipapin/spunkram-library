@@ -2,18 +2,24 @@ import type { CEP_Config } from "vite-cep-plugin";
 import { version } from "./package.json";
 
 /**
- * Local/dev uses a separate ExtensionBundleId so a production ZXP
- * (`com.spunkramlibrary.cep`) can stay installed alongside the symlink/dev panel.
- * Package builds (`npm run zxp` / `zip`) switch to the production id + menu name.
+ * Extension identity:
+ * - `npm run zxp` / `zip` / `release` → prod: com.spunkramlibrary.cep
+ * - `npm run zxp:dev` / local symlink / watch → dev: com.spunkramlibrarydev.cep
+ *
+ * Controlled by SPUNKRAM_EXT_FLAVOR=prod|dev (set by package scripts).
+ * Default without flavor: prod only when packaging, otherwise dev.
  */
+const flavor = (process.env.SPUNKRAM_EXT_FLAVOR || "").toLowerCase();
 const isPackage =
   process.env.ZXP_PACKAGE === "true" || process.env.ZIP_PACKAGE === "true";
+const isDevExt =
+  flavor === "dev" || (flavor !== "prod" && !isPackage);
 
-const id = isPackage
-  ? "com.spunkramlibrary.cep"
-  : "com.spunkramlibrarydev.cep";
+const id = isDevExt
+  ? "com.spunkramlibrarydev.cep"
+  : "com.spunkramlibrary.cep";
 
-const displayName = isPackage ? "Spunkram Library" : "Spunkram Library Dev";
+const displayName = isDevExt ? "Spunkram Library Dev" : "Spunkram Library";
 
 const config: CEP_Config = {
   version,

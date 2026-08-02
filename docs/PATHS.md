@@ -13,7 +13,8 @@
 | Mode | Bundle id | Menu name |
 |---|---|---|
 | Local (`dev` / `watch` / `build` / `symlink`) | `com.spunkramlibrarydev.cep` | **Spunkram Library Dev** |
-| Package (`zxp` / `zip` / `release`) | `com.spunkramlibrary.cep` | **Spunkram Library** |
+| `npm run zxp:dev` | `com.spunkramlibrarydev.cep` | **Spunkram Library Dev** |
+| `npm run zxp` / `zip` / `release` | `com.spunkramlibrary.cep` | **Spunkram Library** |
 
 Так можно держать установленный prod ZXP и параллельно symlink-dev панель.
 
