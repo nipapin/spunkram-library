@@ -1,9 +1,17 @@
-import { apiUrl, SUPPORT_ENDPOINT } from "@/api/config";
+import { SUPPORT_ENDPOINT } from "@/api/config";
 import { getUserIdentity } from "@/api/user";
-import { cepHttpRequest } from "@/lib/api/cep-http";
+import { cepHttpRequest, type HttpResult } from "@/lib/api/cep-http";
 import { collectSupportMeta } from "./collect-meta";
 
 const DEDUPE_WINDOW_MS = 60_000;
+
+/**
+ * Always absolute. In Vite DEV `apiUrl()` is relative (`"" + /api/...`) so the
+ * CEP Node `http` client cannot parse it and the report silently fails.
+ * Support must hit production Motionflow regardless of panel origin.
+ */
+const SUPPORT_REPORT_URL = `https://motionflow.pro${SUPPORT_ENDPOINT}`;
+
 
 /**
  * Severity:
@@ -155,7 +163,7 @@ function isDuplicate(
   return false;
 }
 
-async function postReport(payload: ReportPayload): Promise<void> {
+async function postReport(payload: ReportPayload): Promise<HttpResult> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -167,7 +175,7 @@ async function postReport(payload: ReportPayload): Promise<void> {
     // ignore — optional auth
   }
 
-  await cepHttpRequest(apiUrl(SUPPORT_ENDPOINT), {
+  return cepHttpRequest(SUPPORT_REPORT_URL, {
     method: "POST",
     headers,
     body: JSON.stringify(payload),
@@ -218,9 +226,23 @@ export function reportError(
       extra,
     };
 
-    void postReport(payload).catch(() => {
-      // Silent — reporting must never disrupt the panel.
-    });
+    void postReport(payload)
+      .then((result) => {
+        if (import.meta.env.DEV && !result.ok) {
+          console.warn(
+            "[support] report failed →",
+            SUPPORT_REPORT_URL,
+            result.status,
+            result.error,
+            (result.text || "").slice(0, 200),
+          );
+        } else if (import.meta.env.DEV) {
+          console.info("[support] report sent →", SUPPORT_REPORT_URL, result.status);
+        }
+      })
+      .catch(() => {
+        // Silent — reporting must never disrupt the panel.
+      });
   } catch {
     // Silent
   }

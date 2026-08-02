@@ -216,9 +216,10 @@ function migrateVaultIfNeeded(file: PreferencesFile): PreferencesFile {
   if (normalized.length > 0) {
     file.motionflowAccounts = normalized;
     if (!file.motionflowActiveAccountId) {
-      const active =
-        file.motionflowAuth?.id &&
-        normalized.find((a) => a.id === file.motionflowAuth?.id);
+      const preferredId = file.motionflowAuth?.id;
+      const active = preferredId
+        ? normalized.find((a) => a.id === preferredId)
+        : undefined;
       file.motionflowActiveAccountId = active?.id ?? normalized[0].id;
     }
     return file;

@@ -7,14 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
+## [0.4.4-beta.3] - 2026-08-02
 
-- Extension auto-update: panel checks `GET /api/cep/update`, downloads ZXP from CDN, unpacks over the userdata install path, and reloads
-- On-demand ffmpeg download from public CDN into userdata (`%APPDATA%/Spunkram/bin` / macOS Application Support) so the ZXP stays small
+### What's new
 
-### Changed
+- Faster help when something breaks: if a critical error stops your work, Spunkram can notify our support team with the details needed to investigate
+- Manage several Motionflow accounts in the panel and switch between them without signing in again each time
 
-- Removed bundled ffmpeg / ffplay / ffprobe from the extension package (~300 MB)
+### Improvements
+
+- Clearer messages when a pack item can't be applied (for example, when a source file is missing)
+- Smoother account and tutorials experience in the panel
 
 ## [0.0.1] - 2026-08-02
 
