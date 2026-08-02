@@ -58,12 +58,21 @@ function parseArgs(argv) {
   return opts;
 }
 
+/** Quote args with spaces so cmd.exe keeps them as one token when shell:true. */
+function shellQuote(arg) {
+  const s = String(arg);
+  if (!/[ \t"]/.test(s)) return s;
+  return `"${s.replace(/"/g, '\\"')}"`;
+}
+
 function run(cmd, args, opts = {}) {
+  const useShell = opts.shell ?? process.platform === "win32";
+  const finalArgs = useShell ? args.map(shellQuote) : args;
   console.log(`$ ${cmd} ${args.join(" ")}`);
-  const res = spawnSync(cmd, args, {
+  const res = spawnSync(cmd, finalArgs, {
     cwd: opts.cwd || ROOT,
     stdio: "inherit",
-    shell: opts.shell ?? process.platform === "win32",
+    shell: useShell,
     env: { ...process.env, ...opts.env },
   });
   if (res.status !== 0) {
@@ -72,10 +81,12 @@ function run(cmd, args, opts = {}) {
 }
 
 function runCapture(cmd, args) {
-  const res = spawnSync(cmd, args, {
+  const useShell = process.platform === "win32";
+  const finalArgs = useShell ? args.map(shellQuote) : args;
+  const res = spawnSync(cmd, finalArgs, {
     cwd: ROOT,
     encoding: "utf8",
-    shell: process.platform === "win32",
+    shell: useShell,
   });
   if (res.status !== 0) {
     throw new Error(

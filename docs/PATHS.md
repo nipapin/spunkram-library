@@ -8,6 +8,15 @@
 | **Исходный проект (Spunkram Beta CEP)** | `C:\Users\nipap\AppData\Roaming\Adobe\CEP\extensions\Spunkram Beta` |
 | **Сервер (Motionflow next-app)** | `C:\Users\nipap\Documents\motionflow\next-app\` |
 
+## Dev vs prod extension id
+
+| Mode | Bundle id | Menu name |
+|---|---|---|
+| Local (`dev` / `watch` / `build` / `symlink`) | `com.spunkramlibrarydev.cep` | **Spunkram Library Dev** |
+| Package (`zxp` / `zip` / `release`) | `com.spunkramlibrary.cep` | **Spunkram Library** |
+
+Так можно держать установленный prod ZXP и параллельно symlink-dev панель.
+
 ## Release / auto-update
 
 Из корня CEP:
