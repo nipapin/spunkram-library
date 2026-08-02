@@ -1,17 +1,11 @@
-import { Captions, ListOrdered, Mic, Sparkles, Plus, Infinity as InfinityIcon, X } from "lucide-react";
-import { useState } from "react";
+import { Captions, ListOrdered, Mic, Sparkles, Plus, Infinity as InfinityIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { openMotionflowSubscribe } from "@/api/motionflow-auth";
 
 const AI_TOOLS = [
   { id: "captions", label: "Captions", desc: "Auto-generate subtitles", icon: Captions, soon: false },
   { id: "chapter", label: "Chapter", desc: "Split into chapters", icon: ListOrdered, soon: false },
   { id: "voiceover", label: "Voiceover", desc: "AI narration with Minimax", icon: Mic, soon: false },
-] as const;
-
-const EXTRA_PACKS = [
-  { id: "pack-25", amount: 25, price: 7 },
-  { id: "pack-50", amount: 50, price: 12 },
-  { id: "pack-100", amount: 100, price: 19 },
 ] as const;
 
 const ACCENT_PILL =
@@ -23,16 +17,15 @@ export function AiToolsList({
   monthlyLimit,
   isFreeUser,
   onOpenTool,
-  onBuyExtra,
 }: {
   monthly: number;
   extra: number;
   monthlyLimit: number;
   isFreeUser?: boolean;
   onOpenTool: (id: string) => void;
-  onBuyExtra: (amount: number) => void;
+  /** @deprecated Local fake extras removed — quota is server-owned. */
+  onBuyExtra?: (amount: number) => void;
 }) {
-  const [showExtra, setShowExtra] = useState(false);
   const totalLeft = monthly + extra;
   const pct = Math.max(0, Math.min(100, monthlyLimit > 0 ? (monthly / monthlyLimit) * 100 : 0));
 
@@ -66,14 +59,14 @@ export function AiToolsList({
               </span>
               <button
                 type="button"
-                onClick={() => setShowExtra(true)}
+                onClick={() => openMotionflowSubscribe()}
                 className={cn(
                   "flex items-center gap-0.5 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-opacity hover:opacity-95",
                   ACCENT_PILL,
                 )}
               >
                 <Plus className="size-3" strokeWidth={2.5} />
-                Add Extra
+                Get more
               </button>
             </div>
           </div>
@@ -123,56 +116,6 @@ export function AiToolsList({
           );
         })}
       </div>
-
-      {showExtra && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xs rounded-xl border border-white/10 bg-card p-4 shadow-2xl ring-1 ring-inset ring-white/5">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                  <Plus className="size-4 text-primary" strokeWidth={2.5} />
-                  Buy extra generations
-                </h3>
-                <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  Extra generations never expire and are used after your monthly quota.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowExtra(false)}
-                aria-label="Close"
-                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {EXTRA_PACKS.map((pack) => (
-                <button
-                  key={pack.id}
-                  type="button"
-                  onClick={() => {
-                    onBuyExtra(pack.amount);
-                    setShowExtra(false);
-                  }}
-                  className="flex flex-col items-center gap-0.5 rounded-lg border border-white/10 bg-background/50 px-2 py-2.5 transition-colors hover:border-primary/60 hover:bg-primary/10"
-                >
-                  <span className="text-sm font-semibold text-foreground">{pack.amount}</span>
-                  <span className="text-[9px] uppercase tracking-wide text-muted-foreground">gens</span>
-                  <span
-                    className={cn(
-                      "mt-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                      ACCENT_PILL,
-                    )}
-                  >
-                    ${pack.price}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

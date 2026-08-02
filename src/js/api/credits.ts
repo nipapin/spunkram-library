@@ -41,6 +41,15 @@ export async function fetchGenerationsStatus(
       if (response.status === 401) {
         return { authenticated: false };
       }
+      if (response.status === 402 || response.status === 403) {
+        return {
+          authenticated: true,
+          subscription_generations_left: 0,
+          extra_generations_left: 0,
+          total_generations_left: 0,
+          remaining: 0,
+        };
+      }
       return null;
     }
     return (await response.json()) as GenerationsStatus;

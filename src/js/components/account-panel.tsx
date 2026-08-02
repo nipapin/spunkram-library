@@ -6,7 +6,9 @@ import {
   Loader2,
   LogOut,
   Monitor,
+  Plus,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -16,6 +18,7 @@ import {
 } from "@/api/motionflow-auth";
 import { getUserSystemData } from "@/lib/api/usp";
 import { parseDeviceFingerprint } from "@/lib/api/market-api";
+import type { MotionflowAccountSession } from "@/lib/api/preferences";
 
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
@@ -31,12 +34,37 @@ function formatDate(iso?: string): string | null {
   });
 }
 
+function accountInitial(account: Pick<MotionflowAccountSession, "name" | "email">): string {
+  const source = (account.name || account.email || "?").trim();
+  return source.charAt(0).toUpperCase() || "?";
+}
+
 export function AccountPanel({ onBack }: { onBack: () => void }) {
-  const { auth, subscription, isFreeUser, generationLimit, logout, recheck, revoke } =
-    useAuth();
+  const {
+    auth,
+    subscription,
+    isFreeUser,
+    generationLimit,
+    logout,
+    recheck,
+    revoke,
+    savedAccounts,
+    switchAccount,
+    addAccount,
+    removeSavedAccount,
+    loginBusy,
+    loginCode,
+    cancelLogin,
+  } = useAuth();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const currentMac = useMemo(() => getUserSystemData().mac, []);
+
+  const otherAccounts = useMemo(
+    () => savedAccounts.filter((a) => a.id !== auth.id),
+    [savedAccounts, auth.id],
+  );
+
   async function handleRecheck() {
     setBusy(true);
     setMessage(null);
@@ -51,6 +79,38 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
     const result = await revoke(deviceId);
     setBusy(false);
     if (!result.ok) setMessage(result.message || "Revoke failed");
+  }
+
+  async function handleSwitch(id: string) {
+    setBusy(true);
+    setMessage(null);
+    const result = await switchAccount(id);
+    setBusy(false);
+    setMessage(result.ok ? result.message || "Switched account" : result.message || "Switch failed");
+  }
+
+  async function handleAddAccount() {
+    setBusy(true);
+    setMessage(null);
+    const result = await addAccount();
+    setBusy(false);
+    if (!result.ok) setMessage(result.message || "Could not add account");
+    else setMessage(result.message || "Account added");
+  }
+
+  async function handleRemove(id: string) {
+    setBusy(true);
+    setMessage(null);
+    const result = await removeSavedAccount(id);
+    setBusy(false);
+    setMessage(result.ok ? "Account removed" : result.message || "Remove failed");
+  }
+
+  async function handleLogout() {
+    setBusy(true);
+    await logout();
+    setBusy(false);
+    onBack();
   }
 
   const renewLabel = formatDate(subscription.renews_at);
@@ -76,11 +136,32 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
           </div>
         )}
 
+        {loginBusy && loginCode && (
+          <div className="mb-3 rounded-xl border border-primary/30 bg-card/60 px-3 py-3 text-center">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Confirm this code in the browser
+            </p>
+            <p className="mt-1 font-mono text-lg font-semibold tracking-widest text-foreground">
+              {loginCode}
+            </p>
+            <button
+              type="button"
+              onClick={cancelLogin}
+              className="mt-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
         <section className="mb-3 rounded-xl border border-white/10 bg-card/60 p-3">
           <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Profile
           </h3>
           <div className="flex items-center gap-2">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">
+              {accountInitial({ name: auth.name, email: auth.email || "" })}
+            </div>
             <div className="min-w-0 flex-1 space-y-1">
               <p className="truncate text-sm font-medium text-foreground">
                 {auth.name || auth.email || "Spunkram user"}
@@ -93,15 +174,75 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
               type="button"
               aria-label="Log out"
               title="Log out"
-              onClick={() => {
-                logout();
-                onBack();
-              }}
-              className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-secondary/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              disabled={busy || loginBusy}
+              onClick={() => void handleLogout()}
+              className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-secondary/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
             >
               <LogOut className="size-3.5" />
             </button>
           </div>
+        </section>
+
+        <section className="mb-3 rounded-xl border border-white/10 bg-card/60 p-3">
+          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Saved accounts
+          </h3>
+          <ul className="mb-2 space-y-1">
+            {otherAccounts.length === 0 ? (
+              <li className="rounded-lg border border-white/5 bg-background/30 px-2.5 py-2 text-[11px] text-muted-foreground">
+                No other accounts saved yet
+              </li>
+            ) : (
+              otherAccounts.map((account) => (
+                <li
+                  key={account.id}
+                  className="flex items-center gap-2 rounded-lg border border-white/5 bg-background/30 px-2.5 py-2"
+                >
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-foreground">
+                    {accountInitial(account)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[11px] font-medium text-foreground">
+                      {account.name || account.email}
+                    </div>
+                    <div className="truncate text-[9px] text-muted-foreground">{account.email}</div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy || loginBusy}
+                    onClick={() => void handleSwitch(account.id)}
+                    className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 disabled:opacity-50"
+                  >
+                    Switch
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || loginBusy}
+                    aria-label={`Remove ${account.email}`}
+                    title="Remove"
+                    onClick={() => void handleRemove(account.id)}
+                    className="flex size-6 items-center justify-center rounded-full border border-white/10 text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive disabled:opacity-50"
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+          <button
+            type="button"
+            disabled={busy || loginBusy}
+            onClick={() => void handleAddAccount()}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-background/40 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 disabled:opacity-50"
+          >
+            {loginBusy ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Plus className="size-3.5" />
+            )}
+            Add account
+            <ExternalLink className="size-3 opacity-70" />
+          </button>
         </section>
 
         <section className="mb-3 rounded-xl border border-white/10 bg-card/60 p-3">

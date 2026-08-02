@@ -9,6 +9,7 @@ import { loadPreferencesFile, resolvePreferencesPath, savePreferencesFile } from
 import { initPackageAsync, parsePackageFileFormat } from "./pack";
 import type { InstalledPackMeta } from "./pack-types";
 import { extractZipToFolder } from "./pack-zip";
+import { reportSupportError } from "@/api/support";
 
 function cepFsAvailable(): boolean {
   return typeof fs?.existsSync === "function";
@@ -139,6 +140,7 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
 
     return { ok: true, meta };
   } catch (e) {
+    reportSupportError("pack.install", e);
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   } finally {
     if (cleanupStagingDir) {

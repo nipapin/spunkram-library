@@ -384,6 +384,43 @@ Captions / chapters / voiceover: тот же Bearer; лимит и Spunkram-sub 
 
 ---
 
+## 6.1 Support / error reports → Telegram
+
+`POST /api/cep/support/report` — CEP Error Observer. Bearer **опционален** (если есть — в Telegram добавляются email / user id).
+
+**Env (next-app):**
+
+| Var | Role |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Bot API token (общий с contact form) |
+| `GROUP_CHAT_ID` | Группа / супергруппа support |
+| `TOPIC_ID` | Forum topic id (`message_thread_id`) |
+
+**Request**
+
+```json
+{
+  "action": "voiceover.generate",
+  "error": "Generation failed",
+  "error_code": "TIMEOUT",
+  "stack": "…",
+  "extension_version": "0.4.4-beta.2",
+  "host": { "appId": "PPRO", "appName": "Premiere Pro", "appVersion": "24.5" },
+  "os": "Windows 11 …",
+  "locale": "en-US",
+  "client": "spunkram-cep",
+  "occurred_at": "2026-08-02T17:09:00.000Z",
+  "extra": { "item": "optional" }
+}
+```
+
+**Response:** `202 { "ok": true }` после принятия (Telegram best-effort).  
+Rate limit: ~1 одинаковый report / мин на IP+action+error → `429 RATE_LIMITED`.
+
+Клиент: `src/js/lib/support/error-observer.ts` + `reportSupportError(action, err)` — не шлёт `UNAUTHORIZED` / `GENERATION_LIMIT_REACHED` / `SUBSCRIPTION_REQUIRED`.
+
+---
+
 ## 7. CORS / CEP HTTP
 
 Production CEP ходит Node `http(s)` без CORS.  
@@ -405,6 +442,7 @@ Vite-dev проксирует `/api/cep/*`, `/api/generations/*`.
 - [ ] `GET /api/cep/update` + R2 `latest.json`
 - [ ] `POST /api/github/webhook` + `GITHUB_WEBHOOK_SECRET`
 - [ ] ffmpeg binaries on public CDN
+- [ ] `POST /api/cep/support/report` + `GROUP_CHAT_ID` / `TOPIC_ID`
 
 ---
 
@@ -430,4 +468,5 @@ Vite-dev проксирует `/api/cep/*`, `/api/generations/*`.
 1. `src/js/api/motionflow-auth.ts`
 2. `src/js/api/cep-market.ts`
 3. `src/js/api/update.ts`
-4. Этот файл
+4. `src/js/api/support.ts`
+5. Этот файл

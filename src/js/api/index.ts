@@ -1,4 +1,17 @@
-export { API_BASE, CAPTIONS_ENDPOINTS, GENERATIONS_ENDPOINTS, PRESET_ENDPOINTS, VOICEOVER_ENDPOINTS, apiUrl } from "./config";
+export {
+  API_BASE,
+  CAPTIONS_ENDPOINTS,
+  GENERATIONS_ENDPOINTS,
+  PRESET_ENDPOINTS,
+  SUPPORT_ENDPOINT,
+  VOICEOVER_ENDPOINTS,
+  apiUrl,
+} from "./config";
+export {
+  installGlobalHandlers,
+  reportSupportError,
+  type SupportExtra,
+} from "./support";
 export { fetchGenerationsStatus, type GenerationsStatus } from "./credits";
 export {
   clearUserIdentity,

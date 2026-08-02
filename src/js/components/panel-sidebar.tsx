@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight, Folder, Layers, Film, Music, Package, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePanelUI } from "@/lib/panel-ui-context";
 import type { PackTreeIcon, PackTreeNode } from "@/lib/utils/pack-types";
 
 const SIDEBAR_WIDTH_KEY = "spunkram.sidebarWidth";
@@ -69,6 +70,7 @@ function TreeNodeRow({
   depth,
   openIds,
   onToggleOpen,
+  showNewBadges,
 }: {
   node: PackTreeNode;
   active: string;
@@ -76,6 +78,7 @@ function TreeNodeRow({
   depth: number;
   openIds: Set<string>;
   onToggleOpen: (id: string) => void;
+  showNewBadges: boolean;
 }) {
   const isFolder = node.kind === "folder";
   const isActive = active === node.id;
@@ -118,7 +121,7 @@ function TreeNodeRow({
         >
           <TreeIcon icon={node.icon} active={isActive} />
           <span className="min-w-0 flex-1 truncate">{node.label}</span>
-          {node.newCount > 0 && (
+          {showNewBadges && node.newCount > 0 && (
             <span className="rounded px-1 text-[9px] font-semibold uppercase tracking-wide text-primary">
               NEW
             </span>
@@ -147,6 +150,7 @@ function TreeNodeRow({
               depth={depth + 1}
               openIds={openIds}
               onToggleOpen={onToggleOpen}
+              showNewBadges={showNewBadges}
             />
           ))}
         </div>
@@ -173,6 +177,7 @@ export function PanelSidebar({
   const [width, setWidth] = useState(loadSidebarWidth);
   const [resizing, setResizing] = useState(false);
   const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const { showNewBadges } = usePanelUI();
 
   const handleResizePointerMove = useCallback((e: PointerEvent) => {
     const drag = dragStateRef.current;
@@ -311,6 +316,7 @@ export function PanelSidebar({
               depth={0}
               openIds={openIds}
               onToggleOpen={toggleOpen}
+              showNewBadges={showNewBadges}
             />
           ))
         )}

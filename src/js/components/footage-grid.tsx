@@ -45,6 +45,7 @@ function PreviewCard({
     applyingItemId,
     setApplyingItemId,
     showStatus,
+    showNewBadges,
   } = usePanelUI();
   const [hovered, setHovered] = useState(false);
   const [inView, setInView] = useState(false);
@@ -60,7 +61,7 @@ function PreviewCard({
   const isGifMotion = motion?.kind === "gif";
   const aspectRatio = resolvePreviewAspectRatio(item.group);
   const isApplying = applyingItemId === item.id;
-  const isNew = !!item.group.is_new_mark;
+  const isNew = showNewBadges && !!item.group.is_new_mark;
   const isPremium = !!item.group.premium;
 
   // With Play Preview on, only cards in the scrollport should decode/play.

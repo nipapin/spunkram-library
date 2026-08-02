@@ -11,6 +11,7 @@ import { csi, evalTS, reloadJSX } from "../../lib/utils/bolt";
 import { convertToMp3, detectSpeechStart } from "../../utils/ffmpeg";
 import { getBundledAudioPresetPath } from "../../utils/audioPreset";
 import { getUserIdentity } from "../../api";
+import { reportSupportError } from "../../api/support";
 import { authErrorMessage, getLocalStyleAssetPaths } from "../../styles";
 import { toHostCaptionPayload } from "../../utils/captionHostPayload";
 import {
@@ -106,7 +107,11 @@ const rebuildWords = (orig: CaptionsChunk[], text: string): CaptionsChunk[] => {
 
 const isAfterEffects = () => csi.hostEnvironment?.appId === "AEFT";
 
-export const CaptionsApp = () => {
+export const CaptionsApp = ({
+  generationsLeft = 0,
+}: {
+  generationsLeft?: number;
+}) => {
   const {
     mode,
     lines,
@@ -230,6 +235,7 @@ export const CaptionsApp = () => {
       .then(() => undefined)
       .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : String(e));
+        reportSupportError("captions.resegment", e);
       });
   };
 
@@ -405,6 +411,7 @@ export const CaptionsApp = () => {
       restoreSession(payload, { compId: found.compId });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      reportSupportError("captions.load", e);
     }
   };
 
@@ -602,6 +609,10 @@ export const CaptionsApp = () => {
 
   const handleDescribe = async () => {
     if (progress) return;
+    if (generationsLeft <= 0) {
+      setError("No generations left. Upgrade your plan or buy extra credits.");
+      return;
+    }
     setError(null);
     try {
       const controller = new AbortController();
@@ -612,6 +623,7 @@ export const CaptionsApp = () => {
         // тихая отмена — без error-banner
       } else {
         setError(e instanceof Error ? e.message : String(e));
+        reportSupportError("captions.transcribe", e);
       }
     } finally {
       abortRef.current = null;
@@ -637,6 +649,7 @@ export const CaptionsApp = () => {
       text,
     }).catch((e: unknown) => {
       setError(e instanceof Error ? e.message : String(e));
+      reportSupportError("captions.live_edit", e);
     });
   };
 

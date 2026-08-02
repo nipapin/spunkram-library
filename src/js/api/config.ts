@@ -37,6 +37,9 @@ export const UPDATE_ENDPOINT = "/api/cep/update" as const;
 /** Admin — full list of uploaded ZXP versions */
 export const UPDATE_VERSIONS_ENDPOINT = "/api/cep/update/versions" as const;
 
+/** POST — CEP error observer → Telegram support topic (optional Bearer). */
+export const SUPPORT_ENDPOINT = "/api/cep/support/report" as const;
+
 /**
  * Каталог MOGRT/AEP-стилей — код из предыдущей версии продукта (Captions CEP),
  * оставлен в репозитории, но в текущем flow не используется.

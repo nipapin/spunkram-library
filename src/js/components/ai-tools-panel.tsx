@@ -26,14 +26,13 @@ export function AiToolsPanel({
   monthlyLimit,
   isFreeUser,
   onUse,
-  onBuyExtra,
 }: {
   monthly: number;
   extra: number;
   monthlyLimit: number;
   isFreeUser?: boolean;
   onUse: () => void;
-  onBuyExtra: (amount: number) => void;
+  onBuyExtra?: (amount: number) => void;
 }) {
   const [activeTool, setActiveTool] = useState<ActiveTool>(loadTool);
   const totalLeft = monthly + extra;
@@ -83,11 +82,11 @@ export function AiToolsPanel({
         </header>
         <div className="tool-shell__body">
           {activeTool === "captions" ? (
-            <CaptionsApp />
+            <CaptionsApp generationsLeft={totalLeft} />
           ) : activeTool === "chapters" ? (
-            <ChaptersApp />
+            <ChaptersApp generationsLeft={totalLeft} />
           ) : (
-            <VoiceoverApp />
+            <VoiceoverApp generationsLeft={totalLeft} />
           )}
         </div>
       </div>
@@ -102,7 +101,6 @@ export function AiToolsPanel({
         monthlyLimit={monthlyLimit}
         isFreeUser={isFreeUser}
         onOpenTool={openTool}
-        onBuyExtra={onBuyExtra}
       />
     </div>
   );

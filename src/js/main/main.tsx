@@ -16,6 +16,7 @@ import { FootagesPanel } from "@/footages";
 import { PanelUIProvider, usePanelUI } from "@/lib/panel-ui-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { fetchUpdateInfo, isRemoteNewer } from "@/api/update";
+import { fetchGenerationsStatus } from "@/api/credits";
 import { applyExtensionUpdate } from "@/utils/extension-update";
 import { ensureFfmpeg } from "@/utils/ffmpeg";
 import { version as LOCAL_VERSION } from "../../shared/shared";
@@ -44,7 +45,42 @@ import {
 import "./main.scss";
 
 const ACTIVE_PACK_STORAGE_KEY = "spunkram.activePackPath";
+const CATEGORY_BY_PACK_KEY = "spunkram.categoryByPack";
 const GENERATIONS_STORAGE_KEY = "spunkram.generations";
+
+function loadCategoryByPack(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(CATEGORY_BY_PACK_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [path, id] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof id === "string" && id) out[path] = id;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function persistCategoryForPack(packPath: string, categoryId: string) {
+  if (!packPath || !categoryId) return;
+  try {
+    const map = loadCategoryByPack();
+    if (map[packPath] === categoryId) return;
+    map[packPath] = categoryId;
+    localStorage.setItem(CATEGORY_BY_PACK_KEY, JSON.stringify(map));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function resolveCategoryForPack(tree: PackTreeNode[], packPath: string): string {
+  const saved = loadCategoryByPack()[packPath];
+  if (saved && findPackTreeNode(tree, saved)) return saved;
+  return getFirstPackRoot(tree)?.id ?? "";
+}
 
 type GenerationsState = {
   monthly: number;
@@ -274,6 +310,7 @@ function EditingWorkspace({
 
 function AppShell() {
   const { signedIn, authReady, generationLimit, isFreeUser } = useAuth();
+  const { setShowFavoritesOnly } = usePanelUI();
   const [nav, setNav] = useState("editing");
   const [tutorialsOpen, setTutorialsOpen] = useState(false);
   const [tree, setTree] = useState<PackTreeNode[]>([]);
@@ -302,12 +339,11 @@ function AppShell() {
     loadInstalledPack(meta)
       .then((loaded) => {
         const nextTree = buildPackTree(loaded.pack.structure);
-        const first = getFirstPackRoot(nextTree);
         setTree(nextTree);
         setAssetsPath(loaded.assetsPath);
         setPackFilePath(loaded.meta.path);
         setPackSettings(loaded.pack.settings);
-        setCategory(first?.id ?? "");
+        setCategory(resolveCategoryForPack(nextTree, loaded.meta.path));
         setPackError(null);
         try {
           localStorage.setItem(ACTIVE_PACK_STORAGE_KEY, loaded.meta.path);
@@ -320,6 +356,11 @@ function AppShell() {
         setPackError(packInitErrorMessage(message));
       });
   }, []);
+
+  useEffect(() => {
+    if (!packFilePath || !category) return;
+    persistCategoryForPack(packFilePath, category);
+  }, [packFilePath, category]);
 
   const reloadPackList = useCallback(() => {
     const installed = readInstallablePackages();
@@ -439,26 +480,46 @@ function AppShell() {
     });
   }, [monthlyGens, extraGens, generationLimit]);
 
-  function useGeneration() {
-    setMonthlyGens((monthly) => {
-      if (monthly > 0) return monthly - 1;
-      setExtraGens((extra) => (extra > 0 ? extra - 1 : extra));
-      return monthly;
-    });
-  }
+  /** Server (`user_generations`) is source of truth — localStorage is cache only. */
+  const refreshGenerationsFromServer = useCallback(async () => {
+    const status = await fetchGenerationsStatus();
+    if (!status?.authenticated) return;
+    const monthly =
+      typeof status.subscription_generations_left === "number"
+        ? status.subscription_generations_left
+        : typeof status.remaining === "number"
+          ? status.remaining
+          : null;
+    const extra =
+      typeof status.extra_generations_left === "number"
+        ? status.extra_generations_left
+        : null;
+    if (monthly !== null) setMonthlyGens(Math.max(0, monthly));
+    if (extra !== null) setExtraGens(Math.max(0, extra));
+  }, []);
+
+  useEffect(() => {
+    if (!authReady || !signedIn) return;
+    void refreshGenerationsFromServer();
+  }, [authReady, signedIn, generationLimit, refreshGenerationsFromServer]);
 
   const aiToolsProps = {
     monthly: monthlyGens,
     extra: extraGens,
     monthlyLimit: generationLimit,
     isFreeUser,
-    onUse: useGeneration,
-    onBuyExtra: (amount: number) => setExtraGens((v) => v + amount),
+    onUse: () => {
+      void refreshGenerationsFromServer();
+    },
   };
 
   function handleNav(id: string) {
     setSettingsOpen(false);
     setNav(id);
+    if (id === "editing") {
+      setTutorialsOpen(false);
+      setShowFavoritesOnly(false);
+    }
   }
 
   function openSettings() {

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Check,
   ChevronDown,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { evalTS } from "@/lib/utils/bolt";
+import { fs } from "@/lib/cep/node";
 import {
   downloadVoiceoverFile,
   fetchVoiceoverCatalog,
@@ -20,10 +21,82 @@ import {
   type VoiceoverResult,
   type VoiceoverVoice,
 } from "@/api/voiceover";
+import { reportSupportError } from "@/api/support";
 import { WaveformPlayer } from "@/components/waveform-player";
 
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
+
+const HISTORY_STORAGE_KEY = "spunkram.voiceoverHistory";
+const HISTORY_MAX = 30;
+
+type VoiceoverHistoryItem = {
+  id: string;
+  createdAt: number;
+  text: string;
+  voiceId: string;
+  voiceName: string;
+  languageBoost: string;
+  languageName: string;
+  speed: number;
+  audioUrl: string;
+  duration?: number;
+  fileName?: string;
+  localPath?: string | null;
+};
+
+function loadHistory(): VoiceoverHistoryItem[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is VoiceoverHistoryItem => {
+        if (!item || typeof item !== "object") return false;
+        const row = item as Partial<VoiceoverHistoryItem>;
+        return (
+          typeof row.id === "string" &&
+          typeof row.createdAt === "number" &&
+          typeof row.text === "string" &&
+          typeof row.audioUrl === "string" &&
+          row.audioUrl.length > 0
+        );
+      })
+      .slice(0, HISTORY_MAX);
+  } catch {
+    return [];
+  }
+}
+
+function persistHistory(items: VoiceoverHistoryItem[]) {
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items.slice(0, HISTORY_MAX)));
+  } catch {
+    // CEP / private mode may block storage
+  }
+}
+
+function newHistoryId(): string {
+  return `vo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function localFileExists(filePath: string | null | undefined): boolean {
+  if (!filePath) return false;
+  try {
+    return typeof fs?.existsSync === "function" && fs.existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+function playbackUrlFor(item: VoiceoverHistoryItem): string | null {
+  if (item.audioUrl && /^https?:\/\//i.test(item.audioUrl)) return item.audioUrl;
+  if (localFileExists(item.localPath)) {
+    return `file://${item.localPath!.replace(/\\/g, "/")}`;
+  }
+  return item.audioUrl || null;
+}
 
 function speedRangeStyle(value: number, min: number, max: number): CSSProperties {
   const pct = ((value - min) / (max - min)) * 100;
@@ -206,7 +279,111 @@ function VoicePreview({ voice }: { voice: VoiceoverVoice | undefined }) {
   );
 }
 
-export const VoiceoverApp = () => {
+function HistoryItemCard({
+  item,
+  placing,
+  onPlace,
+  onLocalPath,
+}: {
+  item: VoiceoverHistoryItem;
+  placing: { id: string; destination: "project" | "timeline" } | null;
+  onPlace: (item: VoiceoverHistoryItem, destination: "project" | "timeline") => void;
+  onLocalPath: (id: string, path: string) => void;
+}) {
+  const playbackUrl = useMemo(() => playbackUrlFor(item), [item]);
+  const busyHere = placing?.id === item.id;
+  const snippet =
+    item.text.length > 90 ? `${item.text.slice(0, 87).trimEnd()}…` : item.text;
+
+  // Best-effort re-download if local file vanished but CDN URL remains.
+  useEffect(() => {
+    if (localFileExists(item.localPath) || !item.audioUrl) return;
+    if (!/^https?:\/\//i.test(item.audioUrl)) return;
+    let cancelled = false;
+    void downloadVoiceoverFile(
+      item.audioUrl,
+      item.fileName || "spunkram-voiceover.wav",
+    ).then((dl) => {
+      if (!cancelled && dl.path) onLocalPath(item.id, dl.path);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally omit onLocalPath — stable via useCallback in parent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id, item.audioUrl, item.fileName, item.localPath]);
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-card/60 p-3 ring-1 ring-inset ring-white/5">
+      <p className="mb-1 line-clamp-2 text-[11px] text-foreground/90">{snippet}</p>
+      <p className="mb-2 text-[10px] text-muted-foreground">
+        {item.voiceName || "Voice"}
+        {item.languageName ? ` · ${item.languageName}` : ""}
+        {item.speed !== 1 ? ` · ${item.speed.toFixed(1)}x` : ""}
+        {item.duration ? ` · ~${item.duration}s` : ""}
+      </p>
+      <div className="rounded-lg border border-white/10 bg-background/40 px-2 py-2">
+        <WaveformPlayer
+          audioUrl={playbackUrl}
+          eagerLoad
+          loading={!playbackUrl}
+          className="gap-1.5"
+          timeClassName="w-8"
+          trailingSlot={
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button
+                type="button"
+                disabled={!!placing || !playbackUrl}
+                title="Add to timeline"
+                aria-label="Add to timeline"
+                onClick={() => onPlace(item, "timeline")}
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-md transition-colors",
+                  busyHere && placing?.destination === "timeline"
+                    ? "bg-primary/20 text-primary"
+                    : "text-muted-foreground hover:bg-primary/15 hover:text-primary",
+                  "disabled:cursor-not-allowed disabled:opacity-40",
+                )}
+              >
+                {busyHere && placing?.destination === "timeline" ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Timeline className="size-3.5" />
+                )}
+              </button>
+              <button
+                type="button"
+                disabled={!!placing || !playbackUrl}
+                title="Add to project"
+                aria-label="Add to project"
+                onClick={() => onPlace(item, "project")}
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-md transition-colors",
+                  busyHere && placing?.destination === "project"
+                    ? "bg-primary/20 text-primary"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  "disabled:cursor-not-allowed disabled:opacity-40",
+                )}
+              >
+                {busyHere && placing?.destination === "project" ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <FolderPlus className="size-3.5" />
+                )}
+              </button>
+            </div>
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+export const VoiceoverApp = ({
+  generationsLeft = 0,
+}: {
+  generationsLeft?: number;
+}) => {
   const [voices, setVoices] = useState<VoiceoverVoice[]>([]);
   const [languages, setLanguages] = useState<VoiceoverLanguage[]>([]);
   const [voiceId, setVoiceId] = useState("");
@@ -214,10 +391,16 @@ export const VoiceoverApp = () => {
   const [text, setText] = useState("");
   const [speed, setSpeed] = useState(1);
   const [busy, setBusy] = useState(false);
-  const [placing, setPlacing] = useState<"project" | "timeline" | null>(null);
+  const [placing, setPlacing] = useState<{
+    id: string;
+    destination: "project" | "timeline";
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<VoiceoverResult | null>(null);
-  const [localPath, setLocalPath] = useState<string | null>(null);
+  const [history, setHistory] = useState<VoiceoverHistoryItem[]>(loadHistory);
+
+  useEffect(() => {
+    persistHistory(history);
+  }, [history]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,7 +420,9 @@ export const VoiceoverApp = () => {
     };
   }, []);
 
-  const canGenerate = text.trim().length > 0 && !!voiceId && !busy;
+  const canGenerate =
+    text.trim().length > 0 && !!voiceId && !busy && generationsLeft > 0;
+  const outOfCredits = generationsLeft <= 0;
   const selectedVoice = useMemo(
     () => voices.find((v) => v.id === voiceId),
     [voices, voiceId],
@@ -247,79 +432,110 @@ export const VoiceoverApp = () => {
     [languages, languageBoost],
   );
 
-  const playbackUrl = useMemo(() => {
-    // Prefer HTTPS so peaks/playback don't remount when the local download finishes.
-    if (result?.audio_url && /^https?:\/\//i.test(result.audio_url)) {
-      return result.audio_url;
-    }
-    if (localPath) return `file://${localPath.replace(/\\/g, "/")}`;
-    return result?.audio_url || null;
-  }, [result?.audio_url, localPath]);
+  const updateLocalPath = useCallback((id: string, path: string) => {
+    setHistory((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, localPath: path } : item)),
+    );
+  }, []);
 
   async function handleGenerate() {
-    if (!canGenerate) return;
+    if (!canGenerate || generationsLeft <= 0) return;
     setBusy(true);
     setError(null);
-    setResult(null);
-    setLocalPath(null);
+    const script = text.trim();
     const res = await generateVoiceover({
-      text: text.trim(),
+      text: script,
       voice_id: voiceId,
       speed,
       language_boost: languageBoost,
     });
     setBusy(false);
     if (!res.data) {
-      setError(res.error || "Generation failed");
+      const msg = res.error || "Generation failed";
+      setError(msg);
+      reportSupportError("voiceover.generate", msg);
       return;
     }
-    setResult(res.data);
+    const data: VoiceoverResult = res.data;
+    const item: VoiceoverHistoryItem = {
+      id: newHistoryId(),
+      createdAt: Date.now(),
+      text: script,
+      voiceId,
+      voiceName: selectedVoice?.name || voiceId,
+      languageBoost,
+      languageName: selectedLanguage?.name || languageBoost,
+      speed,
+      audioUrl: data.audio_url,
+      duration: data.duration,
+      fileName: data.file_name,
+      localPath: null,
+    };
+    setHistory((prev) => [item, ...prev].slice(0, HISTORY_MAX));
+
     const dl = await downloadVoiceoverFile(
-      res.data.audio_url,
-      res.data.file_name || "spunkram-voiceover.wav",
+      data.audio_url,
+      data.file_name || "spunkram-voiceover.wav",
     );
-    if (dl.path) setLocalPath(dl.path);
-    else if (dl.error) setError(dl.error);
+    if (dl.path) updateLocalPath(item.id, dl.path);
+    else if (dl.error) {
+      setError(dl.error);
+      reportSupportError("voiceover.download", dl.error);
+    }
     window.dispatchEvent(new Event("aitools-credits-changed"));
   }
 
-  async function place(destination: "project" | "timeline") {
-    if (!localPath && !result?.audio_url) return;
-    setPlacing(destination);
+  async function place(
+    item: VoiceoverHistoryItem,
+    destination: "project" | "timeline",
+  ) {
+    setPlacing({ id: item.id, destination });
     setError(null);
     try {
-      let filePath = localPath;
-      if (!filePath && result?.audio_url) {
+      let filePath = localFileExists(item.localPath) ? item.localPath! : null;
+      if (!filePath && item.audioUrl) {
         const dl = await downloadVoiceoverFile(
-          result.audio_url,
-          result.file_name || "spunkram-voiceover.wav",
+          item.audioUrl,
+          item.fileName || "spunkram-voiceover.wav",
         );
         if (!dl.path) {
-          setError(dl.error || "Could not download audio");
+          const msg = dl.error || "Could not download audio";
+          setError(msg);
+          reportSupportError("voiceover.download", msg);
           setPlacing(null);
           return;
         }
         filePath = dl.path;
-        setLocalPath(dl.path);
+        updateLocalPath(item.id, dl.path);
+      }
+      if (!filePath) {
+        setError("Audio file unavailable");
+        setPlacing(null);
+        return;
       }
       const outcome = (await evalTS(
         "importVoiceoverAudio",
-        filePath!,
+        filePath,
         destination,
-        result?.duration ?? 1,
+        item.duration ?? 1,
       )) as { ok?: boolean; reason?: string } | null;
       if (!outcome?.ok) {
         const reason = outcome?.reason;
-        setError(
+        const msg =
           reason === "NO_ACTIVE_SEQUENCE"
             ? "Open a sequence first"
             : reason === "NO_ACTIVE_COMP"
               ? "Open a composition first"
-              : reason || "Could not import audio",
-        );
+              : reason || "Could not import audio";
+        setError(msg);
+        if (reason !== "NO_ACTIVE_SEQUENCE" && reason !== "NO_ACTIVE_COMP") {
+          reportSupportError("voiceover.import", msg, { reason: reason || null });
+        }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Import failed");
+      const msg = err instanceof Error ? err.message : "Import failed";
+      setError(msg);
+      reportSupportError("voiceover.import", err);
     } finally {
       setPlacing(null);
     }
@@ -406,8 +622,13 @@ export const VoiceoverApp = () => {
           )}
         >
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 fill-current" />}
-          Generate voiceover
+          {outOfCredits ? "No generations left" : "Generate voiceover"}
         </button>
+        {outOfCredits ? (
+          <p className="mt-2 text-center text-[10px] text-muted-foreground">
+            Upgrade your plan or buy extra generations to continue.
+          </p>
+        ) : null}
       </div>
 
       {error && (
@@ -416,53 +637,29 @@ export const VoiceoverApp = () => {
         </div>
       )}
 
-      {result && (
-        <div className="rounded-xl border border-white/10 bg-card/60 p-3 ring-1 ring-inset ring-white/5">
-          <p className="mb-2 text-[11px] text-muted-foreground">
-            Ready{selectedVoice ? ` · ${selectedVoice.name}` : ""}
-            {selectedLanguage ? ` · ${selectedLanguage.name}` : ""}
-            {result.duration ? ` · ~${result.duration}s` : ""}
-          </p>
-          <div className="mb-3 rounded-lg border border-white/10 bg-background/40 px-2 py-2">
-            <WaveformPlayer
-              audioUrl={playbackUrl}
-              eagerLoad
-              loading={!playbackUrl}
-              className="gap-2"
+      {history.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between px-0.5">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              History
+            </p>
+            <button
+              type="button"
+              onClick={() => setHistory([])}
+              className="text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Clear
+            </button>
+          </div>
+          {history.map((item) => (
+            <HistoryItemCard
+              key={item.id}
+              item={item}
+              placing={placing}
+              onPlace={(row, destination) => void place(row, destination)}
+              onLocalPath={updateLocalPath}
             />
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={!!placing}
-              onClick={() => void place("timeline")}
-              className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold",
-                ACCENT_PILL,
-                placing && "opacity-60",
-              )}
-            >
-              {placing === "timeline" ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Timeline className="size-3.5" />
-              )}
-              Add to timeline
-            </button>
-            <button
-              type="button"
-              disabled={!!placing}
-              onClick={() => void place("project")}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-secondary/60 px-3 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
-            >
-              {placing === "project" ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <FolderPlus className="size-3.5" />
-              )}
-              Add to project
-            </button>
-          </div>
+          ))}
         </div>
       )}
     </div>

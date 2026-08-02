@@ -10,6 +10,7 @@ import { evalTS, reloadJSX } from "../../lib/utils/bolt";
 import { convertToMp3 } from "../../utils/ffmpeg";
 import { getBundledAudioPresetPath } from "../../utils/audioPreset";
 import { getUserIdentity } from "../../api";
+import { reportSupportError } from "../../api/support";
 import { authErrorMessage } from "../../styles";
 import { normalize, transcribe, type CaptionsChunk, type TranscribeResult } from "../../utils/transcribe";
 import {
@@ -46,7 +47,11 @@ type ResultState = {
 
 const emptyResult: ResultState = { titles: [], description: "", tags: "", chapters: [], offset: 0 };
 
-export const ChaptersApp = () => {
+export const ChaptersApp = ({
+  generationsLeft = 0,
+}: {
+  generationsLeft?: number;
+}) => {
   const { srcLang, translateTo } = useConfiguration();
   const [transcription, setTranscription] = useState<TranscribeResult | null>(null);
   const [result, setResult] = useState<ResultState>(emptyResult);
@@ -163,6 +168,10 @@ export const ChaptersApp = () => {
 
   const handleGenerate = async () => {
     if (progress) return;
+    if (generationsLeft <= 0) {
+      setError("No generations left. Upgrade your plan or buy extra credits.");
+      return;
+    }
     setError(null);
     try {
       const controller = new AbortController();
@@ -173,6 +182,7 @@ export const ChaptersApp = () => {
         // тихая отмена — без error-banner
       } else {
         setError(e instanceof Error ? e.message : String(e));
+        reportSupportError("chapters.generate", e);
       }
     } finally {
       abortRef.current = null;
@@ -186,6 +196,10 @@ export const ChaptersApp = () => {
   const handleRegenerateTitles = async () => {
     const source = transcriptionRef.current;
     if (!source || regeneratingTitles) return;
+    if (generationsLeft <= 0) {
+      setError("No generations left. Upgrade your plan or buy extra credits.");
+      return;
+    }
     setRegeneratingTitles(true);
     setError(null);
     try {
@@ -194,6 +208,7 @@ export const ChaptersApp = () => {
       persistResult({ ...result, titles });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      reportSupportError("chapters.regenerate_titles", e);
     } finally {
       setRegeneratingTitles(false);
     }
@@ -202,6 +217,10 @@ export const ChaptersApp = () => {
   const handleRegenerateChapters = async () => {
     const source = transcriptionRef.current;
     if (!source || regeneratingChapters) return;
+    if (generationsLeft <= 0) {
+      setError("No generations left. Upgrade your plan or buy extra credits.");
+      return;
+    }
     setRegeneratingChapters(true);
     setError(null);
     try {
@@ -210,6 +229,7 @@ export const ChaptersApp = () => {
       persistResult({ ...result, chapters: sectionsToChapters(sections) });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      reportSupportError("chapters.regenerate_chapters", e);
     } finally {
       setRegeneratingChapters(false);
     }
@@ -218,6 +238,10 @@ export const ChaptersApp = () => {
   const handleRegenerateDescription = async () => {
     const source = transcriptionRef.current;
     if (!source || regeneratingDescription) return;
+    if (generationsLeft <= 0) {
+      setError("No generations left. Upgrade your plan or buy extra credits.");
+      return;
+    }
     setRegeneratingDescription(true);
     setError(null);
     try {
@@ -226,6 +250,7 @@ export const ChaptersApp = () => {
       persistResult({ ...result, description });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      reportSupportError("chapters.regenerate_description", e);
     } finally {
       setRegeneratingDescription(false);
     }
@@ -234,6 +259,10 @@ export const ChaptersApp = () => {
   const handleRegenerateTags = async () => {
     const source = transcriptionRef.current;
     if (!source || regeneratingTags) return;
+    if (generationsLeft <= 0) {
+      setError("No generations left. Upgrade your plan or buy extra credits.");
+      return;
+    }
     setRegeneratingTags(true);
     setError(null);
     try {
@@ -242,6 +271,7 @@ export const ChaptersApp = () => {
       persistResult({ ...result, tags: tagsToText(tags) });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      reportSupportError("chapters.regenerate_tags", e);
     } finally {
       setRegeneratingTags(false);
     }
@@ -306,6 +336,7 @@ export const ChaptersApp = () => {
       return !!res;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      reportSupportError("chapters.add_markers", e);
       return false;
     } finally {
       setAddingMarkers(false);

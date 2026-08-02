@@ -9,6 +9,7 @@ import { fs, path } from "../cep/node";
 import { resolveItemSourceFile, type HostAppId } from "./pack-apply-paths";
 import { cleanupCacheFile, decodeBinAxFile, decodeMgAssetFile } from "./pack-protect";
 import type { PackSettings, PackTreeItem } from "./pack-types";
+import { reportSupportError } from "@/api/support";
 
 export type ApplyItemOutcome = { ok: true } | { ok: false; message: string };
 
@@ -48,6 +49,7 @@ export async function applyPackItemToHost(
   try {
     resolved = resolveItemSourceFile(item, packFilePath, appId, settings);
   } catch (e) {
+    reportSupportError("pack.resolve_item", e, { item: item.name });
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
 
@@ -73,9 +75,11 @@ export async function applyPackItemToHost(
       decodedCachePath = filePath;
     }
   } catch (e) {
+    const msg = `Couldn't decode item file: ${e instanceof Error ? e.message : String(e)}`;
+    reportSupportError("pack.decode_item", e, { item: item.name });
     return {
       ok: false,
-      message: `Couldn't decode item file: ${e instanceof Error ? e.message : String(e)}`,
+      message: msg,
     };
   }
 
@@ -93,11 +97,23 @@ export async function applyPackItemToHost(
 
     if (!result || !result.applied) {
       const reason = result && !result.applied ? result.reason : "UNKNOWN_ERROR";
-      return { ok: false, message: friendlyReason(reason) };
+      const message = friendlyReason(reason);
+      if (
+        reason !== "NO_ACTIVE_SEQUENCE" &&
+        reason !== "MOGRT_NOT_SUPPORTED_IN_AE"
+      ) {
+        reportSupportError("pack.apply_item", message, {
+          item: item.name,
+          reason,
+          ctype,
+        });
+      }
+      return { ok: false, message };
     }
     return { ok: true };
   } catch (e) {
     cleanupCacheFile(decodedCachePath);
+    reportSupportError("pack.apply_item", e, { item: item.name, ctype });
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
 }

@@ -15,10 +15,12 @@ export function PanelFooter({ className = "" }: { className?: string }) {
     gridColumns,
     hoveredItemName,
     focusMode,
+    showNewBadges,
     togglePlayPreview,
     toggleAudio,
     setThumbSize,
     toggleFocusMode,
+    setShowNewBadges,
   } = usePanelUI();
 
   return (
@@ -53,6 +55,25 @@ export function PanelFooter({ className = "" }: { className?: string }) {
           )}
         >
           <Music className="size-4" />
+        </button>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={showNewBadges}
+          aria-label="Show NEW badges"
+          title={showNewBadges ? "Hide NEW badges" : "Show NEW badges"}
+          onClick={() => setShowNewBadges(!showNewBadges)}
+          className={cn(
+            "relative ml-0.5 inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors",
+            showNewBadges ? "bg-primary" : "bg-secondary",
+          )}
+        >
+          <span
+            className={cn(
+              "pointer-events-none block size-3 rounded-full bg-background shadow transition-transform",
+              showNewBadges ? "translate-x-3.5" : "translate-x-0.5",
+            )}
+          />
         </button>
       </div>
 

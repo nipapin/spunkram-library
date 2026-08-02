@@ -37,12 +37,30 @@ export type MotionflowAuth = {
   name?: string;
 };
 
+/** One saved Motionflow account (multi-account vault). */
+export type MotionflowAccountSession = {
+  id: string;
+  email: string;
+  name?: string;
+  token: string;
+  lastUsedAt: string;
+};
+
+export const MAX_MOTIONFLOW_ACCOUNTS = 5;
+
 export type PreferencesFile = {
   packages?: unknown[];
   PrefSettings?: Partial<PrefSettings>;
   personalAuthSystem?: PersonalAuth;
   motionflowAuth?: MotionflowAuth;
+  motionflowAccounts?: MotionflowAccountSession[];
+  motionflowActiveAccountId?: string;
   [key: string]: unknown;
+};
+
+export type AccountVault = {
+  accounts: MotionflowAccountSession[];
+  activeId: string | null;
 };
 
 export const DEFAULT_PREF_SETTINGS: PrefSettings = {
@@ -96,6 +114,7 @@ export function loadPreferencesFile(): PreferencesFile {
       PrefSettings: { ...DEFAULT_PREF_SETTINGS },
       personalAuthSystem: {},
       motionflowAuth: {},
+      motionflowAccounts: [],
     };
   }
   try {
@@ -107,6 +126,7 @@ export function loadPreferencesFile(): PreferencesFile {
       PrefSettings: { ...DEFAULT_PREF_SETTINGS },
       personalAuthSystem: {},
       motionflowAuth: {},
+      motionflowAccounts: [],
     };
   }
 }
@@ -164,6 +184,183 @@ export function writeMotionflowAuth(auth: MotionflowAuth): boolean {
   const file = loadPreferencesFile();
   file.motionflowAuth = auth;
   return savePreferencesFile(file);
+}
+
+function normalizeAccount(
+  raw: Partial<MotionflowAccountSession> | null | undefined,
+): MotionflowAccountSession | null {
+  if (!raw || typeof raw !== "object") return null;
+  const id = typeof raw.id === "string" ? raw.id.trim() : "";
+  const email = typeof raw.email === "string" ? raw.email.trim() : "";
+  const token = typeof raw.token === "string" ? raw.token.trim() : "";
+  if (!id || !email || !token) return null;
+  return {
+    id,
+    email,
+    name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : undefined,
+    token,
+    lastUsedAt:
+      typeof raw.lastUsedAt === "string" && raw.lastUsedAt
+        ? raw.lastUsedAt
+        : new Date().toISOString(),
+  };
+}
+
+/** Migrate legacy single `motionflowAuth` into the multi-account vault when empty. */
+function migrateVaultIfNeeded(file: PreferencesFile): PreferencesFile {
+  const existing = Array.isArray(file.motionflowAccounts) ? file.motionflowAccounts : [];
+  const normalized = existing
+    .map((a) => normalizeAccount(a))
+    .filter((a): a is MotionflowAccountSession => Boolean(a));
+
+  if (normalized.length > 0) {
+    file.motionflowAccounts = normalized;
+    if (!file.motionflowActiveAccountId) {
+      const active =
+        file.motionflowAuth?.id &&
+        normalized.find((a) => a.id === file.motionflowAuth?.id);
+      file.motionflowActiveAccountId = active?.id ?? normalized[0].id;
+    }
+    return file;
+  }
+
+  const legacy = file.motionflowAuth;
+  if (legacy?.token && legacy.id && legacy.email) {
+    const seeded: MotionflowAccountSession = {
+      id: String(legacy.id),
+      email: legacy.email,
+      name: legacy.name,
+      token: legacy.token,
+      lastUsedAt: new Date().toISOString(),
+    };
+    file.motionflowAccounts = [seeded];
+    file.motionflowActiveAccountId = seeded.id;
+    savePreferencesFile(file);
+  } else {
+    file.motionflowAccounts = [];
+  }
+  return file;
+}
+
+export function readAccountVault(): AccountVault {
+  const file = migrateVaultIfNeeded(loadPreferencesFile());
+  const accounts = (file.motionflowAccounts ?? [])
+    .map((a) => normalizeAccount(a))
+    .filter((a): a is MotionflowAccountSession => Boolean(a));
+  const activeId =
+    typeof file.motionflowActiveAccountId === "string" &&
+    accounts.some((a) => a.id === file.motionflowActiveAccountId)
+      ? file.motionflowActiveAccountId
+      : (accounts[0]?.id ?? null);
+  return { accounts, activeId };
+}
+
+export function listAccountSessions(): MotionflowAccountSession[] {
+  const { accounts } = readAccountVault();
+  return [...accounts].sort((a, b) => {
+    const ta = Date.parse(a.lastUsedAt) || 0;
+    const tb = Date.parse(b.lastUsedAt) || 0;
+    return tb - ta;
+  });
+}
+
+export function upsertAccountSession(
+  session: Omit<MotionflowAccountSession, "lastUsedAt"> & { lastUsedAt?: string },
+): AccountVault {
+  const file = migrateVaultIfNeeded(loadPreferencesFile());
+  let accounts = (file.motionflowAccounts ?? [])
+    .map((a) => normalizeAccount(a))
+    .filter((a): a is MotionflowAccountSession => Boolean(a));
+
+  const next: MotionflowAccountSession = {
+    id: String(session.id).trim(),
+    email: session.email.trim(),
+    name: session.name?.trim() || undefined,
+    token: session.token.trim(),
+    lastUsedAt: session.lastUsedAt || new Date().toISOString(),
+  };
+
+  const idx = accounts.findIndex((a) => a.id === next.id);
+  if (idx >= 0) {
+    accounts[idx] = next;
+  } else {
+    accounts = [next, ...accounts];
+    if (accounts.length > MAX_MOTIONFLOW_ACCOUNTS) {
+      accounts = [...accounts]
+        .sort((a, b) => (Date.parse(b.lastUsedAt) || 0) - (Date.parse(a.lastUsedAt) || 0))
+        .slice(0, MAX_MOTIONFLOW_ACCOUNTS);
+    }
+  }
+
+  file.motionflowAccounts = accounts;
+  file.motionflowActiveAccountId = next.id;
+  file.motionflowAuth = {
+    token: next.token,
+    id: next.id,
+    email: next.email,
+    name: next.name,
+  };
+  savePreferencesFile(file);
+  return { accounts, activeId: next.id };
+}
+
+export function setActiveAccount(id: string): MotionflowAccountSession | null {
+  const file = migrateVaultIfNeeded(loadPreferencesFile());
+  const accounts = (file.motionflowAccounts ?? [])
+    .map((a) => normalizeAccount(a))
+    .filter((a): a is MotionflowAccountSession => Boolean(a));
+  const hit = accounts.find((a) => a.id === id);
+  if (!hit) return null;
+
+  const updated: MotionflowAccountSession = {
+    ...hit,
+    lastUsedAt: new Date().toISOString(),
+  };
+  file.motionflowAccounts = accounts.map((a) => (a.id === id ? updated : a));
+  file.motionflowActiveAccountId = id;
+  file.motionflowAuth = {
+    token: updated.token,
+    id: updated.id,
+    email: updated.email,
+    name: updated.name,
+  };
+  savePreferencesFile(file);
+  return updated;
+}
+
+export function removeAccountSession(id: string): AccountVault {
+  const file = migrateVaultIfNeeded(loadPreferencesFile());
+  const accounts = (file.motionflowAccounts ?? [])
+    .map((a) => normalizeAccount(a))
+    .filter((a): a is MotionflowAccountSession => Boolean(a))
+    .filter((a) => a.id !== id);
+
+  const wasActive = file.motionflowActiveAccountId === id;
+  file.motionflowAccounts = accounts;
+
+  if (wasActive || !accounts.some((a) => a.id === file.motionflowActiveAccountId)) {
+    const next = [...accounts].sort(
+      (a, b) => (Date.parse(b.lastUsedAt) || 0) - (Date.parse(a.lastUsedAt) || 0),
+    )[0];
+    if (next) {
+      file.motionflowActiveAccountId = next.id;
+      file.motionflowAuth = {
+        token: next.token,
+        id: next.id,
+        email: next.email,
+        name: next.name,
+      };
+    } else {
+      file.motionflowActiveAccountId = undefined;
+      file.motionflowAuth = {};
+    }
+  }
+
+  savePreferencesFile(file);
+  return {
+    accounts,
+    activeId: file.motionflowActiveAccountId ?? null,
+  };
 }
 
 export function asBool(value: number | boolean | null | undefined): boolean {

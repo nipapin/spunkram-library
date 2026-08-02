@@ -1,10 +1,24 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { authErrorMessage, type AuthDevice } from "@/lib/api/market-api";
 import {
+  listAccountSessions,
   readMotionflowAuth,
   readPrefSettings,
+  removeAccountSession,
+  setActiveAccount,
+  upsertAccountSession,
   writeMotionflowAuth,
   writePrefSettings,
+  type MotionflowAccountSession,
   type MotionflowAuth,
   type PrefSettings,
 } from "@/lib/api/preferences";
@@ -21,6 +35,7 @@ import {
 } from "@/api/motionflow-auth";
 import { fetchCepMarket, type CepMarketPayload } from "@/api/cep-market";
 import { clearUserIdentity, setUserIdentity } from "@/api/user";
+import { reportSupportError } from "@/api/support";
 import { currentHostAppId } from "@/lib/utils/apply-item";
 import {
   generationLimitForTier,
@@ -40,6 +55,8 @@ type AuthStatus = {
   freePackSlots?: number;
   error?: string;
 };
+
+type AuthActionResult = { ok: boolean; message?: string };
 
 type AuthContextValue = {
   prefs: PrefSettings;
@@ -62,13 +79,19 @@ type AuthContextValue = {
   marketLoading: boolean;
   marketError: string | null;
   refreshMarket: (force?: boolean) => Promise<void>;
-  loginWithMotionflow: () => Promise<{ ok: boolean; message?: string }>;
+  /** Saved accounts (newest lastUsedAt first), for Chrome-style chooser. */
+  savedAccounts: MotionflowAccountSession[];
+  loginWithMotionflow: () => Promise<AuthActionResult>;
+  /** Alias — same device-code flow; upserts into vault. */
+  addAccount: () => Promise<AuthActionResult>;
+  switchAccount: (id: string) => Promise<AuthActionResult>;
+  removeSavedAccount: (id: string) => Promise<AuthActionResult>;
   cancelLogin: () => void;
   loginBusy: boolean;
   loginCode: string | null;
-  logout: () => void;
-  recheck: () => Promise<{ ok: boolean; message?: string }>;
-  revoke: (deviceId: string) => Promise<{ ok: boolean; message?: string }>;
+  logout: () => Promise<void>;
+  recheck: () => Promise<AuthActionResult>;
+  revoke: (deviceId: string) => Promise<AuthActionResult>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -117,9 +140,21 @@ function syncAiIdentity(auth: MotionflowAuth): void {
   }
 }
 
+function authFromSession(session: MotionflowAccountSession): MotionflowAuth {
+  return {
+    token: session.token,
+    id: session.id,
+    email: session.email,
+    name: session.name,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefsState] = useState<PrefSettings>(() => readPrefSettings());
   const [auth, setAuth] = useState<MotionflowAuth>(() => readMotionflowAuth());
+  const [savedAccounts, setSavedAccounts] = useState<MotionflowAccountSession[]>(() =>
+    listAccountSessions(),
+  );
   const [subscription, setSubscription] = useState<AuthStatus>({
     subscribed: false,
     purchases: [],
@@ -134,6 +169,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loginCode, setLoginCode] = useState<string | null>(null);
   const loginAbortRef = useRef(false);
 
+  const refreshSavedAccounts = useCallback(() => {
+    setSavedAccounts(listAccountSessions());
+  }, []);
+
   const setPrefs = useCallback((next: PrefSettings) => {
     setPrefsState(next);
     writePrefSettings(next);
@@ -147,32 +186,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const applySession = useCallback((next: MotionflowAuth, status: AuthStatus) => {
-    setAuth(next);
-    writeMotionflowAuth(next);
-    setSubscription(status);
-    syncAiIdentity(next);
-  }, []);
+  const applySession = useCallback(
+    (next: MotionflowAuth, status: AuthStatus) => {
+      setAuth(next);
+      if (next.token && next.id && next.email) {
+        upsertAccountSession({
+          id: next.id,
+          email: next.email,
+          name: next.name,
+          token: next.token,
+        });
+      } else {
+        writeMotionflowAuth(next);
+      }
+      setSubscription(status);
+      syncAiIdentity(next);
+      refreshSavedAccounts();
+    },
+    [refreshSavedAccounts],
+  );
+
+  const clearSessionLocal = useCallback(() => {
+    setSubscriptionUrls({});
+    setAuth({});
+    writeMotionflowAuth({});
+    syncAiIdentity({});
+    setSubscription(toAuthStatus());
+    setMarket(null);
+    setMarketLoaded(false);
+    refreshSavedAccounts();
+  }, [refreshSavedAccounts]);
 
   const refreshProfile = useCallback(
-    async (token: string) => {
+    async (token: string, opts?: { removeAccountIdOnUnauthorized?: string }) => {
       const host = currentHostAppId();
       const hostType =
         host === "AEFT" ? ("AE" as const) : host === "PPRO" ? ("PR" as const) : null;
       const { data, error } = await fetchMe(token, { host: hostType });
       if (!data) {
         if (error === "UNAUTHORIZED") {
-          setSubscriptionUrls({});
-          applySession(
-            {},
+          if (opts?.removeAccountIdOnUnauthorized) {
+            const vault = removeAccountSession(opts.removeAccountIdOnUnauthorized);
+            refreshSavedAccounts();
+            if (vault.activeId) {
+              const next = vault.accounts.find((a) => a.id === vault.activeId);
+              if (next) {
+                const activated = setActiveAccount(next.id);
+                if (activated) {
+                  syncAiIdentity(authFromSession(activated));
+                  setAuth(authFromSession(activated));
+                  const recovered = await refreshProfile(activated.token, {
+                    removeAccountIdOnUnauthorized: activated.id,
+                  });
+                  return recovered;
+                }
+              }
+            }
+          }
+          clearSessionLocal();
+          setSubscription(
             toAuthStatus(undefined, [], [], {
               error: "Session expired — please sign in again",
             }),
           );
           return { ok: false as const, message: "Session expired — please sign in again" };
         }
-        setSubscription((prev) => ({ ...prev, error: error || "Unable to refresh profile" }));
-        return { ok: false as const, message: error || "Unable to refresh profile" };
+        const msg = error || "Unable to refresh profile";
+        setSubscription((prev) => ({ ...prev, error: msg }));
+        reportSupportError("auth.refresh_profile", msg, {
+          error_code: error || null,
+        });
+        return { ok: false as const, message: msg };
       }
       const nextAuth: MotionflowAuth = {
         token,
@@ -194,7 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
       return { ok: true as const };
     },
-    [applySession],
+    [applySession, clearSessionLocal, refreshSavedAccounts],
   );
 
   const refreshMarket = useCallback(
@@ -204,11 +288,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMarketError(null);
       const { data, error } = await fetchCepMarket(hostPrimaryType());
       if (error || !data) {
-        setMarketError(
+        const msg =
           error === "UNAUTHORIZED"
             ? "Please sign in again"
-            : authErrorMessage(error) || error || "Unable to load market",
-        );
+            : authErrorMessage(error) || error || "Unable to load market";
+        setMarketError(msg);
+        if (error !== "UNAUTHORIZED") {
+          reportSupportError("auth.refresh_market", msg, {
+            error_code: error || null,
+          });
+        }
         setMarketLoading(false);
         return;
       }
@@ -222,7 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [market, marketLoaded],
   );
 
-  const loginWithMotionflow = useCallback(async () => {
+  const runDeviceCodeLogin = useCallback(async (): Promise<AuthActionResult> => {
     loginAbortRef.current = false;
     setLoginBusy(true);
     setLoginCode(null);
@@ -230,6 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const started = await startDeviceAuth();
     if ("error" in started) {
       setLoginBusy(false);
+      reportSupportError("auth.device_start", started.error);
       return { ok: false, message: started.error };
     }
 
@@ -253,9 +343,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: result.user.email,
           name: result.user.name,
         };
-        writeMotionflowAuth(nextAuth);
+        upsertAccountSession({
+          id: nextAuth.id!,
+          email: nextAuth.email!,
+          name: nextAuth.name,
+          token: nextAuth.token!,
+        });
         setAuth(nextAuth);
         syncAiIdentity(nextAuth);
+        refreshSavedAccounts();
         const profile = await refreshProfile(result.token);
         setLoginBusy(false);
         setLoginCode(null);
@@ -280,7 +376,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: false, message: "Login cancelled" };
     }
     return { ok: false, message: "Login timed out — try again" };
-  }, [refreshMarket, refreshProfile]);
+  }, [refreshMarket, refreshProfile, refreshSavedAccounts]);
+
+  const loginWithMotionflow = runDeviceCodeLogin;
+  const addAccount = runDeviceCodeLogin;
 
   const cancelLogin = useCallback(() => {
     loginAbortRef.current = true;
@@ -288,18 +387,121 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoginCode(null);
   }, []);
 
-  const logout = useCallback(() => {
+  const switchAccount = useCallback(
+    async (id: string): Promise<AuthActionResult> => {
+      const activated = setActiveAccount(id);
+      if (!activated) {
+        return { ok: false, message: "Account not found" };
+      }
+      setAuth(authFromSession(activated));
+      syncAiIdentity(authFromSession(activated));
+      refreshSavedAccounts();
+      setMarket(null);
+      setMarketLoaded(false);
+      const profile = await refreshProfile(activated.token, {
+        removeAccountIdOnUnauthorized: activated.id,
+      });
+      if (!profile.ok) {
+        return {
+          ok: false,
+          message: profile.message || "Session expired — sign in again",
+        };
+      }
+      await refreshMarket(true);
+      return { ok: true, message: `Switched to ${activated.email}` };
+    },
+    [refreshMarket, refreshProfile, refreshSavedAccounts],
+  );
+
+  const activateNextOrClear = useCallback(
+    async (vaultActiveId: string | null, accounts: MotionflowAccountSession[]) => {
+      if (vaultActiveId) {
+        const next = accounts.find((a) => a.id === vaultActiveId);
+        if (next) {
+          const activated = setActiveAccount(next.id) || next;
+          setAuth(authFromSession(activated));
+          syncAiIdentity(authFromSession(activated));
+          refreshSavedAccounts();
+          setMarket(null);
+          setMarketLoaded(false);
+          const profile = await refreshProfile(activated.token, {
+            removeAccountIdOnUnauthorized: activated.id,
+          });
+          if (profile.ok) await refreshMarket(true);
+          return;
+        }
+      }
+      clearSessionLocal();
+    },
+    [clearSessionLocal, refreshMarket, refreshProfile, refreshSavedAccounts],
+  );
+
+  const logout = useCallback(async () => {
     loginAbortRef.current = true;
-    setSubscriptionUrls({});
-    applySession({}, toAuthStatus());
-    setMarket(null);
-    setMarketLoaded(false);
-  }, [applySession]);
+    const current = readMotionflowAuth();
+    const currentId = current.id;
+
+    if (current.token) {
+      const currentDevice = subscription.devices.find((d) => d.current);
+      if (currentDevice?.id) {
+        try {
+          await revokeMotionflowDevice(current.token, currentDevice.id);
+        } catch {
+          /* ignore revoke errors on sign-out */
+        }
+      }
+    }
+
+    if (currentId) {
+      const vault = removeAccountSession(currentId);
+      refreshSavedAccounts();
+      await activateNextOrClear(vault.activeId, vault.accounts);
+    } else {
+      clearSessionLocal();
+    }
+  }, [
+    activateNextOrClear,
+    clearSessionLocal,
+    refreshSavedAccounts,
+    subscription.devices,
+  ]);
+
+  const removeSavedAccount = useCallback(
+    async (id: string): Promise<AuthActionResult> => {
+      const sessions = listAccountSessions();
+      const target = sessions.find((a) => a.id === id);
+      if (!target) return { ok: false, message: "Account not found" };
+
+      const isActive = auth.id === id;
+      if (target.token && isActive) {
+        const currentDevice = subscription.devices.find((d) => d.current);
+        if (currentDevice?.id) {
+          try {
+            await revokeMotionflowDevice(target.token, currentDevice.id);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      const vault = removeAccountSession(id);
+      refreshSavedAccounts();
+
+      if (isActive) {
+        await activateNextOrClear(vault.activeId, vault.accounts);
+      }
+
+      return { ok: true, message: "Account removed" };
+    },
+    [activateNextOrClear, auth.id, refreshSavedAccounts, subscription.devices],
+  );
 
   const recheck = useCallback(async () => {
     const current = readMotionflowAuth();
     if (!current.token) return { ok: false, message: "Not signed in" };
-    return refreshProfile(current.token);
+    return refreshProfile(current.token, {
+      removeAccountIdOnUnauthorized: current.id,
+    });
   }, [refreshProfile]);
 
   const revoke = useCallback(
@@ -317,17 +519,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Ensure vault migration runs, then hydrate active session.
+      refreshSavedAccounts();
       const stored = readMotionflowAuth();
       if (stored.token) {
         syncAiIdentity(stored);
-        await refreshProfile(stored.token);
+        await refreshProfile(stored.token, {
+          removeAccountIdOnUnauthorized: stored.id,
+        });
       }
       if (!cancelled) setAuthReady(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [refreshProfile]);
+  }, [refreshProfile, refreshSavedAccounts]);
 
   const accessTier = useMemo(
     () =>
@@ -361,7 +567,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       marketLoading,
       marketError,
       refreshMarket,
+      savedAccounts,
       loginWithMotionflow,
+      addAccount,
+      switchAccount,
+      removeSavedAccount,
       cancelLogin,
       loginBusy,
       loginCode,
@@ -383,7 +593,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       marketLoading,
       marketError,
       refreshMarket,
+      savedAccounts,
       loginWithMotionflow,
+      addAccount,
+      switchAccount,
+      removeSavedAccount,
       cancelLogin,
       loginBusy,
       loginCode,

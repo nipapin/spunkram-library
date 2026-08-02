@@ -1,11 +1,13 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { initBolt } from "../lib/utils/bolt";
+import { installGlobalHandlers } from "@/api/support";
 import "../globals.css";
 import { App } from "./main";
 import { ConfigurationWrapper } from "../../context/ConfigurationWrapper";
 
 initBolt();
+installGlobalHandlers();
 
 ReactDOM.createRoot(document.getElementById("app") as HTMLElement).render(
   <React.StrictMode>

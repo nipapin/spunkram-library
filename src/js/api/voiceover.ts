@@ -143,15 +143,7 @@ export async function generateVoiceover(input: {
     }
   }
 
-  // Only mock when the real backend is unreachable — never swallow 401/402/403.
-  if (
-    MOCK_ENABLED &&
-    (result.status === 0 || result.status === 404 || result.status >= 500)
-  ) {
-    const mock = await writeMockVoiceoverWav(input.text);
-    if (mock) return { data: mock };
-  }
-
+  // Never mock a successful generation — quota / auth must come from the server.
   return {
     error:
       result.status === 401
@@ -195,41 +187,5 @@ export async function downloadVoiceoverFile(
     return { path: outPath };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Download failed" };
-  }
-}
-
-async function writeMockVoiceoverWav(text: string): Promise<VoiceoverResult | null> {
-  try {
-    if (typeof fs?.writeFileSync !== "function" || typeof os?.tmpdir !== "function") return null;
-    const dir = path.join(os.tmpdir(), "spunkram-voiceover");
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const outPath = path.join(dir, `mock-${Date.now()}.wav`);
-    // ~1s silent mono 16-bit PCM wav (placeholder until Minimax backend is live)
-    const sampleRate = 22050;
-    const durationSec = Math.min(8, Math.max(1, Math.ceil(text.length / 14)));
-    const numSamples = sampleRate * durationSec;
-    const dataSize = numSamples * 2;
-    const buffer = Buffer.alloc(44 + dataSize);
-    buffer.write("RIFF", 0);
-    buffer.writeUInt32LE(36 + dataSize, 4);
-    buffer.write("WAVE", 8);
-    buffer.write("fmt ", 12);
-    buffer.writeUInt32LE(16, 16);
-    buffer.writeUInt16LE(1, 20);
-    buffer.writeUInt16LE(1, 22);
-    buffer.writeUInt32LE(sampleRate, 24);
-    buffer.writeUInt32LE(sampleRate * 2, 28);
-    buffer.writeUInt16LE(2, 32);
-    buffer.writeUInt16LE(16, 34);
-    buffer.write("data", 36);
-    buffer.writeUInt32LE(dataSize, 40);
-    fs.writeFileSync(outPath, buffer);
-    return {
-      audio_url: outPath,
-      duration: durationSec,
-      file_name: path.basename(outPath),
-    };
-  } catch {
-    return null;
   }
 }

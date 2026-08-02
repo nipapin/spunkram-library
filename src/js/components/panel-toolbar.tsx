@@ -21,7 +21,24 @@ export function PanelToolbar({
   onToggleControls?: () => void;
   className?: string;
 }) {
-  const { showFavoritesOnly, toggleShowFavoritesOnly } = usePanelUI();
+  const { showFavoritesOnly, toggleShowFavoritesOnly, setShowFavoritesOnly } = usePanelUI();
+
+  function handleToggleTutorials() {
+    if (!tutorialsOpen) {
+      setShowFavoritesOnly(false);
+    }
+    onToggleTutorials?.();
+  }
+
+  function handleToggleFavorites() {
+    if (tutorialsOpen) {
+      // Leave tutorials → package grid with favorites on
+      onToggleTutorials?.();
+      setShowFavoritesOnly(true);
+      return;
+    }
+    toggleShowFavoritesOnly();
+  }
 
   return (
     <div className={cn("flex items-center justify-between gap-2 px-2.5 py-2", className)}>
@@ -47,7 +64,7 @@ export function PanelToolbar({
           aria-label="Video tutorials"
           title="Video tutorials"
           aria-pressed={tutorialsOpen}
-          onClick={onToggleTutorials}
+          onClick={handleToggleTutorials}
           className={cn(
             "flex size-8 items-center justify-center rounded-md transition-colors",
             tutorialsOpen
@@ -60,18 +77,18 @@ export function PanelToolbar({
         <button
           type="button"
           aria-label="Favorites"
-          aria-pressed={showFavoritesOnly}
-          onClick={toggleShowFavoritesOnly}
+          aria-pressed={showFavoritesOnly && !tutorialsOpen}
+          onClick={handleToggleFavorites}
           className={cn(
             "flex size-8 items-center justify-center rounded-md transition-colors",
-            showFavoritesOnly
+            showFavoritesOnly && !tutorialsOpen
               ? "bg-primary/20 text-primary"
               : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
           )}
         >
           <Star
             className="size-4"
-            fill={showFavoritesOnly ? "currentColor" : "none"}
+            fill={showFavoritesOnly && !tutorialsOpen ? "currentColor" : "none"}
             strokeWidth={2.25}
           />
         </button>
