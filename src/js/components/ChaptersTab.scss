@@ -132,13 +132,43 @@
   padding: 0 9px;
   font-size: 10.5px;
   border-radius: var(--radius-md);
+  gap: 4px;
+
+  svg {
+    flex-shrink: 0;
+  }
 }
 
-.chapters-tab__icon-action.btn--ghost {
-  height: 26px;
+.chapters-tab__icon-action.icon-btn {
   width: 26px;
-  padding: 0;
+  height: 26px;
+  border: 1px solid var(--border-input);
   border-radius: var(--radius-md);
+  color: var(--text-secondary);
+
+  &:hover:not(:disabled) {
+    border-color: var(--text-faint);
+    color: var(--text-primary);
+    background: #ffffff0a;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  svg {
+    display: block;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+  }
+
+  .spinner {
+    width: 12px;
+    height: 12px;
+  }
 }
 
 .chapters-tab__warning {

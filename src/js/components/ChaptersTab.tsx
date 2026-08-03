@@ -205,26 +205,30 @@ export const ChaptersTab = ({
             <div className="chapters-tab__section-actions">
               <button
                 type="button"
-                className="btn btn--ghost chapters-tab__icon-action"
+                className="icon-btn chapters-tab__icon-action"
                 onClick={handleCopyChaptersOnly}
                 disabled={!chapters.length}
                 data-tooltip={chaptersCopied ? "Copied!" : "Copy chapters only"}
                 aria-label="Copy chapters only"
               >
-                {chaptersCopied ? <Check size={12} /> : <Copy size={12} />}
+                {chaptersCopied ? <Check size={14} strokeWidth={2} /> : <Copy size={14} strokeWidth={2} />}
               </button>
               <button
                 type="button"
-                className="btn btn--ghost chapters-tab__icon-action"
+                className="icon-btn chapters-tab__icon-action"
                 onClick={onRegenerateChapters}
                 disabled={regeneratingChapters}
                 data-tooltip="Regenerate chapters"
                 aria-label="Regenerate chapters"
               >
-                {regeneratingChapters ? <span className="spinner" /> : <RefreshCw size={12} />}
+                {regeneratingChapters ? (
+                  <span className="spinner" />
+                ) : (
+                  <RefreshCw size={14} strokeWidth={2} />
+                )}
               </button>
               <button type="button" className="btn btn--ghost chapters-tab__add-btn" onClick={onAddChapter}>
-                <Plus size={12} />
+                <Plus size={14} strokeWidth={2} />
                 Add
               </button>
             </div>

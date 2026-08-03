@@ -54,6 +54,11 @@
   #app {
     height: 100%;
     margin: 0;
+    min-width: 420px;
+  }
+
+  html {
+    overflow-x: auto;
   }
 
   body {

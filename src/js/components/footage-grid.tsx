@@ -1,17 +1,45 @@
 import { applyPackItemToHost } from "@/lib/utils/apply-item";
-import { pathToObjectUrl, resolveItemsPreviewMedia, type ItemPreviewMedia } from "@/lib/utils/pack-preview";
+import {
+  loadPreviewObjectUrl,
+  packPrefersWebmPreview,
+  resolveItemPreviewMedia,
+  revokePreviewObjectUrls,
+} from "@/lib/utils/pack-preview";
 import { resolvePreviewAspectRatio, type PackContentSection } from "@/lib/utils/pack-tree";
 import type { PackSettings, PackTreeItem } from "@/lib/utils/pack-types";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { cn } from "@/lib/utils";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Loader2, Lock, Sparkles, Star } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 
-/** First batch of cards per section; more load as the sentinel enters the scrollport. */
-const INITIAL_VISIBLE = 24;
-const LOAD_MORE = 24;
+const GRID_GAP_PX = 4;
+const SECTION_GAP_PX = 16;
+const HEADER_ROW_PX = 26;
+const OVERSCAN_ROWS = 2;
+/** Cap simultaneous Play Preview video decodes in weak CEP Chromium. */
+const MAX_CONCURRENT_VIDEOS = 4;
 
-function getScrollParent(el: HTMLElement | null): Element | null {
+type FlatRow =
+  | { kind: "header"; key: string; title: string; count: number }
+  | {
+      kind: "cards";
+      key: string;
+      items: PackTreeItem[];
+      aspectCss: string;
+      sectionEnd: boolean;
+    };
+
+function getScrollParent(el: HTMLElement | null): HTMLElement | null {
   let node = el?.parentElement ?? null;
   while (node) {
     const { overflowY } = getComputedStyle(node);
@@ -23,18 +51,108 @@ function getScrollParent(el: HTMLElement | null): Element | null {
   return null;
 }
 
-function PreviewCard({
+function parseAspectRatio(css: string): number {
+  const parts = css.split("/").map((s) => parseFloat(s.trim()));
+  if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+    return parts[0] / parts[1];
+  }
+  return 16 / 9;
+}
+
+/** Row height from aspect + width. Includes trailing gap (row or section). */
+function estimateCardsRowHeight(
+  aspectCss: string,
+  containerWidth: number,
+  columns: number,
+  sectionEnd: boolean,
+): number {
+  if (containerWidth <= 0 || columns <= 0) return 120;
+  const cellW = (containerWidth - GRID_GAP_PX * (columns - 1)) / columns;
+  const cardH = cellW / parseAspectRatio(aspectCss);
+  return cardH + (sectionEnd ? SECTION_GAP_PX : GRID_GAP_PX);
+}
+
+function buildFlatRows(
+  sections: PackContentSection[],
+  columns: number,
+): FlatRow[] {
+  const rows: FlatRow[] = [];
+  const cols = Math.max(1, columns);
+
+  for (const section of sections) {
+    if (section.items.length === 0) continue;
+
+    if (section.title) {
+      rows.push({
+        kind: "header",
+        key: `h:${section.id}`,
+        title: section.title,
+        count: section.items.length,
+      });
+    }
+
+    for (let i = 0; i < section.items.length; i += cols) {
+      const slice = section.items.slice(i, i + cols);
+      const sectionEnd = i + cols >= section.items.length;
+      rows.push({
+        kind: "cards",
+        key: `c:${section.id}:${i}`,
+        items: slice,
+        aspectCss: resolvePreviewAspectRatio(slice[0].group),
+        sectionEnd,
+      });
+    }
+  }
+
+  return rows;
+}
+
+// --- Concurrent Play Preview slot manager -----------------------------------
+
+const activeVideoIds = new Set<string>();
+const videoSlotListeners = new Set<() => void>();
+
+function notifyVideoSlots(): void {
+  for (const listener of videoSlotListeners) listener();
+}
+
+function tryAcquireVideoSlot(id: string): boolean {
+  if (activeVideoIds.has(id)) return true;
+  if (activeVideoIds.size >= MAX_CONCURRENT_VIDEOS) return false;
+  activeVideoIds.add(id);
+  return true;
+}
+
+function releaseVideoSlot(id: string): void {
+  if (!activeVideoIds.delete(id)) return;
+  notifyVideoSlots();
+}
+
+function subscribeVideoSlots(listener: () => void): () => void {
+  videoSlotListeners.add(listener);
+  return () => {
+    videoSlotListeners.delete(listener);
+  };
+}
+
+// --- Preview card -----------------------------------------------------------
+
+const PreviewCard = memo(function PreviewCard({
   item,
-  media,
+  assetsPath,
   packFilePath,
   settings,
   locked,
+  preferWebm,
+  useMp4,
 }: {
   item: PackTreeItem;
-  media: ItemPreviewMedia | undefined;
+  assetsPath: string;
   packFilePath: string;
   settings?: PackSettings | null;
   locked: boolean;
+  preferWebm: boolean;
+  useMp4: boolean;
 }) {
   const {
     playPreview,
@@ -48,15 +166,21 @@ function PreviewCard({
     showNewBadges,
   } = usePanelUI();
   const [hovered, setHovered] = useState(false);
-  const [inView, setInView] = useState(false);
+  const [hasVideoSlot, setHasVideoSlot] = useState(false);
   const [posterFailed, setPosterFailed] = useState(false);
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [motionUrl, setMotionUrl] = useState<string | null>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const itemIdRef = useRef(item.id);
+  itemIdRef.current = item.id;
+
+  const media = useMemo(
+    () => resolveItemPreviewMedia(item, assetsPath, { preferWebm, useMp4 }),
+    [item, assetsPath, preferWebm, useMp4],
+  );
 
   const favorited = isFavorite(item.id);
-  const motion = media?.motion ?? null;
-  const posterUrl = media?.posterUrl ?? null;
+  const motion = media.motion;
   const isVideoMotion = motion?.kind === "webm" || motion?.kind === "mp4";
   const isGifMotion = motion?.kind === "gif";
   const aspectRatio = resolvePreviewAspectRatio(item.group);
@@ -64,34 +188,80 @@ function PreviewCard({
   const isNew = showNewBadges && !!item.group.is_new_mark;
   const isPremium = !!item.group.premium;
 
-  // With Play Preview on, only cards in the scrollport should decode/play.
+  // Virtualization already windows cards — mounted ⇒ near viewport.
+  // Reset media state whenever the recycled cell binds a different item.
   useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
+    setHovered(false);
+    setHasVideoSlot(false);
+    setPosterFailed(false);
+    setPosterUrl(media.posterUrl);
+    setMotionUrl(null);
+    releaseVideoSlot(item.id);
+  }, [item.id, media.posterUrl]);
 
-    if (!playPreview) {
-      setInView(true);
+  // Load poster as soon as the card mounts / item changes (queued FS reads).
+  useEffect(() => {
+    if (media.posterUrl) {
+      setPosterUrl(media.posterUrl);
+      return;
+    }
+    if (!media.posterPath) return;
+
+    const id = item.id;
+    let cancelled = false;
+    void loadPreviewObjectUrl(media.posterPath).then((url) => {
+      if (cancelled || itemIdRef.current !== id || !url) return;
+      setPosterUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id, media.posterPath, media.posterUrl]);
+
+  // Mounted + Play Preview on ⇒ eligible for motion; otherwise hover-only.
+  const wantMotion = playPreview || hovered;
+  const showMotion =
+    !!motion && !!motionUrl && wantMotion && (!isVideoMotion || hasVideoSlot);
+
+  useEffect(() => {
+    if (!isVideoMotion || !wantMotion) {
+      releaseVideoSlot(item.id);
+      setHasVideoSlot(false);
       return;
     }
 
-    const root = getScrollParent(el);
-    const observer = new IntersectionObserver(
-      ([entry]) => setInView(!!entry?.isIntersecting),
-      { root, rootMargin: "80px", threshold: 0 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [playPreview]);
-
-  const wantMotion = playPreview ? inView : hovered;
-  const showMotion = !!motion && !!motionUrl && wantMotion;
+    const trySlot = () => {
+      setHasVideoSlot(tryAcquireVideoSlot(item.id));
+    };
+    trySlot();
+    const unsubscribe = subscribeVideoSlots(trySlot);
+    return () => {
+      unsubscribe();
+      releaseVideoSlot(item.id);
+    };
+  }, [isVideoMotion, wantMotion, item.id]);
 
   useEffect(() => {
-    if (!motion || motionUrl) return;
+    if (!motion) return;
     if (!wantMotion) return;
-    const url = pathToObjectUrl(motion.path);
-    if (url) setMotionUrl(url);
-  }, [wantMotion, motion, motionUrl]);
+    if (isVideoMotion && !hasVideoSlot) return;
+
+    const id = item.id;
+    const path = motion.path;
+    let cancelled = false;
+    void loadPreviewObjectUrl(path).then((url) => {
+      if (cancelled || itemIdRef.current !== id || !url) return;
+      setMotionUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [wantMotion, motion, isVideoMotion, hasVideoSlot, item.id]);
+
+  // Drop motion when leaving hover / play mode so a recycled cell can't flash old video.
+  useEffect(() => {
+    if (!wantMotion) setMotionUrl(null);
+  }, [wantMotion]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -116,8 +286,11 @@ function PreviewCard({
     };
   }, [showMotion, isVideoMotion, motionUrl, audioEnabled, playPreview]);
 
+  const resolvedPoster = posterUrl ?? media.posterUrl;
   const imgSrc =
-    showMotion && isGifMotion && motionUrl ? motionUrl : (posterUrl ?? undefined);
+    showMotion && isGifMotion && motionUrl
+      ? motionUrl
+      : (resolvedPoster ?? undefined);
 
   function handlePointerEnter() {
     setHoveredItemName(item.name);
@@ -167,7 +340,6 @@ function PreviewCard({
 
   return (
     <div
-      ref={cardRef}
       role="button"
       tabIndex={0}
       title={locked ? `${item.name} (premium — sign in to apply)` : item.name}
@@ -189,7 +361,7 @@ function PreviewCard({
 
       {imgSrc && !(showMotion && isVideoMotion) && (
         <img
-          key={imgSrc}
+          key={`${item.id}:${imgSrc}`}
           src={imgSrc}
           alt={item.name}
           onError={() => setPosterFailed(true)}
@@ -200,13 +372,14 @@ function PreviewCard({
 
       {motion && isVideoMotion && motionUrl && showMotion && (
         <video
+          key={`${item.id}:${motionUrl}`}
           ref={videoRef}
           src={motionUrl}
-          poster={posterUrl ?? undefined}
+          poster={resolvedPoster ?? undefined}
           muted={!audioEnabled}
           loop
           playsInline
-          preload={playPreview ? "auto" : "metadata"}
+          preload="metadata"
           className="pointer-events-none absolute inset-0 size-full object-cover"
         />
       )}
@@ -259,92 +432,9 @@ function PreviewCard({
       )}
     </div>
   );
-}
+});
 
-function SectionBlock({
-  section,
-  assetsPath,
-  packFilePath,
-  settings,
-  isLocked,
-}: {
-  section: PackContentSection;
-  assetsPath: string;
-  packFilePath: string;
-  settings?: PackSettings | null;
-  isLocked: (item: PackTreeItem) => boolean;
-}) {
-  const { gridColumns } = usePanelUI();
-  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setVisibleCount(INITIAL_VISIBLE);
-  }, [section.id, section.items]);
-
-  const visibleItems = useMemo(
-    () => section.items.slice(0, visibleCount),
-    [section.items, visibleCount],
-  );
-
-  const hasMore = visibleCount < section.items.length;
-
-  const mediaMap = useMemo(
-    () => resolveItemsPreviewMedia(visibleItems, assetsPath, settings),
-    [visibleItems, assetsPath, settings],
-  );
-
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel || !hasMore) return;
-
-    const root = getScrollParent(sentinel);
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting) return;
-        setVisibleCount((count) =>
-          Math.min(count + LOAD_MORE, section.items.length),
-        );
-      },
-      { root, rootMargin: "240px", threshold: 0 },
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-    // Re-bind when visibleCount grows so a still-visible sentinel keeps loading.
-  }, [hasMore, section.items.length, visibleCount]);
-
-  if (section.items.length === 0) return null;
-
-  return (
-    <section className="flex flex-col gap-1.5">
-      {section.title ? (
-        <h3 className="px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground">
-          {section.title}
-          <span className="ml-1.5 font-medium text-muted-foreground/70">
-            {section.items.length}
-          </span>
-        </h3>
-      ) : null}
-      <div
-        className="grid items-start gap-1"
-        style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}
-      >
-        {visibleItems.map((clip) => (
-          <PreviewCard
-            key={clip.id}
-            item={clip}
-            media={mediaMap.get(clip.id)}
-            packFilePath={packFilePath}
-            settings={settings}
-            locked={isLocked(clip)}
-          />
-        ))}
-      </div>
-      {hasMore ? <div ref={sentinelRef} className="h-px w-full" aria-hidden /> : null}
-    </section>
-  );
-}
+// --- Virtualized grid -------------------------------------------------------
 
 export function FootageGrid({
   sections,
@@ -361,7 +451,74 @@ export function FootageGrid({
   isLocked?: (item: PackTreeItem) => boolean;
   emptyMessage?: string;
 }) {
-  if (sections.length === 0) {
+  const { gridColumns } = usePanelUI();
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const preferWebm = packPrefersWebmPreview(settings);
+  const useMp4 = settings?.inside_option_sets?.use_webm_preview === "mp4";
+  const lockedFn = isLocked ?? (() => false);
+
+  const rows = useMemo(
+    () => buildFlatRows(sections, gridColumns),
+    [sections, gridColumns],
+  );
+
+  const rowsKey = useMemo(
+    () => sections.map((s) => `${s.id}:${s.items.length}`).join("|"),
+    [sections],
+  );
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    setScrollElement(getScrollParent(host));
+
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      setContainerWidth(w);
+    });
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, []);
+
+  // Fixed estimates only — measureElement during fast scroll caused gaps/overlaps.
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollElement,
+    estimateSize: (index) => {
+      const row = rows[index];
+      if (!row) return 100;
+      if (row.kind === "header") return HEADER_ROW_PX;
+      return estimateCardsRowHeight(
+        row.aspectCss,
+        containerWidth,
+        gridColumns,
+        row.sectionEnd,
+      );
+    },
+    overscan: OVERSCAN_ROWS,
+    getItemKey: (index) => rows[index]?.key ?? index,
+  });
+
+  // Reset scroll + free blob URLs when category / query / pack content changes.
+  useEffect(() => {
+    if (scrollElement) scrollElement.scrollTop = 0;
+    virtualizer.scrollToOffset(0);
+    return () => {
+      revokePreviewObjectUrls();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed by content identity
+  }, [rowsKey, gridColumns, assetsPath]);
+
+  // Recompute row sizes when geometry changes (no per-row DOM measuring).
+  useEffect(() => {
+    virtualizer.measure();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [containerWidth, gridColumns, rowsKey]);
+
+  if (sections.length === 0 || rows.length === 0) {
     return (
       <div className="flex h-full min-h-32 items-center justify-center text-xs text-muted-foreground">
         {emptyMessage}
@@ -369,20 +526,54 @@ export function FootageGrid({
     );
   }
 
-  const locked = isLocked ?? (() => false);
-
   return (
-    <div className="flex flex-col gap-4">
-      {sections.map((section) => (
-        <SectionBlock
-          key={section.id}
-          section={section}
-          assetsPath={assetsPath}
-          packFilePath={packFilePath}
-          settings={settings}
-          isLocked={locked}
-        />
-      ))}
+    <div ref={hostRef} className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+      {virtualizer.getVirtualItems().map((virtualRow) => {
+        const row = rows[virtualRow.index];
+        if (!row) return null;
+
+        return (
+          <div
+            key={virtualRow.key}
+            data-index={virtualRow.index}
+            className="absolute left-0 top-0 w-full"
+            style={{
+              height: `${virtualRow.size}px`,
+              transform: `translateY(${virtualRow.start}px)`,
+            }}
+          >
+            {row.kind === "header" ? (
+              <h3 className="px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground">
+                {row.title}
+                <span className="ml-1.5 font-medium text-muted-foreground/70">
+                  {row.count}
+                </span>
+              </h3>
+            ) : (
+              <div
+                className="grid items-start"
+                style={{
+                  gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
+                  gap: GRID_GAP_PX,
+                }}
+              >
+                {row.items.map((clip) => (
+                  <PreviewCard
+                    key={clip.id}
+                    item={clip}
+                    assetsPath={assetsPath}
+                    packFilePath={packFilePath}
+                    settings={settings}
+                    locked={lockedFn(clip)}
+                    preferWebm={preferWebm}
+                    useMp4={useMp4}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

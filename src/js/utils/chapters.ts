@@ -4,10 +4,12 @@ import type { CaptionsChunk } from "./transcribe";
 
 export class ChapterApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  code?: string;
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = "ChapterApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -100,7 +102,7 @@ const callGenerations = async (
 
   if (signal?.aborted) throw new Error("Cancelled");
 
-  let data: { error?: string } & GenerationResponse;
+  let data: { error?: string; code?: string } & GenerationResponse;
   try {
     data = await response.json();
   } catch {
@@ -108,7 +110,11 @@ const callGenerations = async (
   }
 
   if (!response.ok) {
-    throw new ChapterApiError(data.error ?? `HTTP ${response.status}`, response.status);
+    throw new ChapterApiError(
+      data.error ?? `HTTP ${response.status}`,
+      response.status,
+      typeof data.code === "string" ? data.code : undefined,
+    );
   }
 
   return data;

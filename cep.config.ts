@@ -51,6 +51,7 @@ const config: CEP_Config = {
   ],
   width: 500,
   height: 550,
+  minWidth: 420,
 
   panels: [
     {
@@ -60,6 +61,7 @@ const config: CEP_Config = {
       autoVisible: true,
       width: 600,
       height: 650,
+      minWidth: 420,
     },
   ],
   build: {

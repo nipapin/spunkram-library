@@ -5,11 +5,11 @@ import type { PackSettings, PackTreeItem } from "./pack-types";
 export type PreviewMotionKind = "webm" | "mp4" | "gif";
 
 export type ItemPreviewMedia = {
-  /** Static poster src (blob: URL), if found. */
+  /** Static poster src (blob: URL) if already cached; otherwise null until lazy load. */
   posterUrl: string | null;
-  /** Absolute poster path. */
+  /** Absolute poster path — load via `loadPreviewObjectUrl` near viewport. */
   posterPath: string | null;
-  /** Absolute motion path — blob URL created lazily on hover. */
+  /** Absolute motion path — blob URL created lazily on hover / play. */
   motion: {
     kind: PreviewMotionKind;
     path: string;
@@ -18,7 +18,18 @@ export type ItemPreviewMedia = {
 
 const POSTER_EXTS = [".png", ".jpg", ".jpeg"] as const;
 
+/** Cap concurrent FS→blob reads so CEP main thread stays responsive. */
+const MAX_CONCURRENT_READS = 3;
+
 const objectUrlCache = new Map<string, string>();
+
+type ReadJob = {
+  path: string;
+  resolve: (url: string | null) => void;
+};
+
+let activeReads = 0;
+const readQueue: ReadJob[] = [];
 
 function cepFsAvailable(): boolean {
   return (
@@ -71,6 +82,40 @@ export function pathToObjectUrl(absolutePath: string): string | null {
   } catch {
     return null;
   }
+}
+
+function pumpReadQueue(): void {
+  while (activeReads < MAX_CONCURRENT_READS && readQueue.length > 0) {
+    const job = readQueue.shift();
+    if (!job) break;
+    activeReads += 1;
+    // Yield between reads so CEF can paint / handle input.
+    setTimeout(() => {
+      try {
+        job.resolve(pathToObjectUrl(job.path));
+      } catch {
+        job.resolve(null);
+      } finally {
+        activeReads -= 1;
+        pumpReadQueue();
+      }
+    }, 0);
+  }
+}
+
+/**
+ * Resolve a file to a blob URL with a concurrency-limited queue.
+ * Prefer this over sync `pathToObjectUrl` from React render/effects for posters.
+ */
+export function loadPreviewObjectUrl(absolutePath: string): Promise<string | null> {
+  if (!absolutePath) return Promise.resolve(null);
+  const cached = objectUrlCache.get(absolutePath);
+  if (cached) return Promise.resolve(cached);
+
+  return new Promise((resolve) => {
+    readQueue.push({ path: absolutePath, resolve });
+    pumpReadQueue();
+  });
 }
 
 /** Drop cached blob URLs (call when leaving a category / unloading pack). */
@@ -132,7 +177,7 @@ function motionKindFromExt(filePath: string): PreviewMotionKind {
 
 /**
  * Resolve poster + hover motion media for a pack item.
- * Poster blob is created immediately; motion path is resolved for lazy blob on hover.
+ * Paths only (existsSync); poster blob is created lazily via `loadPreviewObjectUrl`.
  */
 export function resolveItemPreviewMedia(
   item: PackTreeItem,
@@ -154,7 +199,9 @@ export function resolveItemPreviewMedia(
   const baseWithoutExt = path.join(assetsPath, ...segments);
 
   const posterPath = firstExisting(baseWithoutExt, POSTER_EXTS);
-  const posterUrl = posterPath ? pathToObjectUrl(posterPath) : null;
+  const posterUrl = posterPath
+    ? (objectUrlCache.get(posterPath) ?? null)
+    : null;
 
   if (isStaticFootage || item.group.is_audio) {
     return { posterUrl, posterPath, motion: null };

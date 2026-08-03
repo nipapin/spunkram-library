@@ -364,21 +364,35 @@ npm run release:patch  # from beta: promote to stable core; from stable: +patch 
 
 ## 6. Credits / generations
 
-`POST /api/cep/generations` — Bearer; tier **на сервере**:
+Кредиты и usage **scoped по `author_id`**:
+
+| Scope | `author_id` | Где используется |
+|---|---|---|
+| Motionflow (платформа) | `0` | веб AI `/api/generations/*`, Paddle extra packs |
+| Spunkram | `1691` | CEP captions / chapters / voiceover (`client` → registry) |
+
+Таблицы: `user_generation_credits` PK `(user_id, author_id)`, `user_generations.author_id`, audit с `author_id`.  
+`users.extra_generations_count` — зеркало **только** Motionflow (`author_id = 0`).
+
+`POST /api/cep/generations` — Bearer; tier и баланс **автора** из `client` (не Motionflow extras):
 
 ```json
 {
   "authenticated": true,
   "hasSubscription": false,
   "plan": "free",
-  "remaining": 10,
-  "subscription_generations_left": 10,
-  "extra_generations_left": 0,
-  "total_generations_left": 10
+  "remaining": 5,
+  "subscription_generations_left": 5,
+  "extra_generations_left": 100,
+  "total_generations_left": 105
 }
 ```
 
 Free / purchased (без Spunkram sub) → **5**. Editor → **10**. Editor AI → **100**.
+
+`total_generations_left` = author subscription/free remaining + author `user_generation_credits.extra_balance` (купленные extra этого автора, не сгорают). Motionflow extras в CEP **не** видны. При consume сначала квота автора, затем author extra.
+
+Admin: `POST /api/admin/user-generation-credits` — optional `authorId` (default `0`).
 
 Captions / chapters / voiceover: тот же Bearer; лимит и Spunkram-sub проверяет сервер.
 
@@ -453,7 +467,7 @@ Vite-dev проксирует `/api/cep/*`, `/api/generations/*`.
 - [ ] `/me` purchases = sold_items автора
 - [ ] `/market?host=` все паки автора + `owned` / `action` / urls
 - [ ] Download gate server-side
-- [ ] Generations: 5 free / 10 Editor / 100 Editor AI
+- [ ] Generations: 5 free / 10 Editor / 100 Editor AI; credits + usage scoped by author_id (0 = Motionflow)
 - [ ] В ответах CEP **нет** `author_id`
 - [ ] `GET /api/cep/update` + R2 `latest.json`
 - [ ] `POST /api/github/webhook` + `GITHUB_WEBHOOK_SECRET`

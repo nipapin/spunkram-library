@@ -266,6 +266,16 @@ export function reportError(
       return Promise.resolve();
     }
 
+    // Dev panel: never page Telegram — local console only.
+    if (import.meta.env.DEV) {
+      console.warn(
+        `[support:dev] skip Telegram → ${actionName}:`,
+        parts.message,
+        extra ?? "",
+      );
+      return Promise.resolve();
+    }
+
     const meta = collectSupportMeta();
     const payload: ReportPayload = {
       action: actionName,

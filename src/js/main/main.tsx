@@ -36,6 +36,7 @@ import {
   type PackContentSection,
 } from "@/lib/utils/pack-tree";
 import type { InstalledPackMeta, PackSettings, PackTreeItem, PackTreeNode } from "@/lib/utils/pack-types";
+import { revokePreviewObjectUrls } from "@/lib/utils/pack-preview";
 import { cn } from "@/lib/utils";
 import {
   generationLimitForTier,
@@ -336,6 +337,7 @@ function AppShell() {
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   const applyPack = useCallback((meta: InstalledPackMeta) => {
+    revokePreviewObjectUrls();
     loadInstalledPack(meta)
       .then((loaded) => {
         const nextTree = buildPackTree(loaded.pack.structure);

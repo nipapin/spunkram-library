@@ -3,13 +3,16 @@ import {
   Check,
   ChevronDown,
   FolderPlus,
+  List,
   Loader2,
   Mic,
   Pause,
   Play,
   Timeline,
   Volume2,
+  X,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { evalTS } from "@/lib/utils/bolt";
 import { fs } from "@/lib/cep/node";
@@ -29,6 +32,8 @@ const ACCENT_PILL =
 
 const HISTORY_STORAGE_KEY = "spunkram.voiceoverHistory";
 const HISTORY_MAX = 30;
+/** Inline preview under the form; full list opens in a modal. */
+const HISTORY_PREVIEW = 5;
 
 type VoiceoverHistoryItem = {
   id: string;
@@ -397,10 +402,20 @@ export const VoiceoverApp = ({
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<VoiceoverHistoryItem[]>(loadHistory);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     persistHistory(history);
   }, [history]);
+
+  useEffect(() => {
+    if (!historyOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setHistoryOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [historyOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -645,13 +660,15 @@ export const VoiceoverApp = ({
             </p>
             <button
               type="button"
-              onClick={() => setHistory([])}
-              className="text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => setHistoryOpen(true)}
+              title="View all generations"
+              aria-label="View all generations"
+              className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
             >
-              Clear
+              <List className="size-3.5" strokeWidth={2} />
             </button>
           </div>
-          {history.map((item) => (
+          {history.slice(0, HISTORY_PREVIEW).map((item) => (
             <HistoryItemCard
               key={item.id}
               item={item}
@@ -662,6 +679,55 @@ export const VoiceoverApp = ({
           ))}
         </div>
       )}
+
+      {historyOpen
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[1100] flex items-end justify-center bg-background/85 p-2 sm:items-center"
+              onClick={() => setHistoryOpen(false)}
+              role="presentation"
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Voiceover history"
+                className="flex max-h-[min(90vh,640px)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-white/10 bg-card shadow-xl ring-1 ring-inset ring-white/5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2.5">
+                  <div>
+                    <p className="text-[11px] font-semibold text-foreground">
+                      All generations
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {history.length} saved
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryOpen(false)}
+                    aria-label="Close"
+                    className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+                  >
+                    <X className="size-3.5" strokeWidth={2} />
+                  </button>
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2.5">
+                  {history.map((item) => (
+                    <HistoryItemCard
+                      key={item.id}
+                      item={item}
+                      placing={placing}
+                      onPlace={(row, destination) => void place(row, destination)}
+                      onLocalPath={updateLocalPath}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 };

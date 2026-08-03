@@ -14,6 +14,7 @@ import { reportSupportError } from "../../api/support";
 import { authErrorMessage } from "../../styles";
 import { normalize, transcribe, type CaptionsChunk, type TranscribeResult } from "../../utils/transcribe";
 import {
+  ChapterApiError,
   createChapter,
   formatFullDescription,
   generateAll,
@@ -31,6 +32,15 @@ import { useConfiguration } from "../../../context/ConfigurationWrapper";
 
 const TRANSCRIPTION_KEY = "aitools-cep-chapters-transcription";
 const RESULT_KEY = "aitools-cep-chapters-result";
+
+function reportChapterApiError(action: string, e: unknown) {
+  const status = e instanceof ChapterApiError ? e.status : undefined;
+  const code = e instanceof ChapterApiError ? e.code : undefined;
+  reportSupportError(action, e, {
+    ...(status != null ? { http_status: status } : {}),
+    ...(code ? { api_code: code } : {}),
+  });
+}
 
 type ResultState = {
   titles: string[];
@@ -182,7 +192,7 @@ export const ChaptersApp = ({
         // тихая отмена — без error-banner
       } else {
         setError(e instanceof Error ? e.message : String(e));
-        reportSupportError("chapters.generate", e);
+        reportChapterApiError("chapters.generate", e);
       }
     } finally {
       abortRef.current = null;
@@ -208,7 +218,7 @@ export const ChaptersApp = ({
       persistResult({ ...result, titles });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      reportSupportError("chapters.regenerate_titles", e);
+      reportChapterApiError("chapters.regenerate_titles", e);
     } finally {
       setRegeneratingTitles(false);
     }
@@ -229,7 +239,7 @@ export const ChaptersApp = ({
       persistResult({ ...result, chapters: sectionsToChapters(sections) });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      reportSupportError("chapters.regenerate_chapters", e);
+      reportChapterApiError("chapters.regenerate_chapters", e);
     } finally {
       setRegeneratingChapters(false);
     }
@@ -250,7 +260,7 @@ export const ChaptersApp = ({
       persistResult({ ...result, description });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      reportSupportError("chapters.regenerate_description", e);
+      reportChapterApiError("chapters.regenerate_description", e);
     } finally {
       setRegeneratingDescription(false);
     }
@@ -271,7 +281,7 @@ export const ChaptersApp = ({
       persistResult({ ...result, tags: tagsToText(tags) });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      reportSupportError("chapters.regenerate_tags", e);
+      reportChapterApiError("chapters.regenerate_tags", e);
     } finally {
       setRegeneratingTags(false);
     }
