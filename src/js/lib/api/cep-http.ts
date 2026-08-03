@@ -27,6 +27,10 @@ function nodeRequest(
       }
 
       const timeoutMs = init.timeoutMs ?? 20000;
+      const headers: Record<string, string> = { ...(init.headers || {}) };
+      if (init.body != null && headers["Content-Length"] == null && headers["content-length"] == null) {
+        headers["Content-Length"] = String(Buffer.byteLength(init.body));
+      }
       const req = lib.request(
         {
           protocol: parsed.protocol,
@@ -34,7 +38,7 @@ function nodeRequest(
           port: parsed.port || (isHttps ? 443 : 80),
           path: `${parsed.pathname}${parsed.search}`,
           method: init.method || "GET",
-          headers: init.headers,
+          headers,
           timeout: timeoutMs,
         },
         (res) => {

@@ -6,12 +6,10 @@ import { collectSupportMeta } from "./collect-meta";
 const DEDUPE_WINDOW_MS = 60_000;
 
 /**
- * Always absolute. In Vite DEV `apiUrl()` is relative (`"" + /api/...`) so the
- * CEP Node `http` client cannot parse it and the report silently fails.
- * Support must hit production Motionflow regardless of panel origin.
+ * Absolute production URL — CEP Node `http` cannot POST relative paths.
+ * In Vite DEV we also try the relative path (Vite proxy) if absolute fails.
  */
 const SUPPORT_REPORT_URL = `https://motionflow.pro${SUPPORT_ENDPOINT}`;
-
 
 /**
  * Severity:
@@ -63,6 +61,7 @@ type ReportPayload = {
   error_code?: string;
   severity: SupportSeverity;
   stack?: string;
+  extension_name: string;
   extension_version: string;
   host: {
     appId: string;
@@ -132,38 +131,51 @@ function normalizeOptions(opts?: SupportReportOptions): {
 } {
   if (!opts) return { severity: "error" };
   const { severity = "error", ...rest } = opts;
-  const extraKeys = Object.keys(rest);
-  const extra =
-    extraKeys.length > 0
-      ? (rest as SupportExtra)
-      : undefined;
-  return { severity, extra };
+  const extra: SupportExtra = {};
+  for (const [k, v] of Object.entries(rest)) {
+    if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+      extra[k] = v;
+    } else if (v !== undefined) {
+      extra[k] = String(v);
+    }
+  }
+  return {
+    severity,
+    extra: Object.keys(extra).length ? extra : undefined,
+  };
 }
 
 function dedupeKey(severity: SupportSeverity, action: string, message: string): string {
   return `${severity}::${action}::${message}`;
 }
 
-function isDuplicate(
+/** True if we already successfully sent this report recently. */
+function wasRecentlySent(
   severity: SupportSeverity,
   action: string,
   message: string,
 ): boolean {
   const key = dedupeKey(severity, action, message);
-  const now = Date.now();
   const prev = recentKeys.get(key);
-  if (prev && now - prev < DEDUPE_WINDOW_MS) return true;
-  recentKeys.set(key, now);
+  return Boolean(prev && Date.now() - prev < DEDUPE_WINDOW_MS);
+}
 
+function markSent(
+  severity: SupportSeverity,
+  action: string,
+  message: string,
+): void {
+  const key = dedupeKey(severity, action, message);
+  recentKeys.set(key, Date.now());
   if (recentKeys.size > 200) {
+    const now = Date.now();
     for (const [k, ts] of recentKeys) {
       if (now - ts >= DEDUPE_WINDOW_MS) recentKeys.delete(k);
     }
   }
-  return false;
 }
 
-async function postReport(payload: ReportPayload): Promise<HttpResult> {
+function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -172,47 +184,86 @@ async function postReport(payload: ReportPayload): Promise<HttpResult> {
     const token = getUserIdentity()?.token;
     if (token) headers.Authorization = `Bearer ${token}`;
   } catch {
-    // ignore — optional auth
+    // optional auth
   }
+  return headers;
+}
 
-  return cepHttpRequest(SUPPORT_REPORT_URL, {
+async function postReport(payload: ReportPayload): Promise<HttpResult> {
+  const body = JSON.stringify(payload);
+  const headers = authHeaders();
+
+  // 1) Absolute → CEP Node https (no CORS)
+  let result = await cepHttpRequest(SUPPORT_REPORT_URL, {
     method: "POST",
     headers,
-    body: JSON.stringify(payload),
-    timeoutMs: 8000,
+    body,
+    timeoutMs: 12000,
   });
+
+  // 2) Dev fallback: relative path through Vite proxy (localhost:4000 → motionflow.pro)
+  if (
+    !result.ok &&
+    import.meta.env.DEV &&
+    (result.error === "NO_CONNECTION" || result.status === 0)
+  ) {
+    result = await cepHttpRequest(SUPPORT_ENDPOINT, {
+      method: "POST",
+      headers,
+      body,
+      timeoutMs: 12000,
+    });
+  }
+
+  return result;
+}
+
+function logResult(result: HttpResult): void {
+  // Always log failures — otherwise CEP packaged builds hide the problem.
+  if (!result.ok) {
+    console.warn(
+      "[support] report failed →",
+      SUPPORT_REPORT_URL,
+      result.status,
+      result.error,
+      (result.text || "").slice(0, 200),
+    );
+  } else if (import.meta.env.DEV) {
+    console.info("[support] report sent →", SUPPORT_REPORT_URL, result.status, result.text?.slice(0, 120));
+  }
 }
 
 /**
  * Report a support event.
  * Only `severity: "error"` (default) is sent to the backend / Telegram.
- * `warning` / `info` stay local (console) — do not interrupt support channel.
+ * Returns a promise so callers can await delivery (never throws).
  */
 export function reportError(
   action: string,
   error: unknown,
   opts?: SupportReportOptions,
-): void {
+): Promise<void> {
   try {
     const actionName = (action || "unknown").trim().slice(0, 200);
     const parts = extractErrorParts(error);
-    if (!parts.message) return;
-    if (shouldSkipBusiness(parts.message, parts.code)) return;
+    if (!parts.message) return Promise.resolve();
+    if (shouldSkipBusiness(parts.message, parts.code)) return Promise.resolve();
 
     let { severity, extra } = normalizeOptions(opts);
-    // Prerequisites / soft guidance must never page Telegram as errors.
     if (severity === "error" && isUserGuidance(parts.message)) {
       severity = "warning";
     }
 
-    if (isDuplicate(severity, actionName, parts.message)) return;
+    if (wasRecentlySent(severity, actionName, parts.message)) {
+      return Promise.resolve();
+    }
 
     if (severity !== "error") {
       if (import.meta.env.DEV) {
         const fn = severity === "warning" ? console.warn : console.info;
         fn(`[support:${severity}] ${actionName}:`, parts.message, extra ?? "");
       }
-      return;
+      return Promise.resolve();
     }
 
     const meta = collectSupportMeta();
@@ -226,25 +277,20 @@ export function reportError(
       extra,
     };
 
-    void postReport(payload)
+    return postReport(payload)
       .then((result) => {
-        if (import.meta.env.DEV && !result.ok) {
-          console.warn(
-            "[support] report failed →",
-            SUPPORT_REPORT_URL,
-            result.status,
-            result.error,
-            (result.text || "").slice(0, 200),
-          );
-        } else if (import.meta.env.DEV) {
-          console.info("[support] report sent →", SUPPORT_REPORT_URL, result.status);
+        logResult(result);
+        // Only dedupe after a successful accept (202/2xx). Failed posts can retry.
+        if (result.ok) {
+          markSent(severity, actionName, parts.message);
         }
       })
-      .catch(() => {
-        // Silent — reporting must never disrupt the panel.
+      .catch((err) => {
+        console.warn("[support] report threw", err);
       });
-  } catch {
-    // Silent
+  } catch (err) {
+    console.warn("[support] report setup failed", err);
+    return Promise.resolve();
   }
 }
 
@@ -254,7 +300,7 @@ export function reportWarning(
   error: unknown,
   opts?: Omit<SupportReportOptions, "severity">,
 ): void {
-  reportError(action, error, { ...opts, severity: "warning" });
+  void reportError(action, error, { ...opts, severity: "warning" });
 }
 
 /** Explicit info helper (never Telegram). */
@@ -263,7 +309,7 @@ export function reportInfo(
   error: unknown,
   opts?: Omit<SupportReportOptions, "severity">,
 ): void {
-  reportError(action, error, { ...opts, severity: "info" });
+  void reportError(action, error, { ...opts, severity: "info" });
 }
 
 /** Global uncaught error / rejection handlers (idempotent) — always severity error. */
@@ -273,7 +319,7 @@ export function installGlobalHandlers(): void {
 
   window.addEventListener("error", (event) => {
     const err = event.error ?? event.message;
-    reportError("uncaught", err, {
+    void reportError("uncaught", err, {
       severity: "error",
       filename: event.filename || null,
       lineno: event.lineno ?? null,
@@ -282,6 +328,6 @@ export function installGlobalHandlers(): void {
   });
 
   window.addEventListener("unhandledrejection", (event) => {
-    reportError("unhandledrejection", event.reason, { severity: "error" });
+    void reportError("unhandledrejection", event.reason, { severity: "error" });
   });
 }

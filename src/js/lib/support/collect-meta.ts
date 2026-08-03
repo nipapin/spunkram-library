@@ -1,4 +1,7 @@
-import { version as EXTENSION_VERSION } from "../../../shared/shared";
+import {
+  displayName as EXTENSION_NAME,
+  version as EXTENSION_VERSION,
+} from "../../../shared/shared";
 import { getUserSystemData } from "@/lib/api/usp";
 import { csi } from "@/lib/utils/bolt";
 
@@ -9,6 +12,7 @@ export type SupportHostMeta = {
 };
 
 export type SupportErrorMeta = {
+  extension_name: string;
   extension_version: string;
   host: SupportHostMeta;
   os: string;
@@ -55,6 +59,7 @@ function readOs(): string {
 /** Snapshot of extension / host / OS for support reports. */
 export function collectSupportMeta(): SupportErrorMeta {
   return {
+    extension_name: EXTENSION_NAME,
     extension_version: EXTENSION_VERSION,
     host: readHost(),
     os: readOs(),

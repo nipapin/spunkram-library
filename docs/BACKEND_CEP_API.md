@@ -405,6 +405,7 @@ Captions / chapters / voiceover: тот же Bearer; лимит и Spunkram-sub 
   "error_code": "TIMEOUT",
   "severity": "error",
   "stack": "…",
+  "extension_name": "Spunkram Library",
   "extension_version": "0.4.4-beta.2",
   "host": { "appId": "PPRO", "appName": "Premiere Pro", "appVersion": "24.5" },
   "os": "Windows 11 …",

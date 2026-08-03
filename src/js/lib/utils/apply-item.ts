@@ -49,7 +49,7 @@ export async function applyPackItemToHost(
   try {
     resolved = resolveItemSourceFile(item, packFilePath, appId, settings);
   } catch (e) {
-    reportSupportError("pack.resolve_item", e, { item: item.name });
+    await reportSupportError("pack.resolve_item", e, { item: item.name });
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
 
@@ -59,7 +59,7 @@ export async function applyPackItemToHost(
 
   if (!fs.existsSync(resolved.file)) {
     const msg = `Source file not found: ${path.basename(resolved.file)}`;
-    reportSupportError("pack.apply_item", msg, {
+    await reportSupportError("pack.apply_item", msg, {
       item: item.name,
       reason: "SOURCE_MISSING",
       ctype: resolved.ctype,
@@ -83,7 +83,7 @@ export async function applyPackItemToHost(
     }
   } catch (e) {
     const msg = `Couldn't decode item file: ${e instanceof Error ? e.message : String(e)}`;
-    reportSupportError("pack.decode_item", e, { item: item.name });
+    await reportSupportError("pack.decode_item", e, { item: item.name });
     return {
       ok: false,
       message: msg,
@@ -109,7 +109,7 @@ export async function applyPackItemToHost(
         reason !== "NO_ACTIVE_SEQUENCE" &&
         reason !== "MOGRT_NOT_SUPPORTED_IN_AE"
       ) {
-        reportSupportError("pack.apply_item", message, {
+        await reportSupportError("pack.apply_item", message, {
           item: item.name,
           reason,
           ctype,
@@ -120,7 +120,7 @@ export async function applyPackItemToHost(
     return { ok: true };
   } catch (e) {
     cleanupCacheFile(decodedCachePath);
-    reportSupportError("pack.apply_item", e, { item: item.name, ctype });
+    await reportSupportError("pack.apply_item", e, { item: item.name, ctype });
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
 }
