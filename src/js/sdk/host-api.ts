@@ -12,6 +12,12 @@ export function hostSdk(): HostSdk {
 /** Unwrap MfResult or throw. */
 export async function sdkData<T>(promise: Promise<import("@/sdk").MfResult<T>>): Promise<T> {
   const res = await promise;
-  if (!res.ok) throw new Error(res.error);
+  if (!res.ok) {
+    const msg =
+      res.error && res.error !== "null" && res.error !== "undefined"
+        ? res.error
+        : "Host script failed";
+    throw new Error(msg);
+  }
   return res.data;
 }

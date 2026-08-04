@@ -125,15 +125,29 @@ export const describe = (_audioPresetPath?: string) => {
       return null;
     }
 
+    // Selection order ≠ timeline order; layer outPoints can exceed comp.duration.
+    // workAreaDuration must stay within [frame, duration - start] or AE throws.
+    let rangeStart = audioLayers[0].inPoint;
+    let rangeEnd = audioLayers[0].outPoint;
+    for (let i = 1; i < audioLayers.length; i++) {
+      if (audioLayers[i].inPoint < rangeStart) rangeStart = audioLayers[i].inPoint;
+      if (audioLayers[i].outPoint > rangeEnd) rangeEnd = audioLayers[i].outPoint;
+    }
+    const frame = 1 / Math.max(1, comp.frameRate);
+    const compDur = comp.duration;
+    rangeStart = Math.max(0, Math.min(rangeStart, Math.max(0, compDur - frame)));
+    rangeEnd = Math.max(rangeStart + frame, Math.min(rangeEnd, compDur));
+    const rangeDur = Math.max(frame, rangeEnd - rangeStart);
+
     const saveWAS = comp.workAreaStart;
     const saveWAD = comp.workAreaDuration;
-    comp.workAreaStart = selectedLayers[0].inPoint;
-    comp.workAreaDuration = selectedLayers[selectedLayers.length - 1].outPoint - selectedLayers[0].inPoint;
+    comp.workAreaStart = rangeStart;
+    comp.workAreaDuration = rangeDur;
     const restoreAudio = soloAudioLayers(comp, audioLayers);
 
     const rqItem = app.project.renderQueue.items.add(comp);
-    rqItem.timeSpanStart = comp.workAreaStart;
-    rqItem.timeSpanDuration = comp.workAreaDuration;
+    rqItem.timeSpanStart = rangeStart;
+    rqItem.timeSpanDuration = rangeDur;
     const fileName = `ae_audio_export_${Date.now()}`;
     const om = rqItem.outputModule(1);
 
@@ -150,16 +164,22 @@ export const describe = (_audioPresetPath?: string) => {
       app.project.renderQueue.render();
     } finally {
       rqItem.remove();
-      comp.workAreaStart = saveWAS;
-      comp.workAreaDuration = saveWAD;
+      try {
+        const restoreStart = Math.max(0, Math.min(saveWAS, Math.max(0, compDur - frame)));
+        const restoreDur = Math.max(frame, Math.min(saveWAD, compDur - restoreStart));
+        comp.workAreaStart = restoreStart;
+        comp.workAreaDuration = restoreDur;
+      } catch (eRestore) {
+        // leave work area as-is if restore is invalid
+      }
       restoreAudio();
     }
     comp.openInViewer();
-    // offset РЅР° inPoint РїРµСЂРІРѕРіРѕ РІС‹РґРµР»РµРЅРЅРѕРіРѕ СЃР»РѕСЏ вЂ” С‚Р°Р№РјРєРѕРґС‹ РѕС‚ РЅРµРіРѕ
+    // offset — start of rendered range; transcription timestamps are relative to it
     return {
       source: tempFile.fsName,
       dest: Folder.temp.fsName + `/${fileName}.mp3`,
-      offset: selectedLayers[0].inPoint,
+      offset: rangeStart,
       type: "selected" as const,
     };
   } catch (e: any) {

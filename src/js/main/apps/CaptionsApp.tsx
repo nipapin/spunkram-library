@@ -473,7 +473,11 @@ export const CaptionsApp = ({
     const effectivePresetPath = audioPresetPath || getBundledAudioPresetPath() || undefined;
     const res = await sdkData(hostSdk().describe(effectivePresetPath));
     throwIfCancelled(signal);
-    if (!res) return;
+    if (!res || !res.source) {
+      throw new Error(
+        "Could not export audio from the composition. Check the work area / selected layers and try again.",
+      );
+    }
 
     try {
       setProgress({ stage: "converting" });

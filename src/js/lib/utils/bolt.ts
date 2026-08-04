@@ -88,25 +88,39 @@ export const evalTS = <
           var res = host["${ns}"].${functionName}(${formattedArgs});
           JSON.stringify(res);
         }catch(e){
-          e.fileName = new File(e.fileName).fsName;
-          JSON.stringify(e);
+          try { if (e && e.fileName) e.fileName = new File(e.fileName).fsName; } catch (_f) {}
+          JSON.stringify({ name: (e && e.name) ? e.name : "Error", message: String(e && e.message != null ? e.message : e) });
         }`,
       (res: string) => {
         try {
           //@ts-ignore
           if (res === "undefined") return resolve();
           const parsed = JSON.parse(res);
+          // Host often returns JSON `null` on soft failure (e.g. describe after alert).
+          // `typeof parsed.name` would throw on null and reject("null") → Error: null.
           if (
-            typeof parsed.name === "string" &&
-            (<string>parsed.name).toLowerCase().includes("error")
+            parsed &&
+            typeof parsed === "object" &&
+            typeof (parsed as { name?: unknown }).name === "string" &&
+            String((parsed as { name: string }).name)
+              .toLowerCase()
+              .includes("error")
           ) {
-            console.error(parsed.message);
-            reject(parsed);
+            const msg =
+              typeof (parsed as { message?: unknown }).message === "string"
+                ? (parsed as { message: string }).message
+                : "ExtendScript error";
+            console.error(msg);
+            reject(new Error(msg));
           } else {
             resolve(parsed);
           }
         } catch (error) {
-          reject(res);
+          reject(
+            error instanceof Error
+              ? error
+              : new Error(typeof res === "string" ? res : String(error)),
+          );
         }
       }
     );
