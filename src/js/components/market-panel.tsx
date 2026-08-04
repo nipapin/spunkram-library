@@ -15,6 +15,7 @@ import { uninstallPack } from "@/lib/utils/pack-install";
 import { currentHostAppId } from "@/lib/utils/apply-item";
 import { openMotionflowSubscribe } from "@/api/motionflow-auth";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
+import * as panelStore from "@/lib/userdata-store";
 
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
@@ -276,7 +277,7 @@ export function MarketPanel({
   const resolvedActivePath = useMemo(() => {
     if (activePackPath) return activePackPath;
     try {
-      return localStorage.getItem(ACTIVE_PACK_STORAGE_KEY) || undefined;
+      return panelStore.getItem(ACTIVE_PACK_STORAGE_KEY) || undefined;
     } catch {
       return undefined;
     }

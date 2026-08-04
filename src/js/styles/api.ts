@@ -124,16 +124,15 @@ const parseFilename = (disposition: string | null, id: string, file: CaptionProj
 
 const userPayload = (user?: UserIdentity) => {
   const u = user ?? getUserIdentity();
-  const out: { id?: string; email?: string; devToken?: string } = {};
+  const out: { id?: string; email?: string } = {};
   if (u.id) out.id = u.id;
   if (u.email) out.email = u.email;
-  if (u.devToken) out.devToken = u.devToken;
   return out;
 };
 
 /**
  * POST /api/captions — скачать project.mogrt / project.aep (binary).
- * Проверка доступа на сервере; user id/email уходят в body.
+ * Auth: Bearer Motionflow CEP token (preferred); user id/email also in body.
  */
 export const downloadCaptionProject = async (
   id: string,
@@ -141,14 +140,18 @@ export const downloadCaptionProject = async (
   user?: UserIdentity,
   brand?: BrandId,
 ): Promise<CaptionDownloadResult> => {
+  const identity = user ?? getUserIdentity();
+  const headers: Record<string, string> = {
+    Accept: "application/octet-stream, application/json",
+    "Content-Type": "application/json",
+  };
+  if (identity.token) headers.Authorization = `Bearer ${identity.token}`;
+
   const response = await fetch(apiUrl(CAPTIONS_ENDPOINTS.download), {
     method: "POST",
     credentials: "include",
-    headers: {
-      Accept: "application/octet-stream, application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ id, file, user: userPayload(user), ...(brand ? { brand } : {}) }),
+    headers,
+    body: JSON.stringify({ id, file, user: userPayload(identity), ...(brand ? { brand } : {}) }),
   });
 
   if (response.status === 401) {

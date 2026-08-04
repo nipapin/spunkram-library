@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **MotionFlow SDK** (`src/js/sdk`): UI calls `MotionFlow.AE.*` / `MotionFlow.PPRO.*` instead of raw `evalTS`
+- Beta ExtendScript port under `src/jsx/legacy/` (engine, composers, presets, undo, stock, …)
+- Host methods: `createComp`, `createText`, `addResponsiveBackground`, `addMogrt`, `importSequence`, undo groups
+- Docs: `docs/MOTIONFLOW_SDK.md`, `docs/sdk/INVENTORY.md`, `PARITY.md`, `AUTHOR_COOKBOOK.md`
+
 ## [0.4.4-beta.3] - 2026-08-02
 
 ### What's new

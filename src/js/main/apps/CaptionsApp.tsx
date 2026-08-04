@@ -7,7 +7,8 @@ import {
   type DescribeType,
 } from "../../components/ProgressDialog";
 import { fs } from "../../lib/cep/node";
-import { csi, evalTS, reloadJSX } from "../../lib/utils/bolt";
+import { csi, reloadJSX } from "../../lib/utils/bolt";
+import { hostSdk, sdkData } from "@/sdk/host-api";
 import { convertToMp3, detectSpeechStart } from "../../utils/ffmpeg";
 import { getBundledAudioPresetPath } from "../../utils/audioPreset";
 import { getUserIdentity } from "../../api";
@@ -31,6 +32,7 @@ import {
 } from "../../utils/transcribe";
 import "./CaptionsApp.scss";
 import { useConfiguration } from "../../../context/ConfigurationWrapper";
+import * as panelStore from "../../lib/userdata-store";
 
 const STORAGE_KEY = "aitools-cep-transcription";
 const META_KEY = "aitools-cep-caption-meta";
@@ -179,19 +181,19 @@ export const CaptionsApp = ({
   charactersRef.current = characters;
 
   const persist = (next: TranscribeResult) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    panelStore.setItem(STORAGE_KEY, JSON.stringify(next));
     setData(next);
   };
 
   const persistCustomSegments = (next: CaptionsChunk[] | null) => {
-    if (next) localStorage.setItem(CUSTOM_SEGMENTS_KEY, JSON.stringify(next));
-    else localStorage.removeItem(CUSTOM_SEGMENTS_KEY);
+    if (next) panelStore.setItem(CUSTOM_SEGMENTS_KEY, JSON.stringify(next));
+    else panelStore.removeItem(CUSTOM_SEGMENTS_KEY);
     setCustomSegments(next);
   };
 
   const persistAppliedConfig = (next: AppliedSegmentConfig | null) => {
-    if (next) localStorage.setItem(APPLIED_CONFIG_KEY, JSON.stringify(next));
-    else localStorage.removeItem(APPLIED_CONFIG_KEY);
+    if (next) panelStore.setItem(APPLIED_CONFIG_KEY, JSON.stringify(next));
+    else panelStore.removeItem(APPLIED_CONFIG_KEY);
     setAppliedConfig(next);
   };
 
@@ -226,12 +228,14 @@ export const CaptionsApp = ({
     });
     // единый payload под оба хоста: AE ищет comp по compId, Premiere — трек
     // по trackIndex (у чужого хоста лишнее поле просто игнорируется)
-    return evalTS("resegmentCaptions", {
+    return sdkData(
+      hostSdk().resegmentCaptions({
       compId: "compId" in hostRef ? hostRef.compId : 0,
       trackIndex: "trackIndex" in hostRef ? hostRef.trackIndex : undefined,
       sequenceId: "sequenceId" in hostRef ? hostRef.sequenceId : undefined,
       captions: payload,
-    })
+    }),
+    )
       .then(() => undefined)
       .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : String(e));
@@ -297,7 +301,7 @@ export const CaptionsApp = ({
       hostRef,
       sourceCompId: payload.sourceCompId,
     };
-    localStorage.setItem(META_KEY, JSON.stringify(nextMeta));
+    panelStore.setItem(META_KEY, JSON.stringify(nextMeta));
     setMeta(nextMeta);
     skipSessionSaveRef.current = true;
     setScreen("editor");
@@ -306,7 +310,7 @@ export const CaptionsApp = ({
   // Проверяем наличие captions в выделении / активной seq — без кэша и fallback
   const checkLoadAvailability = async () => {
     try {
-      const found = (await evalTS("findAppliedCaptions")) as
+      const found = (await sdkData(hostSdk().findAppliedCaptions())) as
         | {
             compId?: number;
             sequenceId?: string;
@@ -329,7 +333,7 @@ export const CaptionsApp = ({
     setError(null);
     try {
       if (!isAfterEffects()) {
-        const loaded = (await evalTS("loadCaptionsFromTimeline")) as
+        const loaded = (await sdkData(hostSdk().loadCaptionsFromTimeline())) as
           | {
               sequenceId?: string;
               trackIndex?: number;
@@ -370,14 +374,14 @@ export const CaptionsApp = ({
           offset: 0,
           hostRef,
         };
-        localStorage.setItem(META_KEY, JSON.stringify(nextMeta));
+        panelStore.setItem(META_KEY, JSON.stringify(nextMeta));
         setMeta(nextMeta);
         skipSessionSaveRef.current = true;
         setScreen("editor");
         return;
       }
 
-      const found = (await evalTS("findAppliedCaptions")) as
+      const found = (await sdkData(hostSdk().findAppliedCaptions())) as
         | {
             compId?: number;
             sequenceId?: string;
@@ -403,7 +407,7 @@ export const CaptionsApp = ({
         return;
       }
       if (payload.sourceCompId == null) {
-        const now = (await evalTS("getCurrentTime")) as { time?: number; compId?: number } | null;
+        const now = (await sdkData(hostSdk().getCurrentTime())) as { time?: number; compId?: number } | null;
         if (now && typeof now.compId === "number" && now.compId !== found.compId) {
           payload.sourceCompId = now.compId;
         }
@@ -467,7 +471,7 @@ export const CaptionsApp = ({
     // Premiere: пользовательский .epr из Settings, иначе бандленный WAV-пресет;
     // AE игнорирует параметр
     const effectivePresetPath = audioPresetPath || getBundledAudioPresetPath() || undefined;
-    const res = await evalTS("describe", effectivePresetPath);
+    const res = await sdkData(hostSdk().describe(effectivePresetPath));
     throwIfCancelled(signal);
     if (!res) return;
 
@@ -494,7 +498,6 @@ export const CaptionsApp = ({
           signal,
           userId: user.id || undefined,
           email: user.email,
-          devToken: user.devToken,
           token: user.token,
         });
       } catch (e) {
@@ -524,7 +527,7 @@ export const CaptionsApp = ({
         aepPath: activeAepPath,
       });
       await reloadJSX();
-      const createRes = await evalTS("createCaptions", payload);
+      const createRes = await sdkData(hostSdk().createCaptions(payload));
       throwIfCancelled(signal);
       // evalTS() типизирует createCaptions по пересечению сигнатур ppro.ts/aeft.ts,
       // так что trackIndex/compId выглядят для TS как один фиксированный (не оба
@@ -553,7 +556,7 @@ export const CaptionsApp = ({
         ...(hostRef ? { hostRef } : {}),
         ...(typeof createResult?.sourceCompId === "number" ? { sourceCompId: createResult.sourceCompId } : {}),
       };
-      localStorage.setItem(META_KEY, JSON.stringify(finalMeta));
+      panelStore.setItem(META_KEY, JSON.stringify(finalMeta));
       setMeta(finalMeta);
       skipSessionSaveRef.current = false;
       setScreen("editor");
@@ -591,7 +594,7 @@ export const CaptionsApp = ({
                 json: JSON.stringify(session),
               };
         try {
-          await evalTS("saveSessionData", saveArgs);
+          await sdkData(hostSdk().saveSessionData(saveArgs));
         } catch {
           // Load без маркера будет недоступен — не валим весь Transcribe
         }
@@ -639,7 +642,8 @@ export const CaptionsApp = ({
     const hostRef = metaRef.current.hostRef;
     if (!hostRef) return;
     const isPremiere = csi.hostEnvironment?.appId === "PPRO";
-    evalTS("updateCaptionText", {
+    hostSdk()
+      .updateCaptionText({
       trackIndex: isPremiere ? (hostRef as { trackIndex: number }).trackIndex : undefined,
       clipIndex: isPremiere ? index : undefined,
       sequenceId:
@@ -647,7 +651,11 @@ export const CaptionsApp = ({
       compId: !isPremiere ? (hostRef as { compId: number }).compId : undefined,
       captionIndex: !isPremiere ? index : undefined,
       text,
-    }).catch((e: unknown) => {
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(r.error);
+      })
+      .catch((e: unknown) => {
       setError(e instanceof Error ? e.message : String(e));
       reportSupportError("captions.live_edit", e);
     });
@@ -758,7 +766,12 @@ export const CaptionsApp = ({
     setHighlightIndex(index);
     lastSyncedIndexRef.current = index;
     lastSyncedTimeRef.current = absoluteTime;
-    evalTS("setCurrentTime", { time: absoluteTime }).catch((e: unknown) => {
+    hostSdk()
+      .setCurrentTime({ time: absoluteTime })
+      .then((r) => {
+        if (!r.ok) throw new Error(r.error);
+      })
+      .catch((e: unknown) => {
       setError(e instanceof Error ? e.message : String(e));
     });
   };
@@ -791,7 +804,7 @@ export const CaptionsApp = ({
       if (!captions.length || screen !== "editor") return;
       if (document.hidden || isTypingInField()) return;
       try {
-        const current = await evalTS("getCurrentTime");
+        const current = await sdkData(hostSdk().getCurrentTime());
         if (current == null || typeof current !== "object") return;
         const { time, compId } = current as { time: number; compId?: number };
 
@@ -867,7 +880,7 @@ export const CaptionsApp = ({
               sequenceId: "sequenceId" in hostRef ? hostRef.sequenceId : undefined,
               json: JSON.stringify(session),
             };
-      evalTS("saveSessionData", saveArgs).catch(() => {});
+      hostSdk().saveSessionData(saveArgs).catch(() => {});
     }, 500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -881,10 +894,10 @@ export const CaptionsApp = ({
   };
 
   // загрузка метаданных + проверка Load; на лендинг не прыгаем в editor
-  // с последним localStorage — иначе кажется, что Load поднял «прошлую» сессию
+  // с последним сохранением — иначе кажется, что Load поднял «прошлую» сессию
   // вместо выбранного nest
   useEffect(() => {
-    const storedMeta = localStorage.getItem(META_KEY);
+    const storedMeta = panelStore.getItem(META_KEY);
     if (storedMeta) {
       try {
         setMeta(JSON.parse(storedMeta));
@@ -892,7 +905,7 @@ export const CaptionsApp = ({
         // ignore
       }
     }
-    const storedApplied = localStorage.getItem(APPLIED_CONFIG_KEY);
+    const storedApplied = panelStore.getItem(APPLIED_CONFIG_KEY);
     if (storedApplied) {
       try {
         setAppliedConfig(JSON.parse(storedApplied));

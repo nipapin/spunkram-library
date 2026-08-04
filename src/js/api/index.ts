@@ -19,12 +19,8 @@ export {
 export { fetchGenerationsStatus, type GenerationsStatus } from "./credits";
 export {
   clearUserIdentity,
-  DEV_ADMIN_EMAIL,
-  DEV_ADMIN_ID,
   getUserIdentity,
-  isDevAdminSignedIn,
   setUserIdentity,
-  signInAsDevAdmin,
   type UserIdentity,
 } from "./user";
 export {

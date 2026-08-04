@@ -8,6 +8,7 @@ interface TitleSuggestionsProps {
   onEditTitle: (index: number, title: string) => void;
   onRegenerate: () => void;
   regenerating: boolean;
+  canRegenerate?: boolean;
 }
 
 export const TitleSuggestions = ({
@@ -15,6 +16,7 @@ export const TitleSuggestions = ({
   onEditTitle,
   onRegenerate,
   regenerating,
+  canRegenerate = true,
 }: TitleSuggestionsProps) => {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
@@ -26,6 +28,8 @@ export const TitleSuggestions = ({
     setTimeout(() => setCopiedIndex((current) => (current === index ? null : current)), 1500);
   };
 
+  const regenerateDisabled = regenerating || !canRegenerate;
+
   return (
     <div className="title-suggestions">
       <div className="title-suggestions__head">
@@ -34,7 +38,14 @@ export const TitleSuggestions = ({
           type="button"
           className="btn btn--ghost title-suggestions__regenerate"
           onClick={onRegenerate}
-          disabled={regenerating}
+          disabled={regenerateDisabled}
+          title={
+            !canRegenerate
+              ? "No generations left"
+              : regenerating
+                ? "Regenerating…"
+                : "Uses 1 generation"
+          }
         >
           {regenerating ? <span className="spinner" /> : <RefreshCw size={12} />}
           Regenerate

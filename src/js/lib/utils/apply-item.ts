@@ -1,10 +1,11 @@
 /**
  * Apply a pack item (transition/title/SFX/footage) to the host project.
  * Orchestration port of Spunkram Beta `applyItemPremiereProLikeAs` +
- * `prepareToApplyPremierePro` — decrypt (if needed) then hand off to the
- * ExtendScript `applyPackItem` (see `src/jsx/{ppro,aeft}/*-apply-item.ts`).
+ * `prepareToApplyPremierePro` — decrypt (if needed) then hand off via
+ * MotionFlow SDK → ExtendScript `applyPackItem`.
  */
-import { csi, evalTS } from "./bolt";
+import { csi } from "./bolt";
+import { MotionFlow } from "@/sdk";
 import { fs, path } from "../cep/node";
 import { resolveItemSourceFile, type HostAppId } from "./pack-apply-paths";
 import { cleanupCacheFile, decodeBinAxFile, decodeMgAssetFile } from "./pack-protect";
@@ -94,7 +95,7 @@ export async function applyPackItemToHost(
   const ctype = resolved.ctype === "FULL_PROJECT" ? "PROJECT" : resolved.ctype;
 
   try {
-    const result = await evalTS("applyPackItem", {
+    const wrapped = await MotionFlow.applyPackItem({
       ctype,
       filePath,
       itemName: item.name,
@@ -102,6 +103,15 @@ export async function applyPackItemToHost(
     });
     cleanupCacheFile(decodedCachePath);
 
+    if (!wrapped.ok) {
+      await reportSupportError("pack.apply_item", wrapped.error, {
+        item: item.name,
+        ctype,
+      });
+      return { ok: false, message: wrapped.error };
+    }
+
+    const result = wrapped.data;
     if (!result || !result.applied) {
       const reason = result && !result.applied ? result.reason : "UNKNOWN_ERROR";
       const message = friendlyReason(reason);

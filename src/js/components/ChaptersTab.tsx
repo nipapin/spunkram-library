@@ -1,4 +1,4 @@
-import { ArrowLeft, Bookmark, Check, Copy, Globe, Plus, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, Bookmark, Check, ChevronRight, Copy, Globe, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useConfiguration } from "../../context/ConfigurationWrapper";
 import { SRC_LANGS, TRANSLATE_TARGETS } from "../data/languages";
@@ -10,11 +10,23 @@ import { TitleSuggestions } from "./TitleSuggestions";
 import { copyToClipboard } from "../utils/clipboard";
 import { formatChaptersForYoutube, MIN_YOUTUBE_CHAPTERS, type Chapter } from "../utils/chapters";
 
+export type ChaptersHistoryPreview = {
+  id: string;
+  createdAt: number;
+  label: string;
+  chapterCount: number;
+};
+
 interface ChaptersTabProps {
   screen: "landing" | "results";
   progress: DescribeProgress | null;
   onGenerate: () => void;
   onBack: () => void;
+  /** false when user has no generations left — Regenerate buttons stay disabled. */
+  canRegenerate?: boolean;
+  history?: ChaptersHistoryPreview[];
+  onOpenHistory?: (id: string) => void;
+  onDeleteHistory?: (id: string) => void;
   titles: string[];
   onEditTitle: (index: number, title: string) => void;
   onRegenerateTitles: () => void;
@@ -41,11 +53,31 @@ interface ChaptersTabProps {
 
 const HOUR = 3600;
 
+function formatHistoryWhen(createdAt: number): string {
+  const diff = Date.now() - createdAt;
+  if (diff < 60_000) return "Just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 86_400_000 * 7) return `${Math.floor(diff / 86_400_000)}d ago`;
+  try {
+    return new Date(createdAt).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "";
+  }
+}
+
 export const ChaptersTab = ({
   screen,
   progress,
   onGenerate,
   onBack,
+  canRegenerate = true,
+  history = [],
+  onOpenHistory,
+  onDeleteHistory,
   titles,
   onEditTitle,
   onRegenerateTitles,
@@ -114,6 +146,51 @@ export const ChaptersTab = ({
               ready to paste into YouTube.
             </p>
           </div>
+
+          {history.length > 0 && (
+            <div className="chapters-tab__history">
+              <div className="chapters-tab__history-head">
+                <span className="chapters-tab__section-label">History</span>
+                <span className="chapters-tab__history-count">{history.length}</span>
+              </div>
+              <ul className="chapters-tab__history-list">
+                {history.map((item) => (
+                  <li key={item.id} className="chapters-tab__history-item">
+                    <button
+                      type="button"
+                      className="chapters-tab__history-open"
+                      onClick={() => onOpenHistory?.(item.id)}
+                      disabled={!!progress}
+                    >
+                      <span className="chapters-tab__history-main">
+                        <span className="chapters-tab__history-label">{item.label}</span>
+                        <span className="chapters-tab__history-meta">
+                          {item.chapterCount} chapter{item.chapterCount === 1 ? "" : "s"}
+                          <span className="chapters-tab__history-dot" aria-hidden>
+                            ·
+                          </span>
+                          {formatHistoryWhen(item.createdAt)}
+                        </span>
+                      </span>
+                      <ChevronRight size={14} className="chapters-tab__history-chevron" />
+                    </button>
+                    {onDeleteHistory ? (
+                      <button
+                        type="button"
+                        className="icon-btn chapters-tab__history-delete"
+                        onClick={() => onDeleteHistory(item.id)}
+                        disabled={!!progress}
+                        data-tooltip="Remove from history"
+                        aria-label={`Remove ${item.label} from history`}
+                      >
+                        <Trash2 size={13} strokeWidth={2} />
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="chapters-tab__landing-footer">
@@ -173,6 +250,7 @@ export const ChaptersTab = ({
         <TitleSuggestions
           titles={titles}
           regenerating={regeneratingTitles}
+          canRegenerate={canRegenerate}
           onEditTitle={onEditTitle}
           onRegenerate={onRegenerateTitles}
         />
@@ -185,6 +263,7 @@ export const ChaptersTab = ({
           onChange={onUpdateDescription}
           onRegenerate={onRegenerateDescription}
           regenerating={regeneratingDescription}
+          canRegenerate={canRegenerate}
         />
 
         <GeneratedTextSection
@@ -195,6 +274,7 @@ export const ChaptersTab = ({
           onChange={onUpdateTags}
           onRegenerate={onRegenerateTags}
           regenerating={regeneratingTags}
+          canRegenerate={canRegenerate}
         />
 
         <div className="chapters-tab__chapters-section">
@@ -217,8 +297,14 @@ export const ChaptersTab = ({
                 type="button"
                 className="icon-btn chapters-tab__icon-action"
                 onClick={onRegenerateChapters}
-                disabled={regeneratingChapters}
-                data-tooltip="Regenerate chapters"
+                disabled={regeneratingChapters || !canRegenerate}
+                data-tooltip={
+                  !canRegenerate
+                    ? "No generations left"
+                    : regeneratingChapters
+                      ? "Regenerating…"
+                      : "Regenerate chapters (uses 1 generation)"
+                }
                 aria-label="Regenerate chapters"
               >
                 {regeneratingChapters ? (

@@ -1,5 +1,6 @@
 import { path } from "../lib/cep/node";
-import { csi, evalTS } from "../lib/utils/bolt";
+import { csi } from "../lib/utils/bolt";
+import { MotionFlow } from "@/sdk";
 import { defaultsFromDefinition } from "../presets";
 import type { MogrtDefinition } from "../presets/types";
 import { loadLocalPackage } from "./localStore";
@@ -109,14 +110,18 @@ export const applyPresetProjectInHost = async (
     return { applied: false, reason: "unsupported_host" };
   }
 
-  const result = (await evalTS("applyStyleProject", {
+  const hostApi = MotionFlow.host === "AE" ? MotionFlow.AE : MotionFlow.PPRO;
+  const wrapped = await hostApi.applyStyleProject({
     styleId: prepared.preset.styleId,
     styleName: prepared.preset.name,
     aepPath: prepared.paths?.aep,
     mogrtPath: prepared.paths?.mogrt,
     values: prepared.preset.values,
-  })) as ApplyStyleProjectResult | null;
-
+  });
+  if (!wrapped.ok) {
+    return { applied: false, reason: wrapped.error };
+  }
+  const result = wrapped.data as ApplyStyleProjectResult | null;
   return result ?? { applied: false, reason: "host_returned_null" };
 };
 

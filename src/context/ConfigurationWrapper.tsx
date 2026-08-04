@@ -19,7 +19,9 @@ import {
 import { createDefaultValues, defaultsFromDefinition, stylePropsFromValues } from "../js/presets";
 import type { ControlValues, MogrtDefinition } from "../js/presets";
 import type { GroupingMode } from "../js/utils/transcribe";
-import { csi, evalTS } from "../js/lib/utils/bolt";
+import { csi } from "../js/lib/utils/bolt";
+import { MotionFlow } from "../js/sdk";
+import * as panelStore from "../js/lib/userdata-store";
 
 export type { StylePreset } from "../js/styles";
 export { isPresetDirty, isPresetValuesDirty, presetSwatchColors };
@@ -108,7 +110,7 @@ type StoredConfig = Pick<
 
 const loadConfig = (): StoredConfig => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = panelStore.getItem(STORAGE_KEY);
     if (!stored) return defaultValue;
     const parsed = JSON.parse(stored) as Partial<StoredConfig>;
     return {
@@ -296,7 +298,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       applyValuesTimer.current = setTimeout(() => {
         let sequenceId: string | undefined;
         try {
-          const raw = localStorage.getItem("aitools-cep-caption-meta");
+          const raw = panelStore.getItem("aitools-cep-caption-meta");
           if (raw) {
             const meta = JSON.parse(raw) as {
               hostRef?: { sequenceId?: string };
@@ -306,7 +308,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         } catch {
           // ignore
         }
-        evalTS("applyCaptionStyleValues", { props, sequenceId }).catch(() => {});
+        const hostApi = MotionFlow.host === "AE" ? MotionFlow.AE : MotionFlow.PPRO;
+        hostApi.applyCaptionStyleValues({ props, sequenceId }).catch(() => {});
       }, 120);
     },
     [definitions],
@@ -392,7 +395,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   }, [refreshStyles]);
 
   useEffect(() => {
-    localStorage.setItem(
+    panelStore.setItem(
       STORAGE_KEY,
       JSON.stringify({ mode, lines, characters, fontSize, mogrtPath, audioPresetPath, srcLang, translateTo }),
     );

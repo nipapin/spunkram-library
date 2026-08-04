@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { fs, os, path } from "../../lib/cep/node";
-import { evalTS } from "../../lib/utils/bolt";
+import { MotionFlow } from "@/sdk";
 import { useFiltersContext } from "../context/FiltersContext";
 import { useProgressContext } from "../context/ProgressContext";
 import { incrementUsage } from "../utils/trial-usage";
@@ -28,7 +28,8 @@ export function useImportMedia() {
         setProgress(0);
 
         if (fs.existsSync(filePath)) {
-          await evalTS("importMedia", filePath, destination, duration);
+          const res = await MotionFlow.importMedia(filePath, destination, duration);
+          if (!res.ok) throw new Error(res.error);
           incrementUsage("gallery");
           setProgress(100);
           return;
@@ -61,7 +62,8 @@ export function useImportMedia() {
 
         const buffer = Buffer.from(merged);
         fs.writeFileSync(filePath, buffer);
-        await evalTS("importMedia", filePath, destination, duration);
+        const res = await MotionFlow.importMedia(filePath, destination, duration);
+        if (!res.ok) throw new Error(res.error);
         incrementUsage("gallery");
         setProgress(100);
         if (downloadLocation) {

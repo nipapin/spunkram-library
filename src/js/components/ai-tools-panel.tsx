@@ -4,6 +4,7 @@ import { AiToolsList } from "@/components/ai-tools-list";
 import { CaptionsApp } from "@/main/apps/CaptionsApp";
 import { ChaptersApp } from "@/main/apps/ChaptersApp";
 import { VoiceoverApp } from "@/main/apps/VoiceoverApp";
+import * as panelStore from "@/lib/userdata-store";
 import "@/ai-tools.scss";
 
 type ActiveTool = "hub" | "captions" | "chapters" | "voiceover";
@@ -12,7 +13,7 @@ const TOOL_KEY = "spunkram-library-ai-active-tool";
 
 const loadTool = (): ActiveTool => {
   try {
-    const stored = localStorage.getItem(TOOL_KEY);
+    const stored = panelStore.getItem(TOOL_KEY);
     if (stored === "captions" || stored === "chapters" || stored === "voiceover") return stored;
   } catch {
     // ignore
@@ -40,7 +41,7 @@ export function AiToolsPanel({
   onUseRef.current = onUse;
 
   useEffect(() => {
-    localStorage.setItem(TOOL_KEY, activeTool);
+    panelStore.setItem(TOOL_KEY, activeTool);
   }, [activeTool]);
 
   useEffect(() => {

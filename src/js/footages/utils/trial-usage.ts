@@ -1,3 +1,5 @@
+import * as panelStore from "@/lib/userdata-store";
+
 const STORAGE_KEY = "gal-premiere-gallery-trial";
 const TRIAL_LIMIT = 20;
 
@@ -5,7 +7,7 @@ type UsageMap = Record<string, number>;
 
 function loadUsage(): UsageMap {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = panelStore.getItem(STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return typeof parsed === "object" && parsed !== null ? parsed : {};
@@ -16,7 +18,7 @@ function loadUsage(): UsageMap {
 
 function saveUsage(map: UsageMap): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+    panelStore.setItem(STORAGE_KEY, JSON.stringify(map));
   } catch {
     // ignore
   }

@@ -1,6 +1,39 @@
 ﻿export { importMedia, importVoiceoverAudio } from "./ppro-import-media";
 export { applyPackItem } from "./ppro-apply-item";
 import { applyPackItem } from "./ppro-apply-item";
+export {
+  bindPack,
+  setEngine,
+  getPackContext,
+  getEngine,
+  mfCopyPackage,
+  mfDeletePackage,
+  addMogrt,
+  importSequence,
+  importFootage,
+  importAudio,
+  undoGroupStart,
+  undoGroupEnd,
+  undoGroupAbort,
+  legacyPpCall,
+} from "./ppro-sdk";
+/** AE-only stubs so Scripts intersection typing still works for evalTS. */
+export const createComp = (_opts: unknown) => ({
+  ok: false as const,
+  reason: "PPRO_ONLY_HOST",
+});
+export const createText = (_opts: unknown) => ({
+  ok: false as const,
+  reason: "PPRO_ONLY_HOST",
+});
+export const addResponsiveBackground = (_opts?: unknown) => ({
+  ok: false as const,
+  reason: "PPRO_ONLY_HOST",
+});
+export const legacyAeCall = (_method: string, _argsJson: string) => ({
+  ok: false,
+  reason: "PPRO_ONLY_HOST",
+});
 import {
   helloVoid,
   helloError,
@@ -9,6 +42,7 @@ import {
   helloArrayStr,
   helloObj,
 } from "../utils/samples";
+/** @deprecated Bolt samples — not part of MotionFlow SDK surface */
 export { helloError, helloStr, helloNum, helloArrayStr, helloObj, helloVoid };
 import { dispatchTS, readJsonUtf8 } from "../utils/utils";
 import {
@@ -29,6 +63,7 @@ import {
   type MogrtMatchDebug,
 } from "./ppro-utils";
 
+/** @deprecated Bolt sample — not part of MotionFlow SDK surface */
 export const qeDomFunction = () => {
   if (typeof qe === "undefined") {
     app.enableQE();
@@ -39,6 +74,7 @@ export const qeDomFunction = () => {
   }
 };
 
+/** @deprecated Bolt sample — not part of MotionFlow SDK surface */
 export const helloWorld = () => {
   alert("Hello from Premiere Pro.");
 };
@@ -207,6 +243,10 @@ export interface SilenceRangeInput {
 // вырезает её сама: официальный API Premiere не даёт безопасно razor+ripple
 // через несколько треков разом (только недокументированный QE DOM), поэтому
 // пользователь сам подтверждает и вырезает каждый отрезок штатным Ripple Delete.
+export const createCaptionsFromFile = (_jsonPath: string) => ({
+  created: 0,
+  reason: "PPRO_USE_createCaptions",
+});
 export const markSilences = (data: { ranges: SilenceRangeInput[]; offset: number }) => {
   const seq = app.project.activeSequence;
   if (!seq) {

@@ -36,7 +36,8 @@ export const createChapter = (time = 0, title = "New chapter"): Chapter => ({
 });
 
 // "all" — единственный запрос сразу после транскрипции; остальные — точечный
-// Regenerate конкретной секции (не тратит токены модели на прочие поля)
+// Regenerate конкретной секции (не тратит токены модели на прочие поля).
+// Каждый вызов, включая regenerate, списывает 1 генерацию пользователя на сервере.
 export type GenerationTarget = "all" | "titles" | "chapters" | "description" | "tags";
 
 type GenerationResponse = {

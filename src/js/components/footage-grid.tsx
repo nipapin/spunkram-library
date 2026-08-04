@@ -9,12 +9,10 @@ import { resolvePreviewAspectRatio, type PackContentSection } from "@/lib/utils/
 import type { PackSettings, PackTreeItem } from "@/lib/utils/pack-types";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { cn } from "@/lib/utils";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { Loader2, Lock, Sparkles, Star } from "lucide-react";
 import {
   memo,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -24,88 +22,10 @@ import {
 
 const GRID_GAP_PX = 4;
 const SECTION_GAP_PX = 16;
-const HEADER_ROW_PX = 26;
-const OVERSCAN_ROWS = 2;
+/** Show skeleton until the grid mounts when the list is large enough to hitch. */
+const SKELETON_THRESHOLD = 64;
 /** Cap simultaneous Play Preview video decodes in weak CEP Chromium. */
 const MAX_CONCURRENT_VIDEOS = 4;
-
-type FlatRow =
-  | { kind: "header"; key: string; title: string; count: number }
-  | {
-      kind: "cards";
-      key: string;
-      items: PackTreeItem[];
-      aspectCss: string;
-      sectionEnd: boolean;
-    };
-
-function getScrollParent(el: HTMLElement | null): HTMLElement | null {
-  let node = el?.parentElement ?? null;
-  while (node) {
-    const { overflowY } = getComputedStyle(node);
-    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
-      return node;
-    }
-    node = node.parentElement;
-  }
-  return null;
-}
-
-function parseAspectRatio(css: string): number {
-  const parts = css.split("/").map((s) => parseFloat(s.trim()));
-  if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
-    return parts[0] / parts[1];
-  }
-  return 16 / 9;
-}
-
-/** Row height from aspect + width. Includes trailing gap (row or section). */
-function estimateCardsRowHeight(
-  aspectCss: string,
-  containerWidth: number,
-  columns: number,
-  sectionEnd: boolean,
-): number {
-  if (containerWidth <= 0 || columns <= 0) return 120;
-  const cellW = (containerWidth - GRID_GAP_PX * (columns - 1)) / columns;
-  const cardH = cellW / parseAspectRatio(aspectCss);
-  return cardH + (sectionEnd ? SECTION_GAP_PX : GRID_GAP_PX);
-}
-
-function buildFlatRows(
-  sections: PackContentSection[],
-  columns: number,
-): FlatRow[] {
-  const rows: FlatRow[] = [];
-  const cols = Math.max(1, columns);
-
-  for (const section of sections) {
-    if (section.items.length === 0) continue;
-
-    if (section.title) {
-      rows.push({
-        kind: "header",
-        key: `h:${section.id}`,
-        title: section.title,
-        count: section.items.length,
-      });
-    }
-
-    for (let i = 0; i < section.items.length; i += cols) {
-      const slice = section.items.slice(i, i + cols);
-      const sectionEnd = i + cols >= section.items.length;
-      rows.push({
-        kind: "cards",
-        key: `c:${section.id}:${i}`,
-        items: slice,
-        aspectCss: resolvePreviewAspectRatio(slice[0].group),
-        sectionEnd,
-      });
-    }
-  }
-
-  return rows;
-}
 
 // --- Concurrent Play Preview slot manager -----------------------------------
 
@@ -188,8 +108,7 @@ const PreviewCard = memo(function PreviewCard({
   const isNew = showNewBadges && !!item.group.is_new_mark;
   const isPremium = !!item.group.premium;
 
-  // Virtualization already windows cards — mounted ⇒ near viewport.
-  // Reset media state whenever the recycled cell binds a different item.
+  // Reset media state whenever the cell binds a different item.
   useEffect(() => {
     setHovered(false);
     setHasVideoSlot(false);
@@ -434,7 +353,47 @@ const PreviewCard = memo(function PreviewCard({
   );
 });
 
-// --- Virtualized grid -------------------------------------------------------
+// --- Skeleton ---------------------------------------------------------------
+
+function GridSkeleton({
+  columns,
+  aspectCss,
+  itemCount,
+}: {
+  columns: number;
+  aspectCss: string;
+  itemCount: number;
+}) {
+  const cols = Math.max(1, columns);
+  // Fill roughly a viewport of placeholders, never more than the real count.
+  const cells = Math.min(itemCount, cols * 8);
+
+  return (
+    <div
+      className="grid items-start"
+      style={{
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+        gap: GRID_GAP_PX,
+      }}
+      aria-busy="true"
+      aria-label="Loading previews"
+    >
+      {Array.from({ length: cells }, (_, i) => (
+        <div
+          key={i}
+          className="animate-pulse bg-secondary/70"
+          style={{
+            aspectRatio: aspectCss,
+            borderRadius: "clamp(2px, 4%, 10px)",
+            animationDelay: `${(i % cols) * 40}ms`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// --- Grid -------------------------------------------------------------------
 
 export function FootageGrid({
   sections,
@@ -452,73 +411,57 @@ export function FootageGrid({
   emptyMessage?: string;
 }) {
   const { gridColumns } = usePanelUI();
-  const hostRef = useRef<HTMLDivElement>(null);
-  const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
-
   const preferWebm = packPrefersWebmPreview(settings);
   const useMp4 = settings?.inside_option_sets?.use_webm_preview === "mp4";
   const lockedFn = isLocked ?? (() => false);
 
-  const rows = useMemo(
-    () => buildFlatRows(sections, gridColumns),
-    [sections, gridColumns],
-  );
-
-  const rowsKey = useMemo(
-    () => sections.map((s) => `${s.id}:${s.items.length}`).join("|"),
+  const itemCount = useMemo(
+    () => sections.reduce((sum, s) => sum + s.items.length, 0),
     [sections],
   );
 
-  useLayoutEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    setScrollElement(getScrollParent(host));
+  const contentKey = useMemo(
+    () =>
+      `${gridColumns}|${assetsPath}|${sections.map((s) => `${s.id}:${s.items.length}`).join("|")}`,
+    [sections, gridColumns, assetsPath],
+  );
 
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      setContainerWidth(w);
-    });
-    ro.observe(host);
-    return () => ro.disconnect();
-  }, []);
+  const needsSkeleton = itemCount >= SKELETON_THRESHOLD;
+  const [gridReady, setGridReady] = useState(!needsSkeleton);
 
-  // Fixed estimates only — measureElement during fast scroll caused gaps/overlaps.
-  const virtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scrollElement,
-    estimateSize: (index) => {
-      const row = rows[index];
-      if (!row) return 100;
-      if (row.kind === "header") return HEADER_ROW_PX;
-      return estimateCardsRowHeight(
-        row.aspectCss,
-        containerWidth,
-        gridColumns,
-        row.sectionEnd,
-      );
-    },
-    overscan: OVERSCAN_ROWS,
-    getItemKey: (index) => rows[index]?.key ?? index,
-  });
-
-  // Reset scroll + free blob URLs when category / query / pack content changes.
+  // For large lists: paint skeleton first, then mount cards on the next tick
+  // so CEP Chromium doesn't freeze on a blank panel.
   useEffect(() => {
-    if (scrollElement) scrollElement.scrollTop = 0;
-    virtualizer.scrollToOffset(0);
+    if (!needsSkeleton) {
+      setGridReady(true);
+      return;
+    }
+
+    setGridReady(false);
+    let cancelled = false;
+    let timeoutId = 0;
+    const rafId = requestAnimationFrame(() => {
+      // One frame for skeleton paint, then a short defer before heavy mount.
+      timeoutId = window.setTimeout(() => {
+        if (!cancelled) setGridReady(true);
+      }, 32);
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [contentKey, needsSkeleton]);
+
+  // Free blob URLs when category / query / pack content changes.
+  useEffect(() => {
     return () => {
       revokePreviewObjectUrls();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed by content identity
-  }, [rowsKey, gridColumns, assetsPath]);
+  }, [contentKey]);
 
-  // Recompute row sizes when geometry changes (no per-row DOM measuring).
-  useEffect(() => {
-    virtualizer.measure();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [containerWidth, gridColumns, rowsKey]);
-
-  if (sections.length === 0 || rows.length === 0) {
+  if (sections.length === 0 || itemCount === 0) {
     return (
       <div className="flex h-full min-h-32 items-center justify-center text-xs text-muted-foreground">
         {emptyMessage}
@@ -526,52 +469,55 @@ export function FootageGrid({
     );
   }
 
+  const skeletonAspect =
+    resolvePreviewAspectRatio(sections[0]?.items[0]?.group) || "16 / 9";
+
+  if (needsSkeleton && !gridReady) {
+    return (
+      <GridSkeleton
+        columns={gridColumns}
+        aspectCss={skeletonAspect}
+        itemCount={itemCount}
+      />
+    );
+  }
+
   return (
-    <div ref={hostRef} className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-      {virtualizer.getVirtualItems().map((virtualRow) => {
-        const row = rows[virtualRow.index];
-        if (!row) return null;
+    <div className="relative w-full" style={{ display: "flex", flexDirection: "column", gap: SECTION_GAP_PX }}>
+      {sections.map((section) => {
+        if (section.items.length === 0) return null;
 
         return (
-          <div
-            key={virtualRow.key}
-            data-index={virtualRow.index}
-            className="absolute left-0 top-0 w-full"
-            style={{
-              height: `${virtualRow.size}px`,
-              transform: `translateY(${virtualRow.start}px)`,
-            }}
-          >
-            {row.kind === "header" ? (
-              <h3 className="px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground">
-                {row.title}
+          <section key={section.id} className="w-full">
+            {section.title ? (
+              <h3 className="mb-1.5 px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground">
+                {section.title}
                 <span className="ml-1.5 font-medium text-muted-foreground/70">
-                  {row.count}
+                  {section.items.length}
                 </span>
               </h3>
-            ) : (
-              <div
-                className="grid items-start"
-                style={{
-                  gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
-                  gap: GRID_GAP_PX,
-                }}
-              >
-                {row.items.map((clip) => (
-                  <PreviewCard
-                    key={clip.id}
-                    item={clip}
-                    assetsPath={assetsPath}
-                    packFilePath={packFilePath}
-                    settings={settings}
-                    locked={lockedFn(clip)}
-                    preferWebm={preferWebm}
-                    useMp4={useMp4}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+            ) : null}
+            <div
+              className="grid items-start"
+              style={{
+                gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
+                gap: GRID_GAP_PX,
+              }}
+            >
+              {section.items.map((clip) => (
+                <PreviewCard
+                  key={clip.id}
+                  item={clip}
+                  assetsPath={assetsPath}
+                  packFilePath={packFilePath}
+                  settings={settings}
+                  locked={lockedFn(clip)}
+                  preferWebm={preferWebm}
+                  useMp4={useMp4}
+                />
+              ))}
+            </div>
+          </section>
         );
       })}
     </div>

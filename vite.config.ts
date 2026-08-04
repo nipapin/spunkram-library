@@ -1,10 +1,11 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 
 import react from "@vitejs/plugin-react";
 
 import { cep, CepOptions, runAction } from "vite-cep-plugin";
 import cepConfig from "./cep.config";
 import path from "path";
+import fs from "fs";
 import { extendscriptConfig } from "./vite.es.config";
 
 const extensions = [".js", ".ts", ".tsx"];
@@ -16,6 +17,32 @@ const src = path.resolve(__dirname, "src");
 const root = path.resolve(src, "js");
 const outDir = path.resolve(__dirname, "dist", cepDist);
 
+/** Copy Beta legacy JSX into dist/cep/jsx/legacy for runtime $.evalFile. */
+function copyLegacyJsxPlugin(): Plugin {
+  const from = path.resolve(__dirname, "src/jsx/legacy");
+  const to = path.resolve(__dirname, "dist", cepDist, "jsx", "legacy");
+  const copy = () => {
+    if (!fs.existsSync(from)) return;
+    fs.mkdirSync(to, { recursive: true });
+    for (const name of fs.readdirSync(from)) {
+      if (!name.endsWith(".jsx") && !name.endsWith(".txt")) continue;
+      fs.copyFileSync(path.join(from, name), path.join(to, name));
+    }
+  };
+  return {
+    name: "copy-motionflow-legacy-jsx",
+    buildStart() {
+      copy();
+    },
+    writeBundle() {
+      copy();
+    },
+    configureServer() {
+      copy();
+    },
+  };
+}
+
 const debugReact = process.env.DEBUG_REACT === "true";
 const isProduction = process.env.NODE_ENV === "production";
 const isMetaPackage = process.env.ZIP_PACKAGE === "true";
@@ -24,12 +51,6 @@ const isServe = process.env.SERVE_PANEL === "true";
 const action = process.env.BOLT_ACTION;
 
 const devEnv = loadEnv("development", __dirname, "");
-
-// Secret for the CEP dev-admin bypass (backend resolve-captions-user).
-// Loaded from .env.local (gitignored, never committed) and only ever inlined into
-// non-distributed builds (dev/watch/build) — packaged zxp/zip builds always get "",
-// so real users never receive it even if .env.local exists on the build machine.
-const cepDevAdminToken = isPackage ? "" : (devEnv.CEP_DEV_ADMIN_TOKEN ?? "");
 
 // Dev Vite proxy target for /api/* — always https://motionflow.pro unless overridden.
 const apiTarget = devEnv.MOTIONFLOW_API_TARGET?.trim() || "https://motionflow.pro";
@@ -59,13 +80,9 @@ if (action) runAction(config, action);
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [
-    react(),
-    cep(config),
-  ],
+  plugins: [react(), cep(config), copyLegacyJsxPlugin()],
   define: {
     __APP_BRAND__: JSON.stringify("spunkram"),
-    __CEP_DEV_ADMIN_TOKEN__: JSON.stringify(cepDevAdminToken),
     __CEP_API_MOCKS__: JSON.stringify(cepApiMocks),
     // Inline so panel JS never touches bare `process` (CEP CEF / ExtendScript).
     "process.env.SPUNKRAM_EXT_FLAVOR": JSON.stringify(

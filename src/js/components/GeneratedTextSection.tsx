@@ -11,6 +11,7 @@ interface GeneratedTextSectionProps {
   onChange: (value: string) => void;
   onRegenerate: () => void;
   regenerating: boolean;
+  canRegenerate?: boolean;
 }
 
 /** Переиспользуемая секция "заголовок + Regenerate + textarea + Copy" для Description и Tags. */
@@ -22,6 +23,7 @@ export const GeneratedTextSection = ({
   onChange,
   onRegenerate,
   regenerating,
+  canRegenerate = true,
 }: GeneratedTextSectionProps) => {
   const [copied, setCopied] = useState(false);
 
@@ -33,6 +35,8 @@ export const GeneratedTextSection = ({
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const regenerateDisabled = regenerating || !canRegenerate;
+
   return (
     <div className="generated-text-section">
       <div className="generated-text-section__head">
@@ -41,7 +45,14 @@ export const GeneratedTextSection = ({
           type="button"
           className="btn btn--ghost generated-text-section__regenerate"
           onClick={onRegenerate}
-          disabled={regenerating}
+          disabled={regenerateDisabled}
+          title={
+            !canRegenerate
+              ? "No generations left"
+              : regenerating
+                ? "Regenerating…"
+                : "Uses 1 generation"
+          }
         >
           {regenerating ? <span className="spinner" /> : <RefreshCw size={12} />}
           Regenerate

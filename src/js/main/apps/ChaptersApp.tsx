@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { ChaptersTab } from "../../components/ChaptersTab";
+﻿import { useEffect, useRef, useState } from "react";
+import { ChaptersTab, type ChaptersHistoryPreview } from "../../components/ChaptersTab";
 import {
   ProgressDialog,
   CHAPTERS_PROGRESS_STEPS,
   type DescribeProgress,
 } from "../../components/ProgressDialog";
 import { fs } from "../../lib/cep/node";
-import { evalTS, reloadJSX } from "../../lib/utils/bolt";
+import { reloadJSX } from "../../lib/utils/bolt";
+import { hostSdk, sdkData } from "@/sdk/host-api";
 import { convertToMp3 } from "../../utils/ffmpeg";
 import { getBundledAudioPresetPath } from "../../utils/audioPreset";
 import { getUserIdentity } from "../../api";
@@ -27,11 +28,14 @@ import {
   type Chapter,
 } from "../../utils/chapters";
 import { copyToClipboard } from "../../utils/clipboard";
+import * as panelStore from "../../lib/userdata-store";
 import "./ChaptersApp.scss";
 import { useConfiguration } from "../../../context/ConfigurationWrapper";
 
 const TRANSCRIPTION_KEY = "aitools-cep-chapters-transcription";
 const RESULT_KEY = "aitools-cep-chapters-result";
+const HISTORY_KEY = "spunkram.chaptersHistory";
+const HISTORY_MAX = 20;
 
 function reportChapterApiError(action: string, e: unknown) {
   const status = e instanceof ChapterApiError ? e.status : undefined;
@@ -44,18 +48,109 @@ function reportChapterApiError(action: string, e: unknown) {
 
 type ResultState = {
   titles: string[];
-  // редактируется как обычный текст, а не массив чипов
+  // СЂРµРґР°РєС‚РёСЂСѓРµС‚СЃСЏ РєР°Рє РѕР±С‹С‡РЅС‹Р№ С‚РµРєСЃС‚, Р° РЅРµ РјР°СЃСЃРёРІ С‡РёРїРѕРІ
   description: string;
-  // редактируется как один текст через запятую, а не массив чипов
+  // СЂРµРґР°РєС‚РёСЂСѓРµС‚СЃСЏ РєР°Рє РѕРґРёРЅ С‚РµРєСЃС‚ С‡РµСЂРµР· Р·Р°РїСЏС‚СѓСЋ, Р° РЅРµ РјР°СЃСЃРёРІ С‡РёРїРѕРІ
   tags: string;
   chapters: Chapter[];
-  // сдвиг рендера относительно таймлинии хоста (offset из describe) — нужен,
-  // чтобы маркеры на композиции/секвенции легли на реальные тайминги, а не
-  // на тайминги внутри рендеренного фрагмента
+  // СЃРґРІРёРі СЂРµРЅРґРµСЂР° РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕ С‚Р°Р№РјР»РёРЅРёРё С…РѕСЃС‚Р° (offset РёР· describe) вЂ” РЅСѓР¶РµРЅ,
+  // С‡С‚РѕР±С‹ РјР°СЂРєРµСЂС‹ РЅР° РєРѕРјРїРѕР·РёС†РёРё/СЃРµРєРІРµРЅС†РёРё Р»РµРіР»Рё РЅР° СЂРµР°Р»СЊРЅС‹Рµ С‚Р°Р№РјРёРЅРіРё, Р° РЅРµ
+  // РЅР° С‚Р°Р№РјРёРЅРіРё РІРЅСѓС‚СЂРё СЂРµРЅРґРµСЂРµРЅРЅРѕРіРѕ С„СЂР°РіРјРµРЅС‚Р°
   offset: number;
 };
 
+type ChaptersHistoryItem = ChaptersHistoryPreview & {
+  result: ResultState;
+  transcription: TranscribeResult | null;
+};
+
 const emptyResult: ResultState = { titles: [], description: "", tags: "", chapters: [], offset: 0 };
+
+function historyLabel(result: ResultState): string {
+  const title = result.titles.find((t) => t.trim())?.trim();
+  if (title) return title;
+  const firstChapter = [...result.chapters].sort((a, b) => a.time - b.time)[0]?.title?.trim();
+  if (firstChapter) return firstChapter;
+  return "Untitled chapters";
+}
+
+function newHistoryId(): string {
+  return `ch-hist-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function isResultState(value: unknown): value is ResultState {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Partial<ResultState>;
+  return Array.isArray(row.chapters) && row.chapters.length > 0;
+}
+
+function loadHistory(): ChaptersHistoryItem[] {
+  try {
+    const raw = panelStore.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is ChaptersHistoryItem => {
+        if (!item || typeof item !== "object") return false;
+        const row = item as Partial<ChaptersHistoryItem>;
+        return (
+          typeof row.id === "string" &&
+          typeof row.createdAt === "number" &&
+          isResultState(row.result)
+        );
+      })
+      .map((item) => ({
+        ...item,
+        label: typeof item.label === "string" && item.label.trim() ? item.label : historyLabel(item.result),
+        chapterCount: item.result.chapters.length,
+        transcription: item.transcription ?? null,
+      }))
+      .slice(0, HISTORY_MAX);
+  } catch {
+    return [];
+  }
+}
+
+function persistHistory(items: ChaptersHistoryItem[]) {
+  try {
+    panelStore.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, HISTORY_MAX)));
+  } catch {
+    // CEP / private mode may block storage
+  }
+}
+
+/** One-time migrate from the old single-result keys into history. */
+function migrateLegacyResult(): ChaptersHistoryItem[] {
+  try {
+    const rawResult = panelStore.getItem(RESULT_KEY);
+    if (!rawResult) return [];
+    const parsed = JSON.parse(rawResult) as Partial<ResultState>;
+    if (!parsed?.chapters?.length) return [];
+    const result: ResultState = { ...emptyResult, ...parsed };
+    let transcription: TranscribeResult | null = null;
+    const rawTx = panelStore.getItem(TRANSCRIPTION_KEY);
+    if (rawTx) {
+      try {
+        transcription = JSON.parse(rawTx) as TranscribeResult;
+      } catch {
+        transcription = null;
+      }
+    }
+    return [
+      {
+        id: newHistoryId(),
+        createdAt: Date.now(),
+        label: historyLabel(result),
+        chapterCount: result.chapters.length,
+        result,
+        transcription,
+      },
+    ];
+  } catch {
+    return [];
+  }
+}
 
 export const ChaptersApp = ({
   generationsLeft = 0,
@@ -65,6 +160,7 @@ export const ChaptersApp = ({
   const { srcLang, translateTo } = useConfiguration();
   const [transcription, setTranscription] = useState<TranscribeResult | null>(null);
   const [result, setResult] = useState<ResultState>(emptyResult);
+  const [history, setHistory] = useState<ChaptersHistoryItem[]>([]);
   const [progress, setProgress] = useState<DescribeProgress | null>(null);
   const [regeneratingTitles, setRegeneratingTitles] = useState(false);
   const [regeneratingChapters, setRegeneratingChapters] = useState(false);
@@ -72,44 +168,108 @@ export const ChaptersApp = ({
   const [regeneratingTags, setRegeneratingTags] = useState(false);
   const [addingMarkers, setAddingMarkers] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // landing | results — явный экран, чтобы Back не сбрасывал данные
+  // landing | results вЂ” СЏРІРЅС‹Р№ СЌРєСЂР°РЅ, С‡С‚РѕР±С‹ Back РЅРµ СЃР±СЂР°СЃС‹РІР°Р» РґР°РЅРЅС‹Рµ
   const [screen, setScreen] = useState<"landing" | "results">("landing");
 
   const transcriptionRef = useRef(transcription);
   transcriptionRef.current = transcription;
+  const activeHistoryIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // когда выбран перевод, ВСЕ поля (title/description/tags/главы) генерируются
-  // на этом языке — не только транскрипт; читаем перед каждым вызовом, чтобы
-  // Regenerate одной секции сразу подхватывал текущий выбор языка в панели
+  // РєРѕРіРґР° РІС‹Р±СЂР°РЅ РїРµСЂРµРІРѕРґ, Р’РЎР• РїРѕР»СЏ (title/description/tags/РіР»Р°РІС‹) РіРµРЅРµСЂРёСЂСѓСЋС‚СЃСЏ
+  // РЅР° СЌС‚РѕРј СЏР·С‹РєРµ вЂ” РЅРµ С‚РѕР»СЊРєРѕ С‚СЂР°РЅСЃРєСЂРёРїС‚; С‡РёС‚Р°РµРј РїРµСЂРµРґ РєР°Р¶РґС‹Рј РІС‹Р·РѕРІРѕРј, С‡С‚РѕР±С‹
+  // Regenerate РѕРґРЅРѕР№ СЃРµРєС†РёРё СЃСЂР°Р·Сѓ РїРѕРґС…РІР°С‚С‹РІР°Р» С‚РµРєСѓС‰РёР№ РІС‹Р±РѕСЂ СЏР·С‹РєР° РІ РїР°РЅРµР»Рё
   const outputLanguage = translateTo !== "off" ? translateTo : undefined;
 
   const persistTranscription = (next: TranscribeResult) => {
-    localStorage.setItem(TRANSCRIPTION_KEY, JSON.stringify(next));
+    try {
+      panelStore.setItem(TRANSCRIPTION_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
     setTranscription(next);
   };
 
+  /** Save current result + keep the active history entry in sync. */
   const persistResult = (next: ResultState) => {
-    localStorage.setItem(RESULT_KEY, JSON.stringify(next));
+    try {
+      panelStore.setItem(RESULT_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
     setResult(next);
+
+    const activeId = activeHistoryIdRef.current;
+    if (!activeId) return;
+    setHistory((prev) => {
+      const updated = prev.map((item) =>
+        item.id === activeId
+          ? {
+              ...item,
+              result: next,
+              label: historyLabel(next),
+              chapterCount: next.chapters.length,
+              transcription: transcriptionRef.current,
+            }
+          : item,
+      );
+      persistHistory(updated);
+      return updated;
+    });
+  };
+
+  /** New generation в†’ prepend history and open results. */
+  const commitNewGeneration = (nextResult: ResultState, nextTranscription: TranscribeResult) => {
+    const id = newHistoryId();
+    const item: ChaptersHistoryItem = {
+      id,
+      createdAt: Date.now(),
+      label: historyLabel(nextResult),
+      chapterCount: nextResult.chapters.length,
+      result: nextResult,
+      transcription: nextTranscription,
+    };
+    activeHistoryIdRef.current = id;
+    setHistory((prev) => {
+      const updated = [item, ...prev.filter((h) => h.id !== id)].slice(0, HISTORY_MAX);
+      persistHistory(updated);
+      return updated;
+    });
+    try {
+      panelStore.setItem(RESULT_KEY, JSON.stringify(nextResult));
+      panelStore.setItem(TRANSCRIPTION_KEY, JSON.stringify(nextTranscription));
+    } catch {
+      // ignore
+    }
+    setResult(nextResult);
+    setTranscription(nextTranscription);
+    setScreen("results");
   };
 
   const throwIfCancelled = (signal: AbortSignal) => {
     if (signal.aborted) throw new Error("Cancelled");
   };
 
-  // временные файлы рендера (wav/avi + mp3) удаляем в самом конце flow:
-  // хост может держать хендл на только что отрендеренный файл, а удаление
-  // открытого файла на Windows оставляет его в "delete pending" и роняет
-  // следующий exportAsMediaDirect ("Unable To Delete Existing File")
+  // РІСЂРµРјРµРЅРЅС‹Рµ С„Р°Р№Р»С‹ СЂРµРЅРґРµСЂР° (wav/avi + mp3) СѓРґР°Р»СЏРµРј РІ СЃР°РјРѕРј РєРѕРЅС†Рµ flow:
+  // С…РѕСЃС‚ РјРѕР¶РµС‚ РґРµСЂР¶Р°С‚СЊ С…РµРЅРґР» РЅР° С‚РѕР»СЊРєРѕ С‡С‚Рѕ РѕС‚СЂРµРЅРґРµСЂРµРЅРЅС‹Р№ С„Р°Р№Р», Р° СѓРґР°Р»РµРЅРёРµ
+  // РѕС‚РєСЂС‹С‚РѕРіРѕ С„Р°Р№Р»Р° РЅР° Windows РѕСЃС‚Р°РІР»СЏРµС‚ РµРіРѕ РІ "delete pending" Рё СЂРѕРЅСЏРµС‚
+  // СЃР»РµРґСѓСЋС‰РёР№ exportAsMediaDirect ("Unable To Delete Existing File")
   const cleanupTempAudio = (paths: (string | undefined)[]) => {
     for (const p of paths) {
       if (!p) continue;
       try {
         if (fs.existsSync(p)) fs.unlinkSync(p);
       } catch {
-        // файл ещё занят хостом — оставляем, temp почистит система
+        // С„Р°Р№Р» РµС‰С‘ Р·Р°РЅСЏС‚ С…РѕСЃС‚РѕРј вЂ” РѕСЃС‚Р°РІР»СЏРµРј, temp РїРѕС‡РёСЃС‚РёС‚ СЃРёСЃС‚РµРјР°
       }
+    }
+  };
+
+  const notifyCreditsChanged = () => {
+    try {
+      window.dispatchEvent(new Event("aitools-credits-changed"));
+    } catch {
+      // ignore
     }
   };
 
@@ -118,7 +278,7 @@ export const ChaptersApp = ({
 
     setProgress({ stage: "rendering" });
     const effectivePresetPath = getBundledAudioPresetPath() || undefined;
-    const res = await evalTS("describe", effectivePresetPath);
+    const res = await sdkData(hostSdk().describe(effectivePresetPath));
     throwIfCancelled(signal);
     if (!res) return;
 
@@ -136,7 +296,6 @@ export const ChaptersApp = ({
           signal,
           userId: user.id || undefined,
           email: user.email,
-          devToken: user.devToken,
           token: user.token,
         });
       } catch (e) {
@@ -146,7 +305,7 @@ export const ChaptersApp = ({
       }
       throwIfCancelled(signal);
 
-      // чиним разорванные ИИ предложения перед суммаризацией
+      // С‡РёРЅРёРј СЂР°Р·РѕСЂРІР°РЅРЅС‹Рµ РР РїСЂРµРґР»РѕР¶РµРЅРёСЏ РїРµСЂРµРґ СЃСѓРјРјР°СЂРёР·Р°С†РёРµР№
       const normalized = normalize(transcriptionResult);
       persistTranscription(normalized);
 
@@ -162,12 +321,11 @@ export const ChaptersApp = ({
         chapters: sectionsToChapters(sections),
         offset: res.offset ?? 0,
       };
-      persistResult(nextResult);
-      setScreen("results");
-      window.dispatchEvent(new Event("aitools-credits-changed"));
+      commitNewGeneration(nextResult, normalized);
+      notifyCreditsChanged();
     } finally {
-      // wav/avi + mp3 — только когда flow полностью завершён (успех, ошибка
-      // или отмена), чтобы не дёргать файлы, которые хост ещё держит открытыми
+      // wav/avi + mp3 вЂ” С‚РѕР»СЊРєРѕ РєРѕРіРґР° flow РїРѕР»РЅРѕСЃС‚СЊСЋ Р·Р°РІРµСЂС€С‘РЅ (СѓСЃРїРµС…, РѕС€РёР±РєР°
+      // РёР»Рё РѕС‚РјРµРЅР°), С‡С‚РѕР±С‹ РЅРµ РґС‘СЂРіР°С‚СЊ С„Р°Р№Р»С‹, РєРѕС‚РѕСЂС‹Рµ С…РѕСЃС‚ РµС‰С‘ РґРµСЂР¶РёС‚ РѕС‚РєСЂС‹С‚С‹РјРё
       cleanupTempAudio([res.source, res.dest]);
     }
   };
@@ -189,7 +347,7 @@ export const ChaptersApp = ({
       await runGeneration(controller.signal);
     } catch (e) {
       if (e instanceof Error && e.message === "Cancelled") {
-        // тихая отмена — без error-banner
+        // С‚РёС…Р°СЏ РѕС‚РјРµРЅР° вЂ” Р±РµР· error-banner
       } else {
         setError(e instanceof Error ? e.message : String(e));
         reportChapterApiError("chapters.generate", e);
@@ -200,92 +358,77 @@ export const ChaptersApp = ({
     }
   };
 
-  // повторный вызов /api/generations/chapters по уже готовому транскрипту, без
-  // повторного рендера/транскрипции; каждая секция регенерируется независимо —
-  // точечный target на бэкенде не трогает остальные поля
-  const handleRegenerateTitles = async () => {
+  // РїРѕРІС‚РѕСЂРЅС‹Р№ РІС‹Р·РѕРІ /api/generations/chapters РїРѕ СѓР¶Рµ РіРѕС‚РѕРІРѕРјСѓ С‚СЂР°РЅСЃРєСЂРёРїС‚Сѓ, Р±РµР·
+  // РїРѕРІС‚РѕСЂРЅРѕРіРѕ СЂРµРЅРґРµСЂР°/С‚СЂР°РЅСЃРєСЂРёРїС†РёРё; РєР°Р¶РґР°СЏ СЃРµРєС†РёСЏ СЂРµРіРµРЅРµСЂРёСЂСѓРµС‚СЃСЏ РЅРµР·Р°РІРёСЃРёРјРѕ вЂ”
+  // С‚РѕС‡РµС‡РЅС‹Р№ target РЅР° Р±СЌРєРµРЅРґРµ РЅРµ С‚СЂРѕРіР°РµС‚ РѕСЃС‚Р°Р»СЊРЅС‹Рµ РїРѕР»СЏ, РЅРѕ СЃРїРёСЃС‹РІР°РµС‚ 1
+  // РіРµРЅРµСЂР°С†РёСЋ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (РєР°Рє Рё generateAll)
+  const runSectionRegenerate = async <T,>(opts: {
+    busy: boolean;
+    setBusy: (v: boolean) => void;
+    action: string;
+    run: (chunks: CaptionsChunk[]) => Promise<T>;
+    apply: (value: T) => void;
+  }) => {
     const source = transcriptionRef.current;
-    if (!source || regeneratingTitles) return;
+    if (!source || opts.busy) return;
     if (generationsLeft <= 0) {
       setError("No generations left. Upgrade your plan or buy extra credits.");
       return;
     }
-    setRegeneratingTitles(true);
+    opts.setBusy(true);
     setError(null);
     try {
       const chunks: CaptionsChunk[] = source.chunk.chunks ?? [];
-      const titles = await regenerateTitles(chunks, undefined, outputLanguage);
-      persistResult({ ...result, titles });
+      const value = await opts.run(chunks);
+      opts.apply(value);
+      notifyCreditsChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      reportChapterApiError("chapters.regenerate_titles", e);
+      reportChapterApiError(opts.action, e);
+      if (e instanceof ChapterApiError && e.code === "GENERATION_LIMIT_REACHED") {
+        notifyCreditsChanged();
+      }
     } finally {
-      setRegeneratingTitles(false);
+      opts.setBusy(false);
     }
   };
 
-  const handleRegenerateChapters = async () => {
-    const source = transcriptionRef.current;
-    if (!source || regeneratingChapters) return;
-    if (generationsLeft <= 0) {
-      setError("No generations left. Upgrade your plan or buy extra credits.");
-      return;
-    }
-    setRegeneratingChapters(true);
-    setError(null);
-    try {
-      const chunks: CaptionsChunk[] = source.chunk.chunks ?? [];
-      const sections = await regenerateChapters(chunks, undefined, outputLanguage);
-      persistResult({ ...result, chapters: sectionsToChapters(sections) });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      reportChapterApiError("chapters.regenerate_chapters", e);
-    } finally {
-      setRegeneratingChapters(false);
-    }
-  };
+  const handleRegenerateTitles = () =>
+    runSectionRegenerate({
+      busy: regeneratingTitles,
+      setBusy: setRegeneratingTitles,
+      action: "chapters.regenerate_titles",
+      run: (chunks) => regenerateTitles(chunks, undefined, outputLanguage),
+      apply: (titles) => persistResult({ ...result, titles }),
+    });
 
-  const handleRegenerateDescription = async () => {
-    const source = transcriptionRef.current;
-    if (!source || regeneratingDescription) return;
-    if (generationsLeft <= 0) {
-      setError("No generations left. Upgrade your plan or buy extra credits.");
-      return;
-    }
-    setRegeneratingDescription(true);
-    setError(null);
-    try {
-      const chunks: CaptionsChunk[] = source.chunk.chunks ?? [];
-      const description = await regenerateDescription(chunks, undefined, outputLanguage);
-      persistResult({ ...result, description });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      reportChapterApiError("chapters.regenerate_description", e);
-    } finally {
-      setRegeneratingDescription(false);
-    }
-  };
+  const handleRegenerateChapters = () =>
+    runSectionRegenerate({
+      busy: regeneratingChapters,
+      setBusy: setRegeneratingChapters,
+      action: "chapters.regenerate_chapters",
+      run: (chunks) => regenerateChapters(chunks, undefined, outputLanguage),
+      apply: (sections) =>
+        persistResult({ ...result, chapters: sectionsToChapters(sections) }),
+    });
 
-  const handleRegenerateTags = async () => {
-    const source = transcriptionRef.current;
-    if (!source || regeneratingTags) return;
-    if (generationsLeft <= 0) {
-      setError("No generations left. Upgrade your plan or buy extra credits.");
-      return;
-    }
-    setRegeneratingTags(true);
-    setError(null);
-    try {
-      const chunks: CaptionsChunk[] = source.chunk.chunks ?? [];
-      const tags = await regenerateTags(chunks, undefined, outputLanguage);
-      persistResult({ ...result, tags: tagsToText(tags) });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      reportChapterApiError("chapters.regenerate_tags", e);
-    } finally {
-      setRegeneratingTags(false);
-    }
-  };
+  const handleRegenerateDescription = () =>
+    runSectionRegenerate({
+      busy: regeneratingDescription,
+      setBusy: setRegeneratingDescription,
+      action: "chapters.regenerate_description",
+      run: (chunks) => regenerateDescription(chunks, undefined, outputLanguage),
+      apply: (description) => persistResult({ ...result, description }),
+    });
+
+  const handleRegenerateTags = () =>
+    runSectionRegenerate({
+      busy: regeneratingTags,
+      setBusy: setRegeneratingTags,
+      action: "chapters.regenerate_tags",
+      run: (chunks) => regenerateTags(chunks, undefined, outputLanguage),
+      apply: (tags) => persistResult({ ...result, tags: tagsToText(tags) }),
+    });
 
   const handleUpdateTitle = (index: number, title: string) => {
     persistResult({
@@ -327,13 +470,13 @@ export const ChaptersApp = ({
     persistResult({ ...result, chapters: [...result.chapters, createChapter(nextTime)] });
   };
 
-  // "Copy Description" в футере — цельный блок для поля Description на YouTube:
-  // текст описания + список таймкодов глав + теги в виде #хэштегов
+  // "Copy Description" РІ С„СѓС‚РµСЂРµ вЂ” С†РµР»СЊРЅС‹Р№ Р±Р»РѕРє РґР»СЏ РїРѕР»СЏ Description РЅР° YouTube:
+  // С‚РµРєСЃС‚ РѕРїРёСЃР°РЅРёСЏ + СЃРїРёСЃРѕРє С‚Р°Р№РјРєРѕРґРѕРІ РіР»Р°РІ + С‚РµРіРё РІ РІРёРґРµ #С…СЌС€С‚РµРіРѕРІ
   const handleCopyDescription = () =>
     copyToClipboard(formatFullDescription(result.description, result.chapters, result.tags));
 
-  // маркеры ставим на реальные тайминги (time + offset рендера), без правила
-  // "первая глава = 00:00" — оно нужно только для текстового YouTube-формата
+  // РјР°СЂРєРµСЂС‹ СЃС‚Р°РІРёРј РЅР° СЂРµР°Р»СЊРЅС‹Рµ С‚Р°Р№РјРёРЅРіРё (time + offset СЂРµРЅРґРµСЂР°), Р±РµР· РїСЂР°РІРёР»Р°
+  // "РїРµСЂРІР°СЏ РіР»Р°РІР° = 00:00" вЂ” РѕРЅРѕ РЅСѓР¶РЅРѕ С‚РѕР»СЊРєРѕ РґР»СЏ С‚РµРєСЃС‚РѕРІРѕРіРѕ YouTube-С„РѕСЂРјР°С‚Р°
   const handleAddMarkers = async () => {
     if (addingMarkers || !result.chapters.length) return false;
     setAddingMarkers(true);
@@ -342,7 +485,7 @@ export const ChaptersApp = ({
       const markers = [...result.chapters]
         .sort((a, b) => a.time - b.time)
         .map((c) => ({ time: c.time + result.offset, name: c.title.trim() || "Chapter" }));
-      const res = await evalTS("addMarkers", { markers });
+      const res = await sdkData(hostSdk().addMarkers({ markers }));
       return !!res;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -353,35 +496,58 @@ export const ChaptersApp = ({
     }
   };
 
-  // Back — только UI, данные остаются, чтобы можно было вернуться в Results
+  // Back вЂ” С‚РѕР»СЊРєРѕ UI; РёСЃС‚РѕСЂРёСЏ РЅР° landing РґР°С‘С‚ СЃРЅРѕРІР° РѕС‚РєСЂС‹С‚СЊ СЂРµР·СѓР»СЊС‚Р°С‚
   const handleBack = () => {
     setScreen("landing");
   };
 
-  // загрузка последнего результата при открытии панели
+  const handleOpenHistory = (id: string) => {
+    const item = history.find((h) => h.id === id);
+    if (!item) return;
+    activeHistoryIdRef.current = id;
+    setResult(item.result);
+    setTranscription(item.transcription);
+    try {
+      panelStore.setItem(RESULT_KEY, JSON.stringify(item.result));
+      if (item.transcription) {
+        panelStore.setItem(TRANSCRIPTION_KEY, JSON.stringify(item.transcription));
+      }
+    } catch {
+      // ignore
+    }
+    setError(null);
+    setScreen("results");
+  };
+
+  const handleDeleteHistory = (id: string) => {
+    setHistory((prev) => {
+      const updated = prev.filter((h) => h.id !== id);
+      persistHistory(updated);
+      return updated;
+    });
+    if (activeHistoryIdRef.current === id) {
+      activeHistoryIdRef.current = null;
+    }
+  };
+
+  // РёСЃС‚РѕСЂРёСЏ (+ РјРёРіСЂР°С†РёСЏ СЃС‚Р°СЂРѕРіРѕ РѕРґРёРЅРѕС‡РЅРѕРіРѕ СЂРµР·СѓР»СЊС‚Р°С‚Р°); СЃС‚Р°СЂС‚СѓРµРј РЅР° landing
   useEffect(() => {
-    const storedTranscription = localStorage.getItem(TRANSCRIPTION_KEY);
-    if (storedTranscription) {
-      try {
-        setTranscription(JSON.parse(storedTranscription));
-      } catch {
-        // ignore corrupt
-      }
+    let items = loadHistory();
+    if (items.length === 0) {
+      items = migrateLegacyResult();
+      if (items.length) persistHistory(items);
     }
-    const storedResult = localStorage.getItem(RESULT_KEY);
-    if (storedResult) {
-      try {
-        const parsed = JSON.parse(storedResult) as Partial<ResultState>;
-        if (parsed?.chapters?.length) {
-          // ...emptyResult подстраховывает старые записи (до появления description/tags)
-          setResult({ ...emptyResult, ...parsed });
-          setScreen("results");
-        }
-      } catch {
-        // ignore corrupt
-      }
-    }
+    setHistory(items);
   }, []);
+
+  const historyPreview: ChaptersHistoryPreview[] = history.map(
+    ({ id, createdAt, label, chapterCount }) => ({
+      id,
+      createdAt,
+      label,
+      chapterCount,
+    }),
+  );
 
   return (
     <div className="app-shell">
@@ -401,6 +567,10 @@ export const ChaptersApp = ({
         progress={progress}
         onGenerate={handleGenerate}
         onBack={handleBack}
+        canRegenerate={generationsLeft > 0}
+        history={historyPreview}
+        onOpenHistory={handleOpenHistory}
+        onDeleteHistory={handleDeleteHistory}
         titles={result.titles}
         onEditTitle={handleUpdateTitle}
         onRegenerateTitles={handleRegenerateTitles}

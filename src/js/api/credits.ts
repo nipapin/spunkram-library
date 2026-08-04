@@ -17,7 +17,7 @@ export type GenerationsStatus = {
 
 /**
  * Fetch generation credits for the current CEP user.
- * Uses session cookie when available; otherwise posts CEP identity (dev).
+ * Uses Bearer token when available; otherwise posts CEP identity fields.
  */
 export async function fetchGenerationsStatus(
   signal?: AbortSignal,
@@ -34,7 +34,6 @@ export async function fetchGenerationsStatus(
       body: JSON.stringify({
         email: user.email || undefined,
         userId: user.id || undefined,
-        devToken: user.devToken || undefined,
       }),
     });
     if (!response.ok) {

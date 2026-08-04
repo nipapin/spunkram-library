@@ -38,6 +38,7 @@ import {
 import type { InstalledPackMeta, PackSettings, PackTreeItem, PackTreeNode } from "@/lib/utils/pack-types";
 import { revokePreviewObjectUrls } from "@/lib/utils/pack-preview";
 import { cn } from "@/lib/utils";
+import * as panelStore from "@/lib/userdata-store";
 import {
   generationLimitForTier,
   SPUNKRAM_FREE_TIER,
@@ -51,7 +52,7 @@ const GENERATIONS_STORAGE_KEY = "spunkram.generations";
 
 function loadCategoryByPack(): Record<string, string> {
   try {
-    const raw = localStorage.getItem(CATEGORY_BY_PACK_KEY);
+    const raw = panelStore.getItem(CATEGORY_BY_PACK_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
@@ -71,7 +72,7 @@ function persistCategoryForPack(packPath: string, categoryId: string) {
     const map = loadCategoryByPack();
     if (map[packPath] === categoryId) return;
     map[packPath] = categoryId;
-    localStorage.setItem(CATEGORY_BY_PACK_KEY, JSON.stringify(map));
+    panelStore.setItem(CATEGORY_BY_PACK_KEY, JSON.stringify(map));
   } catch {
     // ignore storage errors
   }
@@ -104,7 +105,7 @@ function loadGenerationsState(limit: number): GenerationsState {
     limit,
   };
   try {
-    const raw = localStorage.getItem(GENERATIONS_STORAGE_KEY);
+    const raw = panelStore.getItem(GENERATIONS_STORAGE_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<GenerationsState>;
     if (parsed.monthKey !== fallback.monthKey) return fallback;
@@ -129,7 +130,7 @@ function loadGenerationsState(limit: number): GenerationsState {
 
 function saveGenerationsState(state: GenerationsState): void {
   try {
-    localStorage.setItem(GENERATIONS_STORAGE_KEY, JSON.stringify(state));
+    panelStore.setItem(GENERATIONS_STORAGE_KEY, JSON.stringify(state));
   } catch {
     // ignore storage errors
   }
@@ -348,7 +349,7 @@ function AppShell() {
         setCategory(resolveCategoryForPack(nextTree, loaded.meta.path));
         setPackError(null);
         try {
-          localStorage.setItem(ACTIVE_PACK_STORAGE_KEY, loaded.meta.path);
+          panelStore.setItem(ACTIVE_PACK_STORAGE_KEY, loaded.meta.path);
         } catch {
           // ignore storage errors
         }
@@ -374,7 +375,7 @@ function AppShell() {
 
     let preferredPath: string | null = null;
     try {
-      preferredPath = localStorage.getItem(ACTIVE_PACK_STORAGE_KEY);
+      preferredPath = panelStore.getItem(ACTIVE_PACK_STORAGE_KEY);
     } catch {
       // ignore storage errors
     }
@@ -482,7 +483,7 @@ function AppShell() {
     });
   }, [monthlyGens, extraGens, generationLimit]);
 
-  /** Server (`user_generations`) is source of truth — localStorage is cache only. */
+  /** Server (`user_generations`) is source of truth — userdata store is cache only. */
   const refreshGenerationsFromServer = useCallback(async () => {
     const status = await fetchGenerationsStatus();
     if (!status?.authenticated) return;

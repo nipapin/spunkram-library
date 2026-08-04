@@ -6,7 +6,12 @@
 |---|---|
 | **Этот репозиторий (CEP Spunkram Library)** | `C:\Users\nipap\Documents\motionflow\CEP\spunkram-library` |
 | **Исходный проект (Spunkram Beta CEP)** | `C:\Users\nipap\AppData\Roaming\Adobe\CEP\extensions\Spunkram Beta` |
+| **Beta JSX port (legacy)** | `src/jsx/legacy/` → runtime `dist/cep/jsx/legacy/` |
+| **MotionFlow SDK** | `src/js/sdk/` — see [`MOTIONFLOW_SDK.md`](./MOTIONFLOW_SDK.md) |
 | **Сервер (Motionflow next-app)** | `C:\Users\nipap\Documents\motionflow\next-app\` |
+| **Panel userdata store** | `%APPDATA%\Spunkram\Spunkram Library\panel-store.json` (mac: `~/Library/Application Support/Spunkram/Spunkram Library/panel-store.json`) |
+
+Panel UI state (favorites, history, AI config, active pack, …) lives in **userdata**, not Chromium `localStorage` — see `src/js/lib/userdata-store.ts`. Auth/preferences remain in `…/Spunkram Extension/preferences.json`.
 
 ## Dev vs prod extension id
 

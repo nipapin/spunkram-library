@@ -223,6 +223,15 @@ export const initBolt = (log = true) => {
       evalFile(jsxBinSrc);
     }
     initializeCEP();
+    // MotionFlow: load Beta legacy composers async (non-blocking for panel paint)
+    try {
+      // dynamic import to avoid circular init with sdk → bolt
+      import("../../sdk/legacy-loader").then(({ loadLegacyJsx }) => {
+        loadLegacyJsx().catch((e) => console.warn("[MotionFlow] legacy JSX load", e));
+      });
+    } catch (e) {
+      console.warn("[MotionFlow] legacy loader", e);
+    }
   }
 };
 

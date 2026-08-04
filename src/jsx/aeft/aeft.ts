@@ -1,6 +1,42 @@
 ﻿export { importMedia, importVoiceoverAudio } from "./aeft-import-media";
 export { applyPackItem } from "./aeft-apply-item";
 import { applyPackItem } from "./aeft-apply-item";
+export {
+  bindPack,
+  setEngine,
+  getPackContext,
+  getEngine,
+  mfCopyPackage,
+  mfDeletePackage,
+  createComp,
+  createText,
+  addResponsiveBackground,
+  legacyAeCall,
+} from "./aeft-sdk";
+/** PPRO-only stubs so Scripts intersection typing still works for evalTS. */
+export const addMogrt = (_opts: unknown) => ({
+  ok: false as const,
+  reason: "AE_ONLY_HOST",
+});
+export const importSequence = (_payload: unknown) => ({
+  ok: false as const,
+  reason: "AE_ONLY_HOST",
+});
+export const importFootage = (_payload: unknown) => ({
+  ok: false as const,
+  reason: "AE_ONLY_HOST",
+});
+export const importAudio = (_payload: unknown) => ({
+  ok: false as const,
+  reason: "AE_ONLY_HOST",
+});
+export const undoGroupStart = () => ({ ok: false, status: "AE_ONLY_HOST" });
+export const undoGroupEnd = () => ({ ok: false, status: "AE_ONLY_HOST" });
+export const undoGroupAbort = () => ({ ok: false, status: "AE_ONLY_HOST" });
+export const legacyPpCall = (_method: string, _argsJson: string) => ({
+  ok: false,
+  reason: "AE_ONLY_HOST",
+});
 import {
   helloArrayStr,
   helloError,
@@ -9,8 +45,10 @@ import {
   helloStr,
   helloVoid,
 } from "../utils/samples";
+/** @deprecated Bolt samples — not part of MotionFlow SDK surface */
 export { helloArrayStr, helloError, helloNum, helloObj, helloStr, helloVoid };
 
+/** @deprecated Bolt sample — not part of MotionFlow SDK surface */
 export const helloWorld = () => {
   alert("Hello from After Effects!");
   app.project.activeItem;
@@ -129,6 +167,9 @@ export const describe = (_audioPresetPath?: string) => {
     return null;
   }
 };
+
+/** PPRO-only — stub for Scripts intersection. */
+export const markSilences = (_data: { ranges: unknown[]; offset: number }) => null;
 
 export interface ChapterMarkerInput {
   time: number;

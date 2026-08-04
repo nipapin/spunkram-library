@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { evalTS } from "@/lib/utils/bolt";
+import { MotionFlow } from "@/sdk";
 import { fs } from "@/lib/cep/node";
 import {
   downloadVoiceoverFile,
@@ -26,6 +26,7 @@ import {
 } from "@/api/voiceover";
 import { reportSupportError } from "@/api/support";
 import { WaveformPlayer } from "@/components/waveform-player";
+import * as panelStore from "@/lib/userdata-store";
 
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
@@ -34,6 +35,18 @@ const HISTORY_STORAGE_KEY = "spunkram.voiceoverHistory";
 const HISTORY_MAX = 30;
 /** Inline preview under the form; full list opens in a modal. */
 const HISTORY_PREVIEW = 5;
+
+const EMOTION_OPTIONS = [
+  { id: "auto", name: "Auto" },
+  { id: "neutral", name: "Neutral" },
+  { id: "happy", name: "Happy" },
+  { id: "calm", name: "Calm" },
+  { id: "sad", name: "Sad" },
+  { id: "angry", name: "Angry" },
+  { id: "fearful", name: "Fearful" },
+  { id: "disgusted", name: "Disgusted" },
+  { id: "surprised", name: "Surprised" },
+] as const;
 
 type VoiceoverHistoryItem = {
   id: string;
@@ -44,6 +57,9 @@ type VoiceoverHistoryItem = {
   languageBoost: string;
   languageName: string;
   speed: number;
+  volume: number;
+  pitch: number;
+  emotion: string;
   audioUrl: string;
   duration?: number;
   fileName?: string;
@@ -52,7 +68,7 @@ type VoiceoverHistoryItem = {
 
 function loadHistory(): VoiceoverHistoryItem[] {
   try {
-    const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+    const raw = panelStore.getItem(HISTORY_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -68,6 +84,13 @@ function loadHistory(): VoiceoverHistoryItem[] {
           row.audioUrl.length > 0
         );
       })
+      .map((item) => ({
+        ...item,
+        speed: typeof item.speed === "number" ? item.speed : 1,
+        volume: typeof item.volume === "number" ? item.volume : 1,
+        pitch: typeof item.pitch === "number" ? item.pitch : 0,
+        emotion: typeof item.emotion === "string" ? item.emotion : "auto",
+      }))
       .slice(0, HISTORY_MAX);
   } catch {
     return [];
@@ -76,7 +99,7 @@ function loadHistory(): VoiceoverHistoryItem[] {
 
 function persistHistory(items: VoiceoverHistoryItem[]) {
   try {
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items.slice(0, HISTORY_MAX)));
+    panelStore.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items.slice(0, HISTORY_MAX)));
   } catch {
     // CEP / private mode may block storage
   }
@@ -103,11 +126,15 @@ function playbackUrlFor(item: VoiceoverHistoryItem): string | null {
   return item.audioUrl || null;
 }
 
-function speedRangeStyle(value: number, min: number, max: number): CSSProperties {
+function rangeStyle(value: number, min: number, max: number): CSSProperties {
   const pct = ((value - min) / (max - min)) * 100;
   return {
     background: `linear-gradient(to right, rgb(var(--primary)) ${pct}%, rgba(var(--secondary), 1) ${pct}%)`,
   };
+}
+
+function emotionLabel(id: string): string {
+  return EMOTION_OPTIONS.find((e) => e.id === id)?.name ?? id;
 }
 
 function DropdownSelect<T extends { id: string }>({
@@ -324,7 +351,10 @@ function HistoryItemCard({
       <p className="mb-2 text-[10px] text-muted-foreground">
         {item.voiceName || "Voice"}
         {item.languageName ? ` · ${item.languageName}` : ""}
+        {item.emotion && item.emotion !== "auto" ? ` · ${emotionLabel(item.emotion)}` : ""}
         {item.speed !== 1 ? ` · ${item.speed.toFixed(1)}x` : ""}
+        {item.volume !== 1 ? ` · vol ${item.volume.toFixed(1)}` : ""}
+        {item.pitch !== 0 ? ` · pitch ${item.pitch > 0 ? "+" : ""}${item.pitch}` : ""}
         {item.duration ? ` · ~${item.duration}s` : ""}
       </p>
       <div className="rounded-lg border border-white/10 bg-background/40 px-2 py-2">
@@ -395,6 +425,9 @@ export const VoiceoverApp = ({
   const [languageBoost, setLanguageBoost] = useState("Automatic");
   const [text, setText] = useState("");
   const [speed, setSpeed] = useState(1);
+  const [volume, setVolume] = useState(1);
+  const [pitch, setPitch] = useState(0);
+  const [emotion, setEmotion] = useState("auto");
   const [busy, setBusy] = useState(false);
   const [placing, setPlacing] = useState<{
     id: string;
@@ -462,6 +495,9 @@ export const VoiceoverApp = ({
       text: script,
       voice_id: voiceId,
       speed,
+      volume,
+      pitch,
+      emotion,
       language_boost: languageBoost,
     });
     setBusy(false);
@@ -481,6 +517,9 @@ export const VoiceoverApp = ({
       languageBoost,
       languageName: selectedLanguage?.name || languageBoost,
       speed,
+      volume,
+      pitch,
+      emotion,
       audioUrl: data.audio_url,
       duration: data.duration,
       fileName: data.file_name,
@@ -528,23 +567,28 @@ export const VoiceoverApp = ({
         setPlacing(null);
         return;
       }
-      const outcome = (await evalTS(
-        "importVoiceoverAudio",
+      const wrapped = await MotionFlow.importVoiceoverAudio(
         filePath,
         destination,
         item.duration ?? 1,
-      )) as { ok?: boolean; reason?: string } | null;
-      if (!outcome?.ok) {
-        const reason = outcome?.reason;
-        const msg =
-          reason === "NO_ACTIVE_SEQUENCE"
-            ? "Open a sequence first"
-            : reason === "NO_ACTIVE_COMP"
-              ? "Open a composition first"
-              : reason || "Could not import audio";
-        setError(msg);
-        if (reason !== "NO_ACTIVE_SEQUENCE" && reason !== "NO_ACTIVE_COMP") {
-          reportSupportError("voiceover.import", msg, { reason: reason || null });
+      );
+      if (!wrapped.ok) {
+        setError(wrapped.error || "Could not import audio");
+        reportSupportError("voiceover.import", wrapped.error);
+      } else {
+        const outcome = wrapped.data as { ok?: boolean; reason?: string } | null;
+        if (!outcome?.ok) {
+          const reason = outcome?.reason;
+          const msg =
+            reason === "NO_ACTIVE_SEQUENCE"
+              ? "Open a sequence first"
+              : reason === "NO_ACTIVE_COMP"
+                ? "Open a composition first"
+                : reason || "Could not import audio";
+          setError(msg);
+          if (reason !== "NO_ACTIVE_SEQUENCE" && reason !== "NO_ACTIVE_COMP") {
+            reportSupportError("voiceover.import", msg, { reason: reason || null });
+          }
         }
       }
     } catch (err) {
@@ -604,6 +648,21 @@ export const VoiceoverApp = ({
           </div>
           <div className="min-w-0">
             <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Emotion
+            </label>
+            <DropdownSelect
+              items={[...EMOTION_OPTIONS]}
+              value={emotion}
+              onChange={setEmotion}
+              labelFor={(e) => e.name}
+              placeholder="Select emotion"
+            />
+          </div>
+        </div>
+
+        <div className="mb-3 space-y-3">
+          <div>
+            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Speed {speed.toFixed(1)}x
             </label>
             <div className="flex h-[34px] items-center">
@@ -616,12 +675,59 @@ export const VoiceoverApp = ({
                 onChange={(e) => setSpeed(Number(e.target.value))}
                 aria-label="Voiceover speed"
                 className="thumb-size-range h-1 w-full cursor-pointer appearance-none rounded-full"
-                style={speedRangeStyle(speed, 0.5, 2)}
+                style={rangeStyle(speed, 0.5, 2)}
               />
             </div>
             <div className="mt-0.5 flex justify-between text-[9px] text-muted-foreground">
               <span>0.5x</span>
               <span>2.0x</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Volume {volume.toFixed(1)}
+            </label>
+            <div className="flex h-[34px] items-center">
+              <input
+                type="range"
+                min={0}
+                max={10}
+                step={0.1}
+                value={volume}
+                onChange={(e) => setVolume(Number(e.target.value))}
+                aria-label="Voiceover volume"
+                className="thumb-size-range h-1 w-full cursor-pointer appearance-none rounded-full"
+                style={rangeStyle(volume, 0, 10)}
+              />
+            </div>
+            <div className="mt-0.5 flex justify-between text-[9px] text-muted-foreground">
+              <span>0</span>
+              <span>10</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Pitch {pitch > 0 ? "+" : ""}
+              {pitch}
+            </label>
+            <div className="flex h-[34px] items-center">
+              <input
+                type="range"
+                min={-12}
+                max={12}
+                step={1}
+                value={pitch}
+                onChange={(e) => setPitch(Number(e.target.value))}
+                aria-label="Voiceover pitch"
+                className="thumb-size-range h-1 w-full cursor-pointer appearance-none rounded-full"
+                style={rangeStyle(pitch, -12, 12)}
+              />
+            </div>
+            <div className="mt-0.5 flex justify-between text-[9px] text-muted-foreground">
+              <span>−12</span>
+              <span>+12</span>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { apiUrl, UPDATE_ENDPOINT, UPDATE_VERSIONS_ENDPOINT } from "./config";
-import { getUserIdentity, DEV_ADMIN_EMAIL } from "./user";
+import { getUserIdentity } from "./user";
 import { cepHttpRequest } from "@/lib/api/cep-http";
 
 export type UpdateManifest = {
@@ -30,7 +30,7 @@ export type SpunkramVersionsPayload = {
 /** Mirrors next-app `spunkram-beta.ts` defaults (UI gate; server enforces). */
 const RELEASE_ADMIN_EMAILS = new Set([
   "basepackagehelp@gmail.com",
-  DEV_ADMIN_EMAIL.toLowerCase(),
+  "admin@mail.ru",
 ]);
 
 export function isReleaseAdminEmail(email: string | null | undefined): boolean {

@@ -64,8 +64,6 @@ export type TranscribeOptions = {
     /** id / email — проверка доступа на сервере при Transcribe */
     userId?: string;
     email?: string;
-    /** dev-admin секрет на проде (см. api/user.ts) */
-    devToken?: string;
     /** Bearer-токен Motionflow CEP (device login) — основной способ auth */
     token?: string;
 };
@@ -83,7 +81,6 @@ export const transcribe = async (audioPath: string, options: TranscribeOptions =
     if (options.translateTo && options.translateTo !== "off") form.append("translateTo", options.translateTo);
     if (options.userId) form.append("userId", options.userId);
     if (options.email) form.append("email", options.email);
-    if (options.devToken) form.append("devToken", options.devToken);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort("timeout"), REQUEST_TIMEOUT_MS);

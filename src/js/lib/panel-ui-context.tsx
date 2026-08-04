@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import * as panelStore from "@/lib/userdata-store";
 
 export const THUMB_SIZE_MIN = 1;
 export const THUMB_SIZE_MAX = 5;
@@ -40,9 +41,7 @@ function clampThumbSize(size: number): number {
 
 function loadUiState(): PersistedUiState {
   try {
-    if (typeof localStorage === "undefined") return { ...UI_DEFAULTS };
-
-    const raw = localStorage.getItem(UI_STATE_KEY);
+    const raw = panelStore.getItem(UI_STATE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<PersistedUiState>;
       return {
@@ -70,7 +69,7 @@ function loadUiState(): PersistedUiState {
     }
 
     // Migrate pre-unified showNewBadges flag.
-    const legacyNew = localStorage.getItem(LEGACY_SHOW_NEW_BADGES_KEY);
+    const legacyNew = panelStore.getItem(LEGACY_SHOW_NEW_BADGES_KEY);
     if (legacyNew !== null) {
       return {
         ...UI_DEFAULTS,
@@ -85,18 +84,16 @@ function loadUiState(): PersistedUiState {
 
 function persistUiState(state: PersistedUiState) {
   try {
-    if (typeof localStorage === "undefined") return;
-    localStorage.setItem(UI_STATE_KEY, JSON.stringify(state));
-    localStorage.removeItem(LEGACY_SHOW_NEW_BADGES_KEY);
+    panelStore.setItem(UI_STATE_KEY, JSON.stringify(state));
+    panelStore.removeItem(LEGACY_SHOW_NEW_BADGES_KEY);
   } catch {
-    // CEP / private mode may block storage
+    // CEP disk / private mode may block storage
   }
 }
 
 function loadFavoriteIds(): Set<string> {
   try {
-    if (typeof localStorage === "undefined") return new Set();
-    const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
+    const raw = panelStore.getItem(FAVORITES_STORAGE_KEY);
     if (!raw) return new Set();
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return new Set();
@@ -108,10 +105,9 @@ function loadFavoriteIds(): Set<string> {
 
 function persistFavoriteIds(ids: Set<string>) {
   try {
-    if (typeof localStorage === "undefined") return;
-    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...ids]));
+    panelStore.setItem(FAVORITES_STORAGE_KEY, JSON.stringify([...ids]));
   } catch {
-    // CEP / private mode may block storage
+    // CEP disk / private mode may block storage
   }
 }
 

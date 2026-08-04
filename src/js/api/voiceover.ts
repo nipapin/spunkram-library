@@ -1,7 +1,7 @@
 /**
  * Voiceover (Minimax via Motionflow):
  *   GET  /api/cep/voiceover/voices → { voices, languages }
- *   POST /api/generations/voiceover  { text, voice_id, speed?, language_boost? }
+ *   POST /api/generations/voiceover  { text, voice_id, speed?, volume?, pitch?, emotion?, language_boost? }
  */
 import { apiUrl, GENERATIONS_ENDPOINTS, VOICEOVER_ENDPOINTS } from "./config";
 import { getUserIdentity } from "./user";
@@ -116,6 +116,9 @@ export async function generateVoiceover(input: {
   text: string;
   voice_id: string;
   speed?: number;
+  volume?: number;
+  pitch?: number;
+  emotion?: string;
   language_boost?: string;
 }): Promise<{ data?: VoiceoverResult; error?: string }> {
   const user = getUserIdentity();
@@ -126,10 +129,12 @@ export async function generateVoiceover(input: {
       text: input.text,
       voice_id: input.voice_id,
       speed: input.speed ?? 1,
+      volume: input.volume ?? 1,
+      pitch: input.pitch ?? 0,
+      emotion: input.emotion || "auto",
       language_boost: input.language_boost || "Automatic",
       email: user.email || undefined,
       userId: user.id || undefined,
-      devToken: user.devToken || undefined,
     }),
     timeoutMs: 120000,
   });

@@ -27,7 +27,12 @@ export function AiToolsList({
   onBuyExtra?: (amount: number) => void;
 }) {
   const totalLeft = monthly + extra;
-  const pct = Math.max(0, Math.min(100, monthlyLimit > 0 ? (monthly / monthlyLimit) * 100 : 0));
+  // Capacity = monthly allotment + current extra balance. Empty track = used monthly.
+  const capacity = Math.max(monthlyLimit, 0) + Math.max(extra, 0);
+  const monthlyPct =
+    capacity > 0 ? Math.max(0, Math.min(100, (Math.max(monthly, 0) / capacity) * 100)) : 0;
+  const extraPct =
+    capacity > 0 ? Math.max(0, Math.min(100 - monthlyPct, (Math.max(extra, 0) / capacity) * 100)) : 0;
 
   return (
     <div className="relative flex flex-col gap-3 p-2.5">
@@ -41,19 +46,38 @@ export function AiToolsList({
         </div>
 
         <div className="mt-2.5 space-y-2">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-background/60">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-primary to-primary/70 transition-all"
-              style={{ width: `${pct}%` }}
-            />
+          <div
+            className="flex h-1.5 w-full overflow-hidden rounded-full bg-background/60"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={capacity}
+            aria-valuenow={totalLeft}
+            aria-label={`${totalLeft} generations left (${monthly} monthly, ${extra} extra)`}
+          >
+            {monthlyPct > 0 ? (
+              <div
+                className="h-full bg-gradient-to-r from-primary to-primary/75 transition-[width]"
+                style={{ width: `${monthlyPct}%` }}
+                title={`${monthly} monthly`}
+              />
+            ) : null}
+            {extraPct > 0 ? (
+              <div
+                className="h-full bg-gradient-to-r from-cyan-400/90 to-teal-400/70 transition-[width]"
+                style={{ width: `${extraPct}%` }}
+                title={`${extra} extra`}
+              />
+            ) : null}
           </div>
           <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
               {monthly}/{monthlyLimit} {isFreeUser ? "free plan" : "monthly"}
               {isFreeUser ? "" : " · resets each month"}
             </span>
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
+                <span className="inline-block size-1.5 shrink-0 rounded-full bg-cyan-400" aria-hidden />
                 <InfinityIcon className="size-3" />
                 {extra} extra
               </span>

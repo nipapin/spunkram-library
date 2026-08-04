@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight, Folder, Layers, Film, Music, Package, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePanelUI } from "@/lib/panel-ui-context";
+import * as panelStore from "@/lib/userdata-store";
 import type { PackTreeIcon, PackTreeNode } from "@/lib/utils/pack-types";
 
 const SIDEBAR_WIDTH_KEY = "spunkram.sidebarWidth";
@@ -15,7 +16,7 @@ function clampSidebarWidth(width: number): number {
 
 function loadSidebarWidth(): number {
   try {
-    const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    const stored = Number(panelStore.getItem(SIDEBAR_WIDTH_KEY));
     if (Number.isFinite(stored) && stored > 0) return clampSidebarWidth(stored);
   } catch {
     // ignore storage errors
@@ -192,7 +193,7 @@ export function PanelSidebar({
     window.removeEventListener("pointerup", handleResizePointerUp);
     setWidth((w) => {
       try {
-        localStorage.setItem(SIDEBAR_WIDTH_KEY, String(w));
+        panelStore.setItem(SIDEBAR_WIDTH_KEY, String(w));
       } catch {
         // ignore storage errors
       }
@@ -219,7 +220,7 @@ export function PanelSidebar({
   const handleResizeReset = () => {
     setWidth(SIDEBAR_DEFAULT_WIDTH);
     try {
-      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(SIDEBAR_DEFAULT_WIDTH));
+      panelStore.setItem(SIDEBAR_WIDTH_KEY, String(SIDEBAR_DEFAULT_WIDTH));
     } catch {
       // ignore storage errors
     }
