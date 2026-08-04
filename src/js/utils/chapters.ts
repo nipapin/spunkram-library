@@ -171,30 +171,34 @@ export const regenerateTags = async (
   return Array.isArray(data.tags) ? data.tags : [];
 };
 
-/** Теги хранятся и редактируются в UI как один текст через запятую, а не массив чипов. */
-export const tagsToText = (tags: string[]): string => tags.join(", ");
-
-/** Обратное преобразование — текст через запятую (из textarea) -> массив тегов. */
-export const parseTagsText = (text: string): string[] =>
-  text
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
-
-// "video editing tips" -> "#VideoEditingTips" — YouTube-хэштеги не терпят пробелов,
-// PascalCase вместо slug/lowercase — читаемее в блоке описания
+/**
+ * Теги в UI и при копировании — как YouTube-хэштеги: `#spunkram #adobe #etc`
+ * (с решёткой, через пробел, без запятых).
+ */
 const toHashtag = (tag: string): string => {
-  const words = tag
+  const cleaned = tag
     .trim()
+    .replace(/^#+/, "")
     .replace(/[^\p{L}\p{N}\s]+/gu, "")
     .split(/\s+/)
-    .filter(Boolean);
-  if (!words.length) return "";
-  return `#${words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("")}`;
+    .filter(Boolean)
+    .join("");
+  if (!cleaned) return "";
+  return `#${cleaned.toLowerCase()}`;
 };
 
 export const tagsToHashtags = (tags: string[]): string =>
   tags.map(toHashtag).filter(Boolean).join(" ");
+
+/** Массив тегов → текст для textarea / storage. */
+export const tagsToText = (tags: string[]): string => tagsToHashtags(tags);
+
+/** Текст из textarea (`#a #b` или legacy `a, b`) → массив без решёток. */
+export const parseTagsText = (text: string): string[] =>
+  text
+    .split(/[\s,]+/)
+    .map((t) => t.trim().replace(/^#+/, ""))
+    .filter(Boolean);
 
 // YouTube требует минимум 3 главы, чтобы показать их как timestamps в описании
 export const MIN_YOUTUBE_CHAPTERS = 3;

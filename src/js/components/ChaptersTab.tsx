@@ -269,7 +269,7 @@ export const ChaptersTab = ({
         <GeneratedTextSection
           label="TAGS"
           value={tags}
-          placeholder="tag1, tag2, tag3"
+          placeholder="#spunkram #adobe #etc"
           rows={2}
           onChange={onUpdateTags}
           onRegenerate={onRegenerateTags}
