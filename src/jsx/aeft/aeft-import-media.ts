@@ -101,13 +101,29 @@ export const importVoiceoverAudio = (
 ): { ok: boolean; reason?: string } => {
   try {
     if (!filePath) return { ok: false, reason: "NO_FILE" };
+    // Normalize separators — AE File() is happier with forward slashes on Windows.
+    const normalized = String(filePath).replace(/\\/g, "/");
+    const file = new File(normalized);
+    if (!file.exists) {
+      return { ok: false, reason: "SOURCE_MISSING" };
+    }
+
     const assetsFolder = getStockFolderByName(
       app.project.rootFolder,
       VOICEOVER_FOLDER,
     );
-    let importedItem = findStockItemByPath(assetsFolder, filePath);
+    let importedItem = findStockItemByPath(assetsFolder, normalized);
     if (!importedItem) {
-      importedItem = importStockFileToFolder(filePath, assetsFolder);
+      const importOptions = new ImportOptions(file);
+      try {
+        if (importOptions.canImportAs(ImportAsType.FOOTAGE)) {
+          importOptions.importAs = ImportAsType.FOOTAGE;
+        }
+      } catch (eOpts) {
+        // older AE — ImportAsType may differ
+      }
+      importedItem = app.project.importFile(importOptions);
+      if (importedItem) importedItem.parentFolder = assetsFolder;
     }
     if (!importedItem) return { ok: false, reason: "IMPORT_FAILED" };
     if (destination === "project") return { ok: true };

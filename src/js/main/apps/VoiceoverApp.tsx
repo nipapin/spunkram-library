@@ -112,7 +112,28 @@ function newHistoryId(): string {
 function localFileExists(filePath: string | null | undefined): boolean {
   if (!filePath) return false;
   try {
-    return typeof fs?.existsSync === "function" && fs.existsSync(filePath);
+    if (typeof fs?.existsSync !== "function" || !fs.existsSync(filePath)) return false;
+    if (typeof fs?.statSync === "function" && fs.statSync(filePath).size < 64) return false;
+    // Reject UTF-8-corrupted downloads from the old cepHttpRequest path.
+    if (typeof fs?.openSync === "function" && typeof fs?.readSync === "function") {
+      const fd = fs.openSync(filePath, "r");
+      try {
+        const buf = Buffer.alloc(12);
+        fs.readSync(fd, buf, 0, 12, 0);
+        const isRiff =
+          buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46;
+        const isId3 = buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33;
+        const isMpeg = buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0;
+        if (!isRiff && !isId3 && !isMpeg) return false;
+      } finally {
+        try {
+          fs.closeSync(fd);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    return true;
   } catch {
     return false;
   }
@@ -584,7 +605,9 @@ export const VoiceoverApp = ({
               ? "Open a sequence first"
               : reason === "NO_ACTIVE_COMP"
                 ? "Open a composition first"
-                : reason || "Could not import audio";
+                : reason === "SOURCE_MISSING"
+                  ? "Audio file missing on disk — try generating again"
+                  : reason || "Could not import audio";
           setError(msg);
           if (reason !== "NO_ACTIVE_SEQUENCE" && reason !== "NO_ACTIVE_COMP") {
             reportSupportError("voiceover.import", msg, { reason: reason || null });

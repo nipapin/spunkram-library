@@ -7,6 +7,7 @@ import { apiUrl, GENERATIONS_ENDPOINTS, VOICEOVER_ENDPOINTS } from "./config";
 import { getUserIdentity } from "./user";
 import { cepHttpRequest } from "@/lib/api/cep-http";
 import { fs, os, path } from "@/lib/cep/node";
+import { downloadToFile } from "@/utils/download-file";
 
 // Injected by vite.config.ts — true only when CEP_API_MOCKS=true.
 declare const __CEP_API_MOCKS__: boolean | undefined;
@@ -159,7 +160,7 @@ export async function generateVoiceover(input: {
   };
 }
 
-/** Download remote audio (or copy local mock) into a temp file for host import. */
+/** Download remote audio (or resolve local path) into a temp file for host import. */
 export async function downloadVoiceoverFile(
   audioUrl: string,
   fileName = "spunkram-voiceover.wav",
@@ -172,9 +173,6 @@ export async function downloadVoiceoverFile(
       }
     }
 
-    const result = await cepHttpRequest(audioUrl, { method: "GET", timeoutMs: 60000 });
-    if (!result.ok) return { error: "Failed to download audio" };
-
     const dir =
       typeof os?.tmpdir === "function"
         ? path.join(os.tmpdir(), "spunkram-voiceover")
@@ -185,10 +183,18 @@ export async function downloadVoiceoverFile(
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const safeName = fileName.replace(/[^\w.\-]+/g, "_") || "voiceover.wav";
     const outPath = path.join(dir, `${Date.now()}-${safeName}`);
-    // cepHttpRequest returns text; for binary mock we write UTF-8 base64 decoded below.
-    // Real backend should return a URL to a binary file fetched via node https.
-    const buf = Buffer.from(result.text, "binary");
-    fs.writeFileSync(outPath, buf);
+
+    // Binary stream — never go through cepHttpRequest (UTF-8 text corrupts WAV/MP3).
+    await downloadToFile(audioUrl, outPath, { timeoutMs: 60_000 });
+
+    if (!fs.existsSync(outPath) || fs.statSync(outPath).size < 64) {
+      try {
+        if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+      } catch {
+        /* ignore */
+      }
+      return { error: "Downloaded audio file is empty or invalid" };
+    }
     return { path: outPath };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Download failed" };
