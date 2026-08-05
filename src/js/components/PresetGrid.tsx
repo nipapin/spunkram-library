@@ -40,6 +40,12 @@ const CaptionCard = ({
       </button>
 
       <div className="preset-grid__media">
+        {/* Keep thumb under video so hover never blanks the card when CDN video is slow. */}
+        {thumb ? (
+          <img className="preset-grid__thumb" src={thumb} alt="" draggable={false} />
+        ) : !video ? (
+          <div className="preset-grid__swatch">Aa</div>
+        ) : null}
         {hover && video ? (
           <video
             className="preset-grid__video"
@@ -50,11 +56,7 @@ const CaptionCard = ({
             autoPlay
             poster={thumb || undefined}
           />
-        ) : thumb ? (
-          <img className="preset-grid__thumb" src={thumb} alt="" draggable={false} />
-        ) : (
-          <div className="preset-grid__swatch">Aa</div>
-        )}
+        ) : null}
         {category && <span className="preset-grid__chip">{category}</span>}
         <div className="preset-grid__name">{p.name}</div>
       </div>
@@ -139,10 +141,10 @@ export const PresetGrid = () => {
         <button
           type="button"
           className="preset-grid__icon-btn"
-          data-tooltip="Refresh catalog"
+          data-tooltip="Refresh catalog &amp; project files"
           onClick={() => void refreshStyles()}
           disabled={refreshingStyles}
-          aria-label="Refresh catalog"
+          aria-label="Refresh catalog and project files"
         >
           <RefreshCw size={15} className={refreshingStyles ? "preset-grid__spin" : undefined} />
         </button>

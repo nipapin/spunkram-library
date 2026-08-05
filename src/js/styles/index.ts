@@ -17,12 +17,26 @@ export type {
 export { EMPTY_DEFINITION } from "./types";
 
 export {
+  colorIdsFromDefinition,
+  downloadStylePackage,
+  ensureDefinitionForStyle,
+  isPresetDirty,
+  isPresetValuesDirty,
+  makeOrigin,
+  presetSwatchColors,
+  previewFromValues,
+  refreshStylePackageIfRemoteChanged,
+  syncCaptionStyles,
+  valuesEqual,
+} from "./sync";
+export {
   CaptionApiError,
   authErrorMessage,
   downloadCaptionProject,
   fetchCaptionStylesCatalog,
   fetchCaptionsCatalog,
   flattenCatalog,
+  hashArrayBuffer,
   pickProjectFile,
   resolveMediaUrl,
 } from "./api";
@@ -37,18 +51,6 @@ export {
   upsertUserPreset,
 } from "./localStore";
 export { getStylePackageDir, getStylesDir, getStylesRoot, styleIdToDirName } from "./paths";
-export {
-  colorIdsFromDefinition,
-  downloadStylePackage,
-  ensureDefinitionForStyle,
-  isPresetDirty,
-  isPresetValuesDirty,
-  makeOrigin,
-  presetSwatchColors,
-  previewFromValues,
-  syncCaptionStyles,
-  valuesEqual,
-} from "./sync";
 export {
   acquireAndApplyPreset,
   acquirePresetProject,

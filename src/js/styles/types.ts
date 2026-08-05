@@ -60,7 +60,7 @@ export interface StylePreset {
   source: PresetSource;
   values: ControlValues;
   origin: PresetOrigin;
-  /** на сервере версия новее локальной (сейчас не используется — у API нет version). */
+  /** на сервере файл новее локального (сравниваем etag/size/hash с R2). */
   updateAvailable?: boolean;
   preview?: StylePreviewColors;
   categoryName?: string;
@@ -81,6 +81,13 @@ export interface LocalStyleManifest {
     definition?: string;
     aep?: string;
     mogrt?: string;
+  };
+  /** Fingerprint of last downloaded project file (R2 / CDN). */
+  remote?: {
+    file: CaptionProjectFile;
+    etag?: string;
+    byteLength?: number;
+    contentHash?: string;
   };
 }
 

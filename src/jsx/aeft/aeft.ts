@@ -87,12 +87,23 @@ const soloAudioLayers = (comp: CompItem, keep: AVLayer[]) => {
 
 // РѕРґРёРЅ Describe: Р±РµР· РІС‹РґРµР»РµРЅРёСЏ вЂ” СЂРµРЅРґРµСЂРёРј РІСЃСЋ РєРѕРјРїРѕР·РёС†РёСЋ; СЃ РІС‹РґРµР»РµРЅРёРµРј вЂ” С‚РѕР»СЊРєРѕ
 // РѕР±Р»Р°СЃС‚СЊ РІС‹Р±СЂР°РЅРЅС‹С… СЃР»РѕС‘РІ, СЃРѕР»Рѕ С‚РѕР»СЊРєРѕ РЅР° Р·РІСѓРєРµ РІС‹Р±СЂР°РЅРЅРѕРіРѕ(С‹С…)
+/** Soft-fail shape — never return bare `null` (CEP JSON null → Error: null). */
+export type DescribeFailure = {
+  ok: false;
+  reason: "NO_ACTIVE_COMP" | "NO_AUDIO" | "DESCRIBE_FAILED";
+  message: string;
+};
+
 export const describe = (_audioPresetPath?: string) => {
   try {
     const comp = getActiveComp();
     if (!comp) {
       alert("Open a composition first");
-      return null;
+      return {
+        ok: false as const,
+        reason: "NO_ACTIVE_COMP" as const,
+        message: "Open a composition first",
+      };
     }
 
     const selectedLayers = comp.selectedLayers;
@@ -122,7 +133,11 @@ export const describe = (_audioPresetPath?: string) => {
     const audioLayers = layersWithAudio(selectedLayers);
     if (!audioLayers.length) {
       alert("Selected clip has no audio");
-      return null;
+      return {
+        ok: false as const,
+        reason: "NO_AUDIO" as const,
+        message: "Selected clip has no audio",
+      };
     }
 
     // Selection order ≠ timeline order; layer outPoints can exceed comp.duration.
@@ -183,8 +198,13 @@ export const describe = (_audioPresetPath?: string) => {
       type: "selected" as const,
     };
   } catch (e: any) {
-    alert(e.message);
-    return null;
+    const message = e && e.message ? String(e.message) : String(e);
+    alert(message);
+    return {
+      ok: false as const,
+      reason: "DESCRIBE_FAILED" as const,
+      message: message || "Could not export audio from the composition",
+    };
   }
 };
 

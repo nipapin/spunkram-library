@@ -1,4 +1,4 @@
-import { path } from "../lib/cep/node";
+import { fs, path } from "../lib/cep/node";
 import { csi } from "../lib/utils/bolt";
 import { MotionFlow } from "@/sdk";
 import { defaultsFromDefinition } from "../presets";
@@ -27,13 +27,26 @@ export type ApplyStyleProjectResult = {
 
 export type AcquirePresetStatus = "idle" | "verifying" | "downloading" | "applying" | "ready" | "error";
 
+const fileExists = (p?: string): boolean => {
+  if (!p || typeof fs?.existsSync !== "function") return false;
+  try {
+    return fs.existsSync(p);
+  } catch {
+    return false;
+  }
+};
+
 /** Локальные пути к project.aep / project.mogrt (null в browser preview). */
 export const getLocalStyleAssetPaths = (styleId: string): LocalStyleAssetPaths | null => {
   const pkg = loadLocalPackage(styleId);
   if (!pkg || pkg.dir.startsWith("memory://")) return null;
   const aep = pkg.manifest.files.aep ? path.join(pkg.dir, pkg.manifest.files.aep) : undefined;
   const mogrt = pkg.manifest.files.mogrt ? path.join(pkg.dir, pkg.manifest.files.mogrt) : undefined;
-  return { dir: pkg.dir, aep, mogrt };
+  return {
+    dir: pkg.dir,
+    aep: fileExists(aep) ? aep : undefined,
+    mogrt: fileExists(mogrt) ? mogrt : undefined,
+  };
 };
 
 const hostHasNeededFile = (paths: LocalStyleAssetPaths | null, hostAppId?: string): boolean => {

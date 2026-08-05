@@ -32,8 +32,16 @@ const MAX_CONCURRENT_VIDEOS = 4;
 const activeVideoIds = new Set<string>();
 const videoSlotListeners = new Set<() => void>();
 
+/** Exclusive hover id when Autplay is off — only one card plays at a time. */
+let exclusiveHoverId: string | null = null;
+const exclusiveHoverListeners = new Set<() => void>();
+
 function notifyVideoSlots(): void {
   for (const listener of videoSlotListeners) listener();
+}
+
+function notifyExclusiveHover(): void {
+  for (const listener of exclusiveHoverListeners) listener();
 }
 
 function tryAcquireVideoSlot(id: string): boolean {
@@ -53,6 +61,42 @@ function subscribeVideoSlots(listener: () => void): () => void {
   return () => {
     videoSlotListeners.delete(listener);
   };
+}
+
+function setExclusiveHoverId(id: string | null): void {
+  if (exclusiveHoverId === id) return;
+  exclusiveHoverId = id;
+  notifyExclusiveHover();
+}
+
+function subscribeExclusiveHover(listener: () => void): () => void {
+  exclusiveHoverListeners.add(listener);
+  return () => {
+    exclusiveHoverListeners.delete(listener);
+  };
+}
+
+function clearExclusiveHover(): void {
+  setExclusiveHoverId(null);
+}
+
+/** One shared listener for all cards — stop hover playback when leaving the CEP panel. */
+let panelLeaveBound = false;
+let panelLeavePlayPreview = false;
+
+function ensurePanelLeaveListeners(playPreview: boolean): void {
+  panelLeavePlayPreview = playPreview;
+  if (panelLeaveBound) return;
+  panelLeaveBound = true;
+  const clear = () => {
+    if (!panelLeavePlayPreview) clearExclusiveHover();
+  };
+  const onVisibility = () => {
+    if (document.hidden) clear();
+  };
+  document.documentElement.addEventListener("mouseleave", clear);
+  window.addEventListener("blur", clear);
+  document.addEventListener("visibilitychange", onVisibility);
 }
 
 // --- Preview card -----------------------------------------------------------
@@ -116,6 +160,7 @@ const PreviewCard = memo(function PreviewCard({
     setPosterUrl(media.posterUrl);
     setMotionUrl(null);
     releaseVideoSlot(item.id);
+    if (exclusiveHoverId === item.id) clearExclusiveHover();
   }, [item.id, media.posterUrl]);
 
   // Load poster as soon as the card mounts / item changes (queued FS reads).
@@ -131,11 +176,27 @@ const PreviewCard = memo(function PreviewCard({
     void loadPreviewObjectUrl(media.posterPath).then((url) => {
       if (cancelled || itemIdRef.current !== id || !url) return;
       setPosterUrl(url);
+      setPosterFailed(false);
     });
     return () => {
       cancelled = true;
     };
   }, [item.id, media.posterPath, media.posterUrl]);
+
+  // Sync exclusive hover: another card took over, or panel-wide clear.
+  useEffect(() => {
+    if (playPreview) return;
+    const sync = () => {
+      setHovered(exclusiveHoverId === item.id);
+    };
+    sync();
+    return subscribeExclusiveHover(sync);
+  }, [playPreview, item.id]);
+
+  // Leave the CEP panel / tab → stop hover playback (Autplay keeps playing).
+  useEffect(() => {
+    ensurePanelLeaveListeners(playPreview);
+  }, [playPreview]);
 
   // Mounted + Play Preview on ⇒ eligible for motion; otherwise hover-only.
   const wantMotion = playPreview || hovered;
@@ -206,19 +267,23 @@ const PreviewCard = memo(function PreviewCard({
   }, [showMotion, isVideoMotion, motionUrl, audioEnabled, playPreview]);
 
   const resolvedPoster = posterUrl ?? media.posterUrl;
-  const imgSrc =
-    showMotion && isGifMotion && motionUrl
-      ? motionUrl
-      : (resolvedPoster ?? undefined);
+  const gifSrc = showMotion && isGifMotion && motionUrl ? motionUrl : null;
+  const imgSrc = gifSrc || resolvedPoster || undefined;
 
   function handlePointerEnter() {
     setHoveredItemName(item.name);
-    if (!playPreview) setHovered(true);
+    if (!playPreview) {
+      setExclusiveHoverId(item.id);
+      setHovered(true);
+    }
   }
 
   function handlePointerLeave() {
     setHoveredItemName(null);
-    if (!playPreview) setHovered(false);
+    if (!playPreview) {
+      if (exclusiveHoverId === item.id) clearExclusiveHover();
+      setHovered(false);
+    }
   }
 
   function handleFavoriteClick(e: MouseEvent) {
@@ -265,7 +330,13 @@ const PreviewCard = memo(function PreviewCard({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       onFocus={() => setHoveredItemName(item.name)}
-      onBlur={() => setHoveredItemName(null)}
+      onBlur={() => {
+        setHoveredItemName(null);
+        if (!playPreview) {
+          if (exclusiveHoverId === item.id) clearExclusiveHover();
+          setHovered(false);
+        }
+      }}
       onKeyDown={handleKeyDown}
       onDoubleClick={handleDoubleClick}
       className="group relative w-full overflow-hidden border border-white/5 bg-secondary/40 outline-none ring-primary/60 transition focus-visible:ring-2"
@@ -278,11 +349,12 @@ const PreviewCard = memo(function PreviewCard({
         <div className="absolute inset-0 bg-gradient-to-br from-secondary to-background" />
       )}
 
-      {imgSrc && !(showMotion && isVideoMotion) && (
+      {/* Keep poster mounted under video so hover never flashes a blank/broken frame. */}
+      {imgSrc && !posterFailed && (
         <img
-          key={`${item.id}:${imgSrc}`}
-          src={imgSrc}
-          alt={item.name}
+          key={`${item.id}:poster:${resolvedPoster ?? "none"}`}
+          src={gifSrc || resolvedPoster || imgSrc}
+          alt=""
           onError={() => setPosterFailed(true)}
           className="absolute inset-0 size-full object-cover"
           draggable={false}
@@ -299,7 +371,7 @@ const PreviewCard = memo(function PreviewCard({
           loop
           playsInline
           preload="metadata"
-          className="pointer-events-none absolute inset-0 size-full object-cover"
+          className="pointer-events-none absolute inset-0 z-[1] size-full object-cover"
         />
       )}
 

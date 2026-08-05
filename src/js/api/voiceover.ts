@@ -160,7 +160,7 @@ export async function generateVoiceover(input: {
   };
 }
 
-/** Download remote audio (or resolve local path) into a temp file for host import. */
+/** Download remote audio (or resolve local path) into AppData for host import. */
 export async function downloadVoiceoverFile(
   audioUrl: string,
   fileName = "spunkram-voiceover.wav",
@@ -173,10 +173,20 @@ export async function downloadVoiceoverFile(
       }
     }
 
-    const dir =
-      typeof os?.tmpdir === "function"
-        ? path.join(os.tmpdir(), "spunkram-voiceover")
-        : "";
+    // Prefer AppData over OS temp — AE often fails to open files under %TEMP%.
+    let dir = "";
+    try {
+      const roaming =
+        typeof os?.platform === "function" && os.platform() === "darwin"
+          ? path.join(os.homedir(), "Library", "Application Support")
+          : path.join(os.homedir(), "AppData", "Roaming");
+      dir = path.join(roaming, "Spunkram", "Spunkram Library", "voiceover");
+    } catch {
+      dir = "";
+    }
+    if (!dir && typeof os?.tmpdir === "function") {
+      dir = path.join(os.tmpdir(), "spunkram-voiceover");
+    }
     if (!dir || typeof fs?.mkdirSync !== "function") {
       return { error: "File system unavailable" };
     }

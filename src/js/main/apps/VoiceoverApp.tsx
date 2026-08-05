@@ -567,8 +567,9 @@ export const VoiceoverApp = ({
     setPlacing({ id: item.id, destination });
     setError(null);
     try {
-      let filePath = localFileExists(item.localPath) ? item.localPath! : null;
-      if (!filePath && item.audioUrl) {
+      const resolvePath = async (forceRedownload: boolean): Promise<string | null> => {
+        if (!forceRedownload && localFileExists(item.localPath)) return item.localPath!;
+        if (!item.audioUrl) return null;
         const dl = await downloadVoiceoverFile(
           item.audioUrl,
           item.fileName || "spunkram-voiceover.wav",
@@ -577,41 +578,65 @@ export const VoiceoverApp = ({
           const msg = dl.error || "Could not download audio";
           setError(msg);
           reportSupportError("voiceover.download", msg);
-          setPlacing(null);
-          return;
+          return null;
         }
-        filePath = dl.path;
         updateLocalPath(item.id, dl.path);
-      }
+        return dl.path;
+      };
+
+      let filePath = await resolvePath(false);
       if (!filePath) {
-        setError("Audio file unavailable");
+        setError((prev) => prev || "Audio file unavailable");
         setPlacing(null);
         return;
       }
-      const wrapped = await MotionFlow.importVoiceoverAudio(
-        filePath,
-        destination,
-        item.duration ?? 1,
-      );
+
+      const tryImport = async (path: string) =>
+        MotionFlow.importVoiceoverAudio(path, destination, item.duration ?? 1);
+
+      let wrapped = await tryImport(filePath);
+      let outcome = wrapped.ok
+        ? (wrapped.data as { ok?: boolean; reason?: string } | null)
+        : null;
+      const reason = !wrapped.ok
+        ? wrapped.error
+        : outcome && !outcome.ok
+          ? outcome.reason
+          : null;
+      const needsRetry =
+        !!reason &&
+        (reason === "SOURCE_MISSING" || /could not open source file/i.test(reason));
+
+      // Stale temp path / AE path quirk — re-download once to AppData and retry.
+      if (needsRetry && item.audioUrl) {
+        const fresh = await resolvePath(true);
+        if (fresh && fresh !== filePath) {
+          filePath = fresh;
+          wrapped = await tryImport(filePath);
+          outcome = wrapped.ok
+            ? (wrapped.data as { ok?: boolean; reason?: string } | null)
+            : null;
+        }
+      }
+
       if (!wrapped.ok) {
         setError(wrapped.error || "Could not import audio");
         reportSupportError("voiceover.import", wrapped.error);
-      } else {
-        const outcome = wrapped.data as { ok?: boolean; reason?: string } | null;
-        if (!outcome?.ok) {
-          const reason = outcome?.reason;
-          const msg =
-            reason === "NO_ACTIVE_SEQUENCE"
-              ? "Open a sequence first"
-              : reason === "NO_ACTIVE_COMP"
-                ? "Open a composition first"
-                : reason === "SOURCE_MISSING"
-                  ? "Audio file missing on disk — try generating again"
-                  : reason || "Could not import audio";
-          setError(msg);
-          if (reason !== "NO_ACTIVE_SEQUENCE" && reason !== "NO_ACTIVE_COMP") {
-            reportSupportError("voiceover.import", msg, { reason: reason || null });
-          }
+      } else if (!outcome?.ok) {
+        const failReason = outcome?.reason;
+        const msg =
+          failReason === "NO_ACTIVE_SEQUENCE"
+            ? "Open a sequence first"
+            : failReason === "NO_ACTIVE_COMP"
+              ? "Open a composition first"
+              : failReason === "SOURCE_MISSING"
+                ? "Audio file missing on disk — try generating again"
+                : failReason && /could not open source file/i.test(failReason)
+                  ? "After Effects could not open the audio file. Try generating again."
+                  : failReason || "Could not import audio";
+        setError(msg);
+        if (failReason !== "NO_ACTIVE_SEQUENCE" && failReason !== "NO_ACTIVE_COMP") {
+          reportSupportError("voiceover.import", msg, { reason: failReason || null });
         }
       }
     } catch (err) {

@@ -187,7 +187,11 @@ export const describe = (audioPresetPath?: string) => {
     const seq = app.project.activeSequence;
     if (!seq) {
       alert("Open a sequence first");
-      return null;
+      return {
+        ok: false as const,
+        reason: "NO_ACTIVE_SEQUENCE" as const,
+        message: "Open a sequence first",
+      };
     }
 
     const selection = seq.getSelection();
@@ -207,7 +211,11 @@ export const describe = (audioPresetPath?: string) => {
     const audio = resolveAudioTrackIndices(selection);
     if (!audio.indices.length && audio.resolved) {
       alert("Selected clip has no audio");
-      return null;
+      return {
+        ok: false as const,
+        reason: "NO_AUDIO" as const,
+        message: "Selected clip has no audio",
+      };
     }
 
     const savedIn = seq.getInPointAsTime().seconds;
@@ -226,11 +234,16 @@ export const describe = (audioPresetPath?: string) => {
       seq.setOutPoint(savedOut);
       restoreAudio();
     }
-    // offset РЅР° СЃС‚Р°СЂС‚ РІС‹РґРµР»РµРЅРёСЏ вЂ” С‚Р°Р№РјРєРѕРґС‹ С‚СЂР°РЅСЃРєСЂРёРїС†РёРё РѕС‚ РЅРµРіРѕ
+    // offset — selection start; transcription timestamps are relative to it
     return { source, dest, offset: start, type: "selected" as const };
   } catch (e: any) {
-    alert(e.message);
-    return null;
+    const message = e && e.message ? String(e.message) : String(e);
+    alert(message);
+    return {
+      ok: false as const,
+      reason: "DESCRIBE_FAILED" as const,
+      message: message || "Could not export audio from the sequence",
+    };
   }
 };
 

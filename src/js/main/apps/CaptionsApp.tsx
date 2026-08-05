@@ -471,13 +471,35 @@ export const CaptionsApp = ({
     // Premiere: пользовательский .epr из Settings, иначе бандленный WAV-пресет;
     // AE игнорирует параметр
     const effectivePresetPath = audioPresetPath || getBundledAudioPresetPath() || undefined;
-    const res = await sdkData(hostSdk().describe(effectivePresetPath));
+    const describeRaw = await sdkData(hostSdk().describe(effectivePresetPath));
     throwIfCancelled(signal);
-    if (!res || !res.source) {
-      throw new Error(
-        "Could not export audio from the composition. Check the work area / selected layers and try again.",
-      );
+    const describeFail = describeRaw as {
+      ok?: false;
+      message?: string;
+      reason?: string;
+      source?: string;
+      dest?: string;
+      offset?: number;
+      type?: "composition" | "selected";
+    } | null;
+    if (!describeRaw || !describeFail?.source || !describeFail.dest) {
+      const soft =
+        describeFail?.reason === "NO_ACTIVE_COMP" ||
+        describeFail?.reason === "NO_ACTIVE_SEQUENCE" ||
+        describeFail?.reason === "NO_AUDIO";
+      const msg =
+        (typeof describeFail?.message === "string" && describeFail.message) ||
+        "Could not export audio from the composition. Check the work area / selected layers and try again.";
+      const err = new Error(msg);
+      (err as Error & { soft?: boolean }).soft = soft;
+      throw err;
     }
+    const res = {
+      source: describeFail.source,
+      dest: describeFail.dest,
+      offset: describeFail.offset ?? 0,
+      type: (describeFail.type ?? "composition") as "composition" | "selected",
+    };
 
     try {
       setProgress({ stage: "converting" });
@@ -630,7 +652,8 @@ export const CaptionsApp = ({
         // тихая отмена — без error-banner
       } else {
         setError(e instanceof Error ? e.message : String(e));
-        reportSupportError("captions.transcribe", e);
+        const soft = !!(e && typeof e === "object" && (e as { soft?: boolean }).soft);
+        if (!soft) reportSupportError("captions.transcribe", e);
       }
     } finally {
       abortRef.current = null;

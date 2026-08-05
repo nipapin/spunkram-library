@@ -104,7 +104,21 @@ export interface CaptionDownloadResult {
   buffer: ArrayBuffer;
   filename: string;
   file: CaptionProjectFile;
+  etag?: string;
+  byteLength?: number;
+  contentHash?: string;
 }
+
+/** Fast non-crypto fingerprint for comparing local vs remote project bytes. */
+export const hashArrayBuffer = (buffer: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buffer);
+  let h = 2166136261;
+  for (let i = 0; i < bytes.length; i++) {
+    h ^= bytes[i];
+    h = Math.imul(h, 16777619);
+  }
+  return `${(h >>> 0).toString(16).padStart(8, "0")}:${bytes.length}`;
+};
 
 const parseFilename = (disposition: string | null, id: string, file: CaptionProjectFile): string => {
   if (disposition) {
@@ -133,19 +147,26 @@ const userPayload = (user?: UserIdentity) => {
 /**
  * POST /api/captions — скачать project.mogrt / project.aep (binary).
  * Auth: Bearer Motionflow CEP token (preferred); user id/email also in body.
+ *
+ * Pass `onlyIfChanged` to skip buffering when remote etag matches (or after
+ * hash compare). Returns `{ unchanged: true }` when local is already current.
  */
 export const downloadCaptionProject = async (
   id: string,
   file: CaptionProjectFile = "mogrt",
   user?: UserIdentity,
   brand?: BrandId,
-): Promise<CaptionDownloadResult> => {
+  onlyIfChanged?: { etag?: string; byteLength?: number; contentHash?: string },
+): Promise<CaptionDownloadResult & { unchanged?: boolean }> => {
   const identity = user ?? getUserIdentity();
   const headers: Record<string, string> = {
     Accept: "application/octet-stream, application/json",
     "Content-Type": "application/json",
   };
   if (identity.token) headers.Authorization = `Bearer ${identity.token}`;
+  if (onlyIfChanged?.etag) {
+    headers["If-None-Match"] = `"${onlyIfChanged.etag}"`;
+  }
 
   const response = await fetch(apiUrl(CAPTIONS_ENDPOINTS.download), {
     method: "POST",
@@ -156,6 +177,23 @@ export const downloadCaptionProject = async (
 
   if (response.status === 401) {
     throw new CaptionApiError("Unauthorized", 401, "UNAUTHORIZED");
+  }
+
+  if (response.status === 304) {
+    try {
+      await response.body?.cancel();
+    } catch {
+      /* ignore */
+    }
+    return {
+      buffer: new ArrayBuffer(0),
+      filename: "",
+      file,
+      etag: onlyIfChanged?.etag,
+      byteLength: onlyIfChanged?.byteLength,
+      contentHash: onlyIfChanged?.contentHash,
+      unchanged: true,
+    };
   }
 
   if (!response.ok) {
@@ -171,9 +209,47 @@ export const downloadCaptionProject = async (
     throw new CaptionApiError(message, response.status, code);
   }
 
+  const etag = response.headers.get("ETag")?.replace(/^W\//, "").replace(/"/g, "") || undefined;
+  const lenHeader = response.headers.get("Content-Length");
+  const headerLength =
+    typeof lenHeader === "string" && /^\d+$/.test(lenHeader) ? Number(lenHeader) : undefined;
+
+  // Matching ETag — cancel body, keep local file.
+  if (onlyIfChanged?.etag && etag && onlyIfChanged.etag === etag) {
+    try {
+      await response.body?.cancel();
+    } catch {
+      /* ignore */
+    }
+    return {
+      buffer: new ArrayBuffer(0),
+      filename: "",
+      file,
+      etag,
+      byteLength: headerLength ?? onlyIfChanged.byteLength,
+      contentHash: onlyIfChanged.contentHash,
+      unchanged: true,
+    };
+  }
+
   const buffer = await response.arrayBuffer();
   const filename = parseFilename(response.headers.get("Content-Disposition"), id, file);
-  return { buffer, filename, file };
+  const byteLength = headerLength ?? buffer.byteLength;
+  const contentHash = hashArrayBuffer(buffer);
+
+  if (onlyIfChanged?.contentHash && onlyIfChanged.contentHash === contentHash) {
+    return {
+      buffer,
+      filename,
+      file,
+      etag,
+      byteLength,
+      contentHash,
+      unchanged: true,
+    };
+  }
+
+  return { buffer, filename, file, etag, byteLength, contentHash };
 };
 
 /** Какой файл качать под текущий хост. */

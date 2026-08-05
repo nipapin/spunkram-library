@@ -1,14 +1,12 @@
-import { csi } from "../lib/utils/bolt";
-import { getActiveBrand } from "../lib/utils/brandTheme";
-import { defaultsFromDefinition, findControlByNames, isColorArray, rgbaToHex } from "../presets";
-import type { ControlValues, MogrtDefinition } from "../presets/types";
 import {
   downloadCaptionProject,
   fetchCaptionsCatalog,
   flattenCatalog,
+  hashArrayBuffer,
   pickProjectFile,
   resolveMediaUrl,
 } from "./api";
+import { fs, path } from "../lib/cep/node";
 import {
   listLocalPackageIds,
   loadLocalPackage,
@@ -26,6 +24,10 @@ import type {
   StylesSyncResult,
 } from "./types";
 import { EMPTY_DEFINITION } from "./types";
+import { csi } from "../lib/utils/bolt";
+import { getActiveBrand } from "../lib/utils/brandTheme";
+import { defaultsFromDefinition, findControlByNames, isColorArray, rgbaToHex } from "../presets";
+import type { ControlValues, MogrtDefinition } from "../presets/types";
 
 const cloneValues = (values: ControlValues): ControlValues =>
   JSON.parse(JSON.stringify(values)) as ControlValues;
@@ -224,6 +226,12 @@ export const downloadStylePackage = async (
       aep: file === "aep" || existing?.manifest.files.aep ? "project.aep" : undefined,
       mogrt: file === "mogrt" || existing?.manifest.files.mogrt ? "project.mogrt" : undefined,
     },
+    remote: {
+      file,
+      etag: downloaded.etag,
+      byteLength: downloaded.byteLength ?? downloaded.buffer.byteLength,
+      contentHash: downloaded.contentHash ?? hashArrayBuffer(downloaded.buffer),
+    },
   };
 
   const assets: { aep?: ArrayBuffer; mogrt?: ArrayBuffer } = {};
@@ -250,13 +258,182 @@ export const downloadStylePackage = async (
   return { preset, definition };
 };
 
+const localProjectFingerprint = (
+  pkg: NonNullable<ReturnType<typeof loadLocalPackage>>,
+  file: CaptionProjectFile,
+): { etag?: string; byteLength?: number; contentHash?: string } | null => {
+  if (pkg.manifest.remote?.file === file) {
+    return {
+      etag: pkg.manifest.remote.etag,
+      byteLength: pkg.manifest.remote.byteLength,
+      contentHash: pkg.manifest.remote.contentHash,
+    };
+  }
+  if (pkg.dir.startsWith("memory://") || typeof fs?.readFileSync !== "function") return null;
+  const fileName =
+    file === "aep"
+      ? pkg.manifest.files.aep
+      : file === "mogrt"
+        ? pkg.manifest.files.mogrt
+        : pkg.manifest.files.definition;
+  if (!fileName) return null;
+  const full = path.join(pkg.dir, fileName);
+  try {
+    if (!fs.existsSync(full)) return null;
+    const data = fs.readFileSync(full) as Buffer;
+    const bytes = new Uint8Array(data);
+    // Copy into a standalone buffer for hashing
+    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    return {
+      byteLength: bytes.length,
+      contentHash: hashArrayBuffer(ab as ArrayBuffer),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const fingerprintsMatch = (
+  local: { etag?: string; byteLength?: number; contentHash?: string } | null,
+  remote: { etag?: string; byteLength?: number; contentHash?: string },
+): boolean => {
+  if (!local) return false;
+  if (local.etag && remote.etag && local.etag === remote.etag) return true;
+  if (local.contentHash && remote.contentHash && local.contentHash === remote.contentHash) {
+    return true;
+  }
+  if (
+    local.byteLength != null &&
+    remote.byteLength != null &&
+    local.byteLength === remote.byteLength &&
+    local.contentHash &&
+    remote.contentHash &&
+    local.contentHash === remote.contentHash
+  ) {
+    return true;
+  }
+  return false;
+};
+
 /**
- * При загрузке расширения:
+ * Compare local project file with R2 via POST /api/captions.
+ * If remote differs, replace the local package with the downloaded bytes.
+ */
+export const refreshStylePackageIfRemoteChanged = async (
+  styleId: string,
+  options?: DownloadStyleOptions,
+): Promise<{ updated: boolean; updateAvailable: boolean }> => {
+  const existing = loadLocalPackage(styleId);
+  if (!existing) return { updated: false, updateAvailable: false };
+
+  const hostAppId = options?.hostAppId ?? csi.hostEnvironment?.appId;
+  const fileFlags = options?.files ?? { mogrt: true, aep: true, definition: true };
+  const file = options?.file ?? pickProjectFile(fileFlags, hostAppId);
+  if (!file || file === "definition") return { updated: false, updateAvailable: false };
+
+  try {
+    const localFp = localProjectFingerprint(existing, file);
+    const remote = await downloadCaptionProject(
+      styleId,
+      file,
+      undefined,
+      getActiveBrand(),
+      localFp ?? undefined,
+    );
+    const remoteFp = {
+      etag: remote.etag,
+      byteLength: remote.byteLength ?? (remote.unchanged ? localFp?.byteLength : remote.buffer.byteLength),
+      contentHash:
+        remote.contentHash ??
+        (remote.unchanged ? localFp?.contentHash : hashArrayBuffer(remote.buffer)),
+    };
+
+    if (remote.unchanged || fingerprintsMatch(localFp, remoteFp)) {
+      // Backfill fingerprint on older packages that never stored remote meta.
+      if (!existing.manifest.remote?.contentHash && (remoteFp.contentHash || remoteFp.etag)) {
+        saveLocalPackage(
+          {
+            ...existing.manifest,
+            remote: { file, ...remoteFp },
+          },
+          existing.definition,
+        );
+      }
+      return { updated: false, updateAvailable: false };
+    }
+
+    if (!remote.buffer.byteLength) {
+      return { updated: false, updateAvailable: false };
+    }
+
+    const name = options?.name || existing.manifest.name;
+    const version = new Date().toISOString();
+    let definition = existing.definition;
+    if (fileFlags.definition) {
+      try {
+        const defDl = await downloadCaptionProject(styleId, "definition", undefined, getActiveBrand());
+        const text = new TextDecoder("utf-8").decode(new Uint8Array(defDl.buffer));
+        const parsed = JSON.parse(text) as MogrtDefinition;
+        if (parsed?.clientControls) definition = parsed;
+      } catch {
+        // keep existing definition
+      }
+    }
+
+    const manifest: LocalStyleManifest = {
+      id: styleId,
+      name,
+      version,
+      downloadedAt: version,
+      files: {
+        definition: definition.clientControls?.length
+          ? "definitions.json"
+          : existing.manifest.files.definition,
+        aep: file === "aep" || existing.manifest.files.aep ? "project.aep" : undefined,
+        mogrt: file === "mogrt" || existing.manifest.files.mogrt ? "project.mogrt" : undefined,
+      },
+      remote: { file, ...remoteFp },
+    };
+    const assets: { aep?: ArrayBuffer; mogrt?: ArrayBuffer } = {};
+    if (file === "aep") assets.aep = remote.buffer;
+    if (file === "mogrt") assets.mogrt = remote.buffer;
+    saveLocalPackage(manifest, definition, assets);
+    return { updated: true, updateAvailable: false };
+  } catch {
+    // Network / auth — keep local
+    return { updated: false, updateAvailable: false };
+  }
+};
+
+const mapPool = async <T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> => {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const run = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await worker(items[i]);
+    }
+  };
+  const n = Math.max(1, Math.min(concurrency, items.length || 1));
+  await Promise.all(Array.from({ length: n }, () => run()));
+  return results;
+};
+
+/**
+ * При загрузке расширения / Refresh:
  * 1) локальный стейт + скачанные пакеты
  * 2) GET /api/captions
- * 3) список пресетов для UI
+ * 3) для скачанных — сравнить local vs R2 и обновить при расхождении
+ * 4) список пресетов для UI
  */
-export const syncCaptionStyles = async (): Promise<StylesSyncResult> => {
+export const syncCaptionStyles = async (options?: {
+  checkRemoteUpdates?: boolean;
+}): Promise<StylesSyncResult> => {
+  const checkRemote = options?.checkRemoteUpdates !== false;
   const localState = loadLocalState();
   const definitions: Record<string, MogrtDefinition> = {};
   const localIds = listLocalPackageIds();
@@ -296,6 +473,30 @@ export const syncCaptionStyles = async (): Promise<StylesSyncResult> => {
     }
   }
 
+  // Compare local project files with R2 and replace when the remote copy changed.
+  if (checkRemote && catalog.length > 0) {
+    const hostAppId = csi.hostEnvironment?.appId;
+    const toCheck = catalog.filter((item) => localById.has(item.id));
+    await mapPool(toCheck, 2, async (item) => {
+      try {
+        const result = await refreshStylePackageIfRemoteChanged(item.id, {
+          files: item.files,
+          name: item.name,
+          hostAppId,
+        });
+        if (result.updated) {
+          const pkg = loadLocalPackage(item.id);
+          if (pkg) {
+            localById.set(item.id, pkg);
+            definitions[item.id] = pkg.definition;
+          }
+        }
+      } catch {
+        // keep existing local package
+      }
+    });
+  }
+
   const presets: StylePreset[] = [];
   const seenStyleIds = new Set<string>();
 
@@ -321,6 +522,7 @@ export const syncCaptionStyles = async (): Promise<StylesSyncResult> => {
           previewImageUrl: base.previewImageUrl,
           previewVideoUrl: base.previewVideoUrl,
           files: item.files,
+          updateAvailable: false,
         });
       } else {
         presets.push({
@@ -330,6 +532,7 @@ export const syncCaptionStyles = async (): Promise<StylesSyncResult> => {
           previewImageUrl: base.previewImageUrl,
           previewVideoUrl: base.previewVideoUrl,
           files: item.files,
+          updateAvailable: false,
         });
       }
     } else {

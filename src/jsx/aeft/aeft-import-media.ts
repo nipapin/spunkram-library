@@ -90,6 +90,30 @@ export const importMedia = (
 
 const VOICEOVER_FOLDER = "Spunkram Voiceover";
 
+/** Resolve a path AE can actually open (Windows temp / mixed separators). */
+const resolveImportableFile = (filePath: string): File | null => {
+  if (!filePath) return null;
+  const candidates = [
+    String(filePath),
+    String(filePath).replace(/\\/g, "/"),
+    String(filePath).replace(/\//g, "\\"),
+  ];
+  // Deduplicate while preserving order
+  const seen: { [k: string]: boolean } = {};
+  for (let i = 0; i < candidates.length; i++) {
+    const p = candidates[i];
+    if (seen[p]) continue;
+    seen[p] = true;
+    try {
+      const file = new File(p);
+      if (file.exists) return file;
+    } catch (e) {
+      // try next candidate
+    }
+  }
+  return null;
+};
+
 /**
  * Import a generated voiceover audio file into the AE project and optionally
  * add it as a layer on the active composition at the playhead.
@@ -101,20 +125,31 @@ export const importVoiceoverAudio = (
 ): { ok: boolean; reason?: string } => {
   try {
     if (!filePath) return { ok: false, reason: "NO_FILE" };
-    // Normalize separators — AE File() is happier with forward slashes on Windows.
-    const normalized = String(filePath).replace(/\\/g, "/");
-    const file = new File(normalized);
-    if (!file.exists) {
+
+    const file = resolveImportableFile(filePath);
+    if (!file) {
       return { ok: false, reason: "SOURCE_MISSING" };
+    }
+
+    // Prefer fsName — AE import is more reliable with the host-native path.
+    let importPath = "";
+    try {
+      importPath = file.fsName;
+    } catch (eFs) {
+      importPath = file.absoluteURI || String(filePath);
     }
 
     const assetsFolder = getStockFolderByName(
       app.project.rootFolder,
       VOICEOVER_FOLDER,
     );
-    let importedItem = findStockItemByPath(assetsFolder, normalized);
+    let importedItem = findStockItemByPath(assetsFolder, importPath);
     if (!importedItem) {
-      const importOptions = new ImportOptions(file);
+      const importFile = new File(importPath);
+      if (!importFile.exists) {
+        return { ok: false, reason: "SOURCE_MISSING" };
+      }
+      const importOptions = new ImportOptions(importFile);
       try {
         if (importOptions.canImportAs(ImportAsType.FOOTAGE)) {
           importOptions.importAs = ImportAsType.FOOTAGE;
@@ -122,7 +157,13 @@ export const importVoiceoverAudio = (
       } catch (eOpts) {
         // older AE — ImportAsType may differ
       }
-      importedItem = app.project.importFile(importOptions);
+      try {
+        importedItem = app.project.importFile(importOptions);
+      } catch (eImport: any) {
+        const msg = String(eImport && eImport.message ? eImport.message : eImport);
+        // Surface AE's native message (e.g. "Could not open source file…")
+        return { ok: false, reason: msg || "IMPORT_FAILED" };
+      }
       if (importedItem) importedItem.parentFolder = assetsFolder;
     }
     if (!importedItem) return { ok: false, reason: "IMPORT_FAILED" };

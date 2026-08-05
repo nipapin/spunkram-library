@@ -278,13 +278,29 @@ export const ChaptersApp = ({
 
     setProgress({ stage: "rendering" });
     const effectivePresetPath = getBundledAudioPresetPath() || undefined;
-    const res = await sdkData(hostSdk().describe(effectivePresetPath));
+    const describeRaw = await sdkData(hostSdk().describe(effectivePresetPath));
     throwIfCancelled(signal);
-    if (!res || !res.source) {
+    const describeFail = describeRaw as {
+      ok?: false;
+      message?: string;
+      reason?: string;
+      source?: string;
+      dest?: string;
+      offset?: number;
+      type?: "composition" | "selected";
+    } | null;
+    if (!describeRaw || !describeFail?.source || !describeFail.dest) {
       throw new Error(
-        "Could not export audio from the composition. Check the work area / selected layers and try again.",
+        (typeof describeFail?.message === "string" && describeFail.message) ||
+          "Could not export audio from the composition. Check the work area / selected layers and try again.",
       );
     }
+    const res = {
+      source: describeFail.source,
+      dest: describeFail.dest,
+      offset: describeFail.offset ?? 0,
+      type: (describeFail.type ?? "composition") as "composition" | "selected",
+    };
 
     try {
       setProgress({ stage: "converting" });
