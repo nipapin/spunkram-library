@@ -687,6 +687,20 @@ export const findAppliedCaptions = () => {
     if (comp) {
       const direct = readCaptionsFrom(comp);
       if (direct) return direct;
+
+      // Typical layout: captions live in a nested precomp on the active timeline.
+      // After createCaptions the parent stays open in the viewer — walk its layers.
+      for (let i = 1; i <= comp.numLayers; i++) {
+        try {
+          const source = (comp.layers[i] as AVLayer).source;
+          if (source instanceof CompItem) {
+            const nested = readCaptionsFrom(source);
+            if (nested) return nested;
+          }
+        } catch (eLayer) {
+          // skip non-AV layers
+        }
+      }
     }
 
     if (comp) {

@@ -297,19 +297,29 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       if (applyValuesTimer.current) clearTimeout(applyValuesTimer.current);
       applyValuesTimer.current = setTimeout(() => {
         let sequenceId: string | undefined;
+        let compId: number | undefined;
         try {
           const raw = panelStore.getItem("aitools-cep-caption-meta");
           if (raw) {
             const meta = JSON.parse(raw) as {
-              hostRef?: { sequenceId?: string };
+              hostRef?: { sequenceId?: string; compId?: number };
             };
             sequenceId = meta.hostRef?.sequenceId;
+            if (typeof meta.hostRef?.compId === "number") {
+              compId = meta.hostRef.compId;
+            }
           }
         } catch {
           // ignore
         }
         const hostApi = MotionFlow.host === "AE" ? MotionFlow.AE : MotionFlow.PPRO;
-        hostApi.applyCaptionStyleValues({ props, sequenceId }).catch(() => {});
+        // AE needs captions-precomp compId (parent timeline is usually active).
+        // Premiere uses sequenceId / active sequence.
+        hostApi
+          .applyCaptionStyleValues({ props, sequenceId, compId })
+          .catch((err) => {
+            console.warn("[Styles] applyCaptionStyleValues failed", err);
+          });
       }, 120);
     },
     [definitions],
@@ -330,7 +340,16 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       setMogrtPath("");
       setAepPath("");
     }
-    void ensureDefinitionLoaded(target.styleId);
+    void ensureDefinitionLoaded(target.styleId).then((definition) => {
+      if (!definition?.clientControls?.length) return;
+      // Catalog cards may still have empty values until definition hydrates.
+      const values = Object.keys(target.values || {}).length
+        ? target.values
+        : defaultsFromDefinition(definition);
+      if (Object.keys(values).length) {
+        pushStyleValuesToHost(target.styleId, values);
+      }
+    });
   };
 
   const updateSelectedPreset = (patch: Partial<StylePreset>) => {
