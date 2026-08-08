@@ -82,7 +82,8 @@ const config: CEP_Config = {
     jsxBin: "off",
   },
   installModules: [],
-  copyAssets: ["js/lib/bin"],
+  // audio-export.epr + Motionflow.dll / PTX / Premiere bridge at extension root bin/
+  copyAssets: ["js/lib/bin", "bin"],
   copyZipAssets: [],
 };
 export default config;

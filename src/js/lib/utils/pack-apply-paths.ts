@@ -1,7 +1,9 @@
 /**
- * Resolve the on-disk source file for a pack item (before decrypt), so it can
- * be applied to the host project/timeline.
+ * Resolve the on-disk source file for a pack item, so it can be applied to the
+ * host project/timeline.
  * Port of Spunkram Beta `getItemFilepath` (`js/filesystem.js`) — PR + AE branches.
+ *
+ * Market packs ship plaintext `.prproj` / `.mogrt` only (no encrypted sidecars).
  */
 import { fs, path } from "../cep/node";
 import { MASKED } from "../config/masked";
@@ -13,18 +15,17 @@ export type HostAppId = "PPRO" | "AEFT";
 
 export type PackItemCType =
   | "PROJECT"
+  | "FULL_PROJECT"
   | "MOGRT"
   | "AUDIO"
   | "FOOTAGE"
-  | "FULL_PROJECT"
   | "UNSUPPORTED";
 
 export type ResolvedItemFile = {
   ctype: PackItemCType;
-  /** Absolute path to the source file on disk (still encoded if `encrypted` is set). */
+  /** Absolute path to the source file on disk. */
   file: string;
-  encrypted?: "BIN_AX" | "MG_ASSET";
-  /** Suggested cache file name once decoded. */
+  /** Suggested cache / display file name. */
   cacheName: string;
 };
 
@@ -50,7 +51,12 @@ export function resolvePackTemplatesPath(
       ? `${MASKED.name} Premiere Pro`
       : `${MASKED.name} After Effects`;
   const legacy = hostAppId === "PPRO" ? "Atom Premiere Pro" : "Atom After Effects";
-  const candidates = [path.join(dir, modern), path.join(dir, legacy)];
+  // Market composer zips ship templates under `Assets/` (not Spunkram Premiere Pro).
+  const candidates = [
+    path.join(dir, modern),
+    path.join(dir, legacy),
+    path.join(dir, "Assets"),
+  ];
   for (const candidate of candidates) {
     if (cepFsAvailable() && fs.existsSync(candidate)) return candidate;
   }
@@ -77,7 +83,7 @@ function withCustomFilesFolder(
 }
 
 /**
- * Resolve where an item's real source file lives on disk (before any decrypt).
+ * Resolve where an item's real source file lives on disk.
  * Returns `null` when the item type isn't supported for direct apply yet
  * (e.g. AE/PS text or FX presets, which use a separate `.ffx` engine).
  */
@@ -89,9 +95,6 @@ export function resolveItemSourceFile(
 ): ResolvedItemFile | null {
   const group = item.group;
   const customArgs = customArgsFor(item);
-  const filesProtection = settings?.inside_option_sets?.files_protection_method as
-    | string
-    | undefined;
 
   if (group.is_presets) {
     return { ctype: "UNSUPPORTED", file: "", cacheName: "" };
@@ -138,49 +141,39 @@ export function resolveItemSourceFile(
     return { ctype: "PROJECT", file, cacheName: path.basename(file) };
   }
 
-  // PPRO: item/pack decide PROJECT vs MOGRT vs FULL_PROJECT.
-  const sourceType =
+  // PPRO: FULL_PROJECT (.prproj via $._copyPasteSystem) or MOGRT.
+  // Legacy per-item PROJECT path is removed — treat "PROJECT" as FULL_PROJECT.
+  const rawSourceType =
     (customArgs.custom_source_type as string | undefined) ||
     settings?.inside_option_sets?.source_type ||
-    "PROJECT";
+    "FULL_PROJECT";
+  const sourceType =
+    rawSourceType === "PROJECT" ? "FULL_PROJECT" : rawSourceType;
 
   if (sourceType === "MOGRT") {
-    const encrypted =
-      settings?.inside_option_sets?.mogrt_files_protection_method === "MG_ASSET"
-        ? ("MG_ASSET" as const)
-        : undefined;
-    const ext = encrypted ? "mgasset" : "mogrt";
     const stem = (customArgs.multiuse_ref_mogrt as string) || item.name;
-    let file = path.join(groupDir, `${stem}.${ext}`);
-    file = withCustomFilesFolder(file, templatesDir, customArgs.custom_files_folder);
+    const file = withCustomFilesFolder(
+      path.join(groupDir, `${stem}.mogrt`),
+      templatesDir,
+      customArgs.custom_files_folder,
+    );
     return {
       ctype: "MOGRT",
       file,
-      encrypted,
       cacheName: `${sanitizeName(item.id)}.mogrt`,
     };
   }
 
-  const encrypted = filesProtection === "BIN_AX" ? ("BIN_AX" as const) : undefined;
-  const ext = encrypted ? "atomxasset" : "prproj";
-
-  if (sourceType === "FULL_PROJECT") {
-    const lastGroup = item.pathSegments[item.pathSegments.length - 1] || item.name;
-    const file = path.join(groupDir, `${lastGroup}.${ext}`);
-    return {
-      ctype: "FULL_PROJECT",
-      file,
-      encrypted,
-      cacheName: `${sanitizeName(item.id)}.prproj`,
-    };
-  }
-
-  let file = path.join(groupDir, `${item.name}.${ext}`);
-  file = withCustomFilesFolder(file, templatesDir, customArgs.custom_files_folder);
+  // FULL_PROJECT → `$._copyPasteSystem` / customChain on plaintext .prproj.
+  const lastGroup = item.pathSegments[item.pathSegments.length - 1] || item.name;
+  const file = withCustomFilesFolder(
+    path.join(groupDir, `${lastGroup}.prproj`),
+    templatesDir,
+    customArgs.custom_files_folder,
+  );
   return {
-    ctype: "PROJECT",
+    ctype: "FULL_PROJECT",
     file,
-    encrypted,
     cacheName: `${sanitizeName(item.id)}.prproj`,
   };
 }

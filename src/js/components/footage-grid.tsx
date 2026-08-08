@@ -302,7 +302,8 @@ const PreviewCard = memo(function PreviewCard({
     try {
       const result = await applyPackItemToHost(item, packFilePath, settings ?? null);
       if (result.ok) {
-        showStatus(`Applied "${item.name}"`, "success");
+        if (result.warning) showStatus(result.warning, "info", 8000);
+        else showStatus(`Applied "${item.name}"`, "success");
       } else {
         showStatus(result.message, "error", 6000);
       }

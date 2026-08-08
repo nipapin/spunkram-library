@@ -40,17 +40,18 @@ npm run release -- --no-upload # только git (если webhook уже за�
 Нужен `next-app/.env` с R2 (или `NEXT_APP_ROOT` если путь другой). После upload: `GET https://motionflow.pro/api/cep/update`.
 Beta видна только `basepackagehelp@gmail.com` (после логина в CEP). Промоут beta → stable: `npm run release:patch` (с `x.y.z-beta.N` снимет `-beta` → `x.y.z`).
 
-## Полезные ориентиры в исходном проекте
+## Полезные ориентиры в исходном проекте (историческое)
 
-| Тема | Файл |
+Beta reference only — CEP runtime no longer calls AtomX.
+
+| Тема | Файл (Spunkram Beta) |
 |---|---|
-| Market MAU (`get-atomx` / `mau?king=`) | `js\sync.js` → `fetchMauData` |
-| AtomX API bases | `js\headers.js` → `proxyServersURI` |
 | Market UI / Packages | `js\popups.js` |
-| Brand / king | `js\masked.js` |
+| Brand | `js\masked.js` |
 
-## AtomX MAU
+## Market / stock (Motionflow)
 
-- Prod: `https://api.get-atomx.com/atomx/v1/mau?king=SpunkramTemp`
-- Fallback: `https://atomx.plus/atomx/v1/mau?king=SpunkramTemp`
-- CEP-клиент: `src/js/lib/api/market-api.ts` → `fetchMau`
+- Market: `GET https://motionflow.pro/api/cep/market?host=AE|PR` + Bearer — see next-app `CEP_API.md` / [`BACKEND_CEP_API.md`](./BACKEND_CEP_API.md)
+- Download: `GET /api/cep/market/download?pack_id=` (Bearer, follow redirects)
+- Footages: `GET /api/stock/unsplash`, `/api/stock/pexels/videos`, `/api/stock/download`
+- AtomX MAU / `get-atomx` / `atomx.plus` — **removed** (Операция «Отречение» завершена для CEP runtime)

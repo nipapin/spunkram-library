@@ -1,9 +1,11 @@
 import { useCallback } from "react";
 import { fs, os, path } from "../../lib/cep/node";
 import { MotionFlow } from "@/sdk";
+import { downloadStockAsset } from "@/lib/api/stock-api";
 import { useFiltersContext } from "../context/FiltersContext";
 import { useProgressContext } from "../context/ProgressContext";
 import { incrementUsage } from "../utils/trial-usage";
+import type { MediaItem } from "../types";
 
 function requestDownloadPath(): Promise<string> {
   return Promise.resolve(os.tmpdir());
@@ -14,61 +16,52 @@ export function useImportMedia() {
   const { destination } = useFiltersContext();
 
   const importMedia = useCallback(
-    async (url: string, fileName: string, duration: number, downloadLocation: string) => {
+    async (item: MediaItem) => {
       try {
-        console.log("importMedia", url, fileName, duration, downloadLocation);
-        if (!url) return;
-
+        const provider =
+          item.provider || (item.type === "video" ? "pexels" : "unsplash");
         const downloadDir = await requestDownloadPath();
-        console.log("downloadDir", downloadDir);
         if (!downloadDir) return;
-        const filePath = path.join(downloadDir, fileName);
+        const filePath = path.join(downloadDir, item.name);
 
         setPending(true);
         setProgress(0);
 
         if (fs.existsSync(filePath)) {
-          const res = await MotionFlow.importMedia(filePath, destination, duration);
+          const res = await MotionFlow.importMedia(
+            filePath,
+            destination,
+            item.duration ?? 5,
+          );
           if (!res.ok) throw new Error(res.error);
           incrementUsage("gallery");
           setProgress(100);
           return;
         }
 
-        const response = await fetch(url, { cache: "no-store" });
-        const contentLength = Number(response.headers.get("content-length") || 0);
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error("ReadableStream not supported");
+        const downloaded = await downloadStockAsset({
+          provider,
+          kind: item.type === "video" ? "video" : "image",
+          id: item.id,
+          fileName: item.name,
+          destDir: downloadDir,
+          onProgress: ({ bytesReceived, totalBytes }) => {
+            if (totalBytes && totalBytes > 0) {
+              setProgress(Math.round((bytesReceived / totalBytes) * 100));
+            }
+          },
+        });
 
-        const chunks: Uint8Array[] = [];
-        let received = 0;
+        if (!downloaded.ok) throw new Error(downloaded.message);
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          received += value.length;
-          if (contentLength > 0) {
-            setProgress(Math.round((received / contentLength) * 100));
-          }
-        }
-
-        const merged = new Uint8Array(received);
-        let offset = 0;
-        for (const chunk of chunks) {
-          merged.set(chunk, offset);
-          offset += chunk.length;
-        }
-
-        const buffer = Buffer.from(merged);
-        fs.writeFileSync(filePath, buffer);
-        const res = await MotionFlow.importMedia(filePath, destination, duration);
+        const res = await MotionFlow.importMedia(
+          downloaded.filePath,
+          destination,
+          item.duration ?? 5,
+        );
         if (!res.ok) throw new Error(res.error);
         incrementUsage("gallery");
         setProgress(100);
-        if (downloadLocation) {
-          await trackDownload(downloadLocation);
-        }
       } catch (error) {
         console.error("import error", error);
       } finally {
@@ -78,20 +71,6 @@ export function useImportMedia() {
     },
     [setPending, setProgress, destination],
   );
-  const trackDownload = useCallback(async (url: string) => {
-    const response = await fetch('https://api.get-atomx.com/atomx/v1/track_download', {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify({
-        url,
-      }),
-    });
-    if (!response.ok) {
-      console.error("Failed to track download", response.statusText);
-    }
-    const data = await response.json();
-    return data;
-  }, []);
 
-  return { importMedia, trackDownload };
+  return { importMedia };
 }

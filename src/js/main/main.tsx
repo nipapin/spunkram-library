@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Lock, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Lock, ArrowUpRight, XCircle } from "lucide-react";
 import { PanelHeader } from "@/components/panel-header";
 import { PanelToolbar } from "@/components/panel-toolbar";
 import { PanelSidebar } from "@/components/panel-sidebar";
@@ -15,10 +15,17 @@ import { UpdateBanner } from "@/components/update-banner";
 import { FootagesPanel } from "@/footages";
 import { PanelUIProvider, usePanelUI } from "@/lib/panel-ui-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { NotificationsProvider } from "@/lib/notifications-context";
+import {
+  DownloadManagerProvider,
+  useDownloadManager,
+} from "@/lib/download-manager-context";
 import { fetchUpdateInfo, isRemoteNewer } from "@/api/update";
 import { fetchGenerationsStatus } from "@/api/credits";
 import { applyExtensionUpdate } from "@/utils/extension-update";
 import { ensureFfmpeg } from "@/utils/ffmpeg";
+import { purgeInstalledPacksNotInMarketCatalog, openMarketUrl } from "@/api/cep-market";
+import { currentHostAppId } from "@/lib/utils/apply-item";
 import { version as LOCAL_VERSION } from "../../shared/shared";
 import {
   loadInstalledPack,
@@ -172,14 +179,133 @@ function FreePlanBanner({ onOpenAccount }: { onOpenAccount: () => void }) {
   );
 }
 
-function StatusToast() {
-  const { statusMessage } = usePanelUI();
+function DownloadFloat() {
+  const { jobs, cancel, activeCount } = useDownloadManager();
+  const active = jobs.filter(
+    (j) =>
+      j.status === "queued" ||
+      j.status === "downloading" ||
+      j.status === "installing",
+  );
+  if (activeCount === 0 || active.length === 0) return null;
+  const top = active[0];
+  const pct = Math.max(0, Math.min(100, top.progress || (top.status === "queued" ? 0 : 8)));
+  const r = 16;
+  const c = 2 * Math.PI * r;
+  const offset = c - (pct / 100) * c;
+  const label =
+    top.status === "queued"
+      ? `Queued: ${top.pack.name}`
+      : top.status === "installing"
+        ? `Installing: ${top.pack.name}`
+        : `Downloading: ${top.pack.name}`;
+
+  return (
+    <button
+      type="button"
+      title={`${label} — click to cancel`}
+      aria-label={`${label}. Cancel`}
+      onClick={() => cancel(top.id)}
+      className="absolute bottom-3 right-3 z-40 flex size-11 items-center justify-center rounded-full border border-primary/40 bg-card/95 text-primary shadow-lg shadow-black/40 backdrop-blur transition hover:border-destructive/50 hover:text-destructive"
+    >
+      <svg className="absolute inset-0 size-full -rotate-90 p-0.5" viewBox="0 0 40 40" aria-hidden>
+        <circle
+          cx="20"
+          cy="20"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeOpacity="0.15"
+          strokeWidth="2.5"
+        />
+        <circle
+          cx="20"
+          cy="20"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          className="transition-[stroke-dashoffset] duration-300"
+        />
+      </svg>
+      {top.status === "queued" ? (
+        <Loader2 className="relative size-4 animate-spin" />
+      ) : (
+        <span className="relative text-[9px] font-bold tabular-nums text-foreground">
+          {Math.round(pct)}
+        </span>
+      )}
+      {active.length > 1 ? (
+        <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground">
+          {active.length}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function StatusToast({ onOpenMarket }: { onOpenMarket?: () => void }) {
+  const { statusMessage, clearStatus } = usePanelUI();
   if (!statusMessage) return null;
+
+  const card = statusMessage.card;
+  if (card) {
+    const img = card.imageUrl?.trim() || "";
+    return (
+      <div className="pointer-events-none absolute bottom-3 left-3 z-30 w-[min(100%-1.5rem,300px)]">
+        <div className="pointer-events-auto overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-card via-card to-primary/20 shadow-2xl shadow-black/50 ring-1 ring-inset ring-white/10">
+          <div className="flex gap-0">
+            <div className="flex min-w-0 flex-1 flex-col justify-between gap-3 p-3.5 pr-2">
+              <div className="min-w-0">
+                {card.subtitle ? (
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+                    {card.subtitle}
+                  </p>
+                ) : null}
+                <p className="mt-0.5 line-clamp-2 text-sm font-bold leading-snug text-foreground">
+                  {card.title}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="inline-flex w-fit items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => {
+                  if (card.detailsUrl) openMarketUrl(card.detailsUrl);
+                  else onOpenMarket?.();
+                  clearStatus();
+                }}
+              >
+                <span className="flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <ArrowUpRight className="size-3" strokeWidth={2.5} />
+                </span>
+                Details
+              </button>
+            </div>
+            <div className="relative w-[108px] shrink-0 self-stretch bg-black/30">
+              {img ? (
+                <img
+                  src={img}
+                  alt=""
+                  className="absolute inset-0 size-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/40 to-primary/10" />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-card/40" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-2.5 bottom-14 z-30 flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-[11px] font-medium shadow-lg backdrop-blur",
+        "pointer-events-none absolute bottom-14 left-1/2 z-30 flex w-[min(100%-1.25rem,340px)] -translate-x-1/2 items-center gap-1.5 rounded-xl border px-2.5 py-2 text-[11px] font-medium shadow-lg backdrop-blur",
         statusMessage.tone === "error"
           ? "border-destructive/40 bg-destructive/15 text-destructive-foreground"
           : statusMessage.tone === "success"
@@ -311,9 +437,12 @@ function EditingWorkspace({
 }
 
 function AppShell() {
-  const { signedIn, authReady, generationLimit, isFreeUser } = useAuth();
-  const { setShowFavoritesOnly } = usePanelUI();
-  const [nav, setNav] = useState("editing");
+  const { signedIn, authReady, generationLimit, isFreeUser, market, refreshMarket } =
+    useAuth();
+  const { setShowFavoritesOnly, showStatus } = usePanelUI();
+  const [nav, setNav] = useState(() =>
+    readInstallablePackages().length === 0 ? "market" : "editing",
+  );
   const [tutorialsOpen, setTutorialsOpen] = useState(false);
   const [tree, setTree] = useState<PackTreeNode[]>([]);
   const [category, setCategory] = useState("");
@@ -358,7 +487,7 @@ function AppShell() {
         const message = err instanceof Error ? err.message : String(err);
         setPackError(packInitErrorMessage(message));
       });
-  }, []);
+  }, [showStatus]);
 
   useEffect(() => {
     if (!packFilePath || !category) return;
@@ -370,6 +499,11 @@ function AppShell() {
     if (installed.length === 0) {
       setPackError("No installed pack found");
       setPackFilePath("");
+      setTree([]);
+      setPackSettings(null);
+      setAssetsPath("");
+      setCategory("");
+      setNav("market");
       return;
     }
 
@@ -387,6 +521,25 @@ function AppShell() {
     reloadPackList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load market once signed in so orphan local packs can be purged even
+  // before the user opens the Market tab.
+  useEffect(() => {
+    if (!authReady || !signedIn) return;
+    void refreshMarket();
+  }, [authReady, signedIn, refreshMarket]);
+
+  // Drop installs that are no longer listed in the market API for this host.
+  useEffect(() => {
+    if (!market) return;
+    const host = currentHostAppId();
+    const hostType = host === "PPRO" ? "PR" : host === "AEFT" ? "AE" : null;
+    const removed = purgeInstalledPacksNotInMarketCatalog(market.Packages, {
+      host: hostType,
+    });
+    if (removed.length === 0) return;
+    reloadPackList();
+  }, [market, reloadPackList]);
 
   // Prefetch ffmpeg into userdata on panel start (not on first Captions use).
   useEffect(() => {
@@ -575,6 +728,8 @@ function AppShell() {
         />
       ) : null}
 
+      <DownloadFloat />
+
       {settingsOpen || nav === "settings" ? (
         <section className="min-h-0 flex-1 overflow-hidden">
           <SettingsPanel
@@ -597,7 +752,7 @@ function AppShell() {
             activePackPath={packFilePath}
             onSelectPack={(meta) => {
               applyPack(meta);
-              setNav("editing");
+              // Stay on current nav so background "Use when ready" doesn't yank the user.
             }}
           />
         </section>
@@ -626,7 +781,12 @@ function AppShell() {
         />
       )}
 
-      <StatusToast />
+      <StatusToast
+        onOpenMarket={() => {
+          setSettingsOpen(false);
+          setNav("market");
+        }}
+      />
     </div>
   );
 }
@@ -635,7 +795,11 @@ export const App = () => {
   return (
     <AuthProvider>
       <PanelUIProvider>
-        <AppShell />
+        <NotificationsProvider>
+          <DownloadManagerProvider>
+            <AppShell />
+          </DownloadManagerProvider>
+        </NotificationsProvider>
       </PanelUIProvider>
     </AuthProvider>
   );

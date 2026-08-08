@@ -56,16 +56,18 @@ export type PackSettings = {
   main: PackSettingsMain;
   inside_option_sets?: {
     use_webm_preview?: boolean | "mp4" | "webm";
-    /** PR: default item source — a real .prproj sequence, a .mogrt, or a whole external project. */
-    source_type?: "PROJECT" | "MOGRT" | "FULL_PROJECT" | string;
-    files_protection_method?: "BIN_AX" | string;
-    mogrt_files_protection_method?: "MG_ASSET" | string;
+    /** PR: FULL_PROJECT (.prproj + copyPaste) or MOGRT. Legacy "PROJECT" is treated as FULL_PROJECT. */
+    source_type?: "FULL_PROJECT" | "MOGRT" | "PROJECT" | string;
     header_color_hex?: string;
     [key: string]: unknown;
   };
   stylization?: Record<string, unknown>;
 };
 
+/**
+ * Parsed pack body. On disk, Market JSON may use `content` instead of
+ * `structure`; loaders normalize to `structure` before returning.
+ */
 export type PackContent = {
   settings: PackSettings;
   structure: PackStructureMap;

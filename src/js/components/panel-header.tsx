@@ -1,7 +1,9 @@
-import { Scissors, Video, Sparkles, ShoppingBag, User } from "lucide-react";
+import { Scissors, Video, Sparkles, ShoppingBag, User, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
 import { useAuth } from "@/lib/auth-context";
+import { useNotifications } from "@/lib/notifications-context";
+import { useDownloadManager } from "@/lib/download-manager-context";
 
 const NAV_ITEMS = [
   { id: "editing", label: "Editing", icon: Scissors },
@@ -24,6 +26,8 @@ export function PanelHeader({
   onOpenSettings: () => void;
 }) {
   const { signedIn, subscription } = useAuth();
+  const { unreadMarketCount, clearUnread } = useNotifications();
+  const { activeCount } = useDownloadManager();
 
   return (
     <header className="flex items-center gap-2 border-b border-white/5 px-2.5 py-2.5">
@@ -64,16 +68,28 @@ export function PanelHeader({
 
       <button
         type="button"
-        onClick={() => onSelect("market")}
+        onClick={() => {
+          clearUnread();
+          onSelect("market");
+        }}
         aria-pressed={active === "market"}
         className={cn(
-          "flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors min-[490px]:px-3",
+          "relative flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors min-[490px]:px-3",
           ACCENT_PILL,
         )}
         aria-label="Market"
       >
-        <ShoppingBag className="size-3.5" strokeWidth={2.25} />
+        {activeCount > 0 ? (
+          <Loader2 className="size-3.5 animate-spin" strokeWidth={2.25} />
+        ) : (
+          <ShoppingBag className="size-3.5" strokeWidth={2.25} />
+        )}
         <span className="hidden whitespace-nowrap min-[490px]:inline">Market</span>
+        {unreadMarketCount > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground ring-2 ring-background">
+            {unreadMarketCount > 9 ? "9+" : unreadMarketCount}
+          </span>
+        )}
       </button>
 
       <button

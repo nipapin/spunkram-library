@@ -52,24 +52,7 @@ export default function Gallery() {
   }, [handleObserver]);
 
   const handleImport = (item: MediaItem) => {
-    let url: string | undefined;
-    let duration = 5;
-    if (item.type === "video" && item.videoFiles?.length) {
-      url = [...item.videoFiles].sort(
-        (a, b) => b.width * b.height - a.width * a.height,
-      )[0].link;
-      duration = item.duration ?? 0;
-    } else {
-      url = item.imageUrls?.full ?? item.downloadUrl;
-    }
-    if (url) {
-      importMedia(
-        url,
-        item.name,
-        duration,
-        item.links?.download_location ?? "",
-      );
-    }
+    void importMedia(item);
   };
 
   if (media.length === 0 && !loading) return null;

@@ -1,3 +1,2 @@
-FULL_PROJECT native helpers live in Beta bin\ (Motionflow.dll, pprsequencer.exe, PTX seeds).
-Not copied into this repo by default — see docs/sdk/INVENTORY.md section 3.8.
-Source: C:\Users\nipap\AppData\Roaming\Adobe\CEP\extensions\Spunkram Beta\bin
+FULL_PROJECT apply uses native helpers in src/bin (copied to extension root bin/).
+See src/bin/README.txt.

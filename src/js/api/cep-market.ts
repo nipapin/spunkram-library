@@ -1,18 +1,29 @@
 /**
- * CEP market catalog.
+ * CEP market catalog — Motionflow only.
  *
- * Primary catalog: get-atomx `GET /atomx/v1/mau?king=` (all author packs).
- * Optional entitlements merge: Motionflow `GET /api/cep/market?host=`.
- *
- * @see docs/PATHS.md — Spunkram Beta `js/sync.js` → `fetchMauData`
+ * `GET /api/cep/market?host=` with Bearer; install via authenticated download.
+ * @see next-app/CEP_API.md
  */
 import { apiUrl } from "./config";
 import { cepHttpRequest } from "@/lib/api/cep-http";
-import { fetchMau, type MarketPackage } from "@/lib/api/market-api";
-import { readMotionflowAuth } from "@/lib/api/preferences";
+import {
+  getSessionToken,
+  handleUnauthorized,
+  sessionAuthHeaders,
+} from "@/lib/api/session";
 import { openLinkInBrowser } from "@/lib/utils/bolt";
+import { fs, os, path } from "@/lib/cep/node";
+import { resolvePreferencesPath } from "@/lib/api/preferences";
+import { downloadToFile } from "@/utils/download-file";
+import { installPackFromFile, uninstallPack } from "@/lib/utils/pack-install";
+import { readInstallablePackages } from "@/lib/utils/pack";
+import type { InstalledPackMeta } from "@/lib/utils/pack-types";
+import * as panelStore from "@/lib/userdata-store";
+import { version as EXTENSION_VERSION } from "../../shared/shared";
 
 export const CEP_MARKET_ENDPOINT = "/api/cep/market";
+
+const ACTIVE_PACK_STORAGE_KEY = "spunkram.activePackPath";
 
 const SITE_ORIGIN = import.meta.env.DEV
   ? "http://localhost:3000"
@@ -36,6 +47,9 @@ export type CepMarketPackage = {
   action?: CepMarketAction;
   install_url?: string | null;
   buy_url?: string | null;
+  details_url?: string | null;
+  min_extension_version?: string | null;
+  min_host_version?: string | null;
 };
 
 export type CepMarketPayload = {
@@ -50,79 +64,133 @@ const MOCK_ENABLED =
     ? __CEP_API_MOCKS__
     : Boolean(import.meta.env.DEV);
 
-function authHeaders(token?: string): Record<string, string> {
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-  };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  return headers;
+function authHeaders(): Record<string, string> {
+  return sessionAuthHeaders();
 }
 
-function packKey(name: string, primary: string): string {
-  return `${primary.toUpperCase()}::${name.trim().toLowerCase()}`;
+function defaultSubscribeUrl(): string {
+  return `${SITE_ORIGIN}/pricing?client=spunkram-cep`;
 }
 
-function defaultBuyUrl(): string {
-  return `${SITE_ORIGIN}/spunkram#pricing`;
-}
-
-function mapMauPackage(
-  p: MarketPackage,
-  entitlement?: CepMarketPackage,
-): CepMarketPackage {
-  const price =
-    typeof p.custom_price === "number" ? p.custom_price : Number(p.custom_price) || 0;
-  const free = price <= 0;
-  const owned = Boolean(entitlement?.owned);
-  const covered = Boolean(entitlement?.covered_by_subscription);
-  let action: CepMarketAction =
-    entitlement?.action ||
-    (owned ? "install" : free ? "get_free" : "buy");
-
-  return {
-    id: p.id,
-    name: p.name,
-    pack_name: p.pack_name || p.name,
-    author: p.author,
-    version: p.version,
-    primary_type: p.primary_type,
-    image_url: p.image_url,
-    custom_price: price,
-    discount: p.discount,
-    video_id: p.video_id != null ? String(p.video_id) : undefined,
-    owned,
-    covered_by_subscription: covered || free,
-    action,
-    install_url: entitlement?.install_url ?? null,
-    buy_url:
-      entitlement?.buy_url ||
-      (typeof p.extra_href === "string" && p.extra_href.trim()
-        ? p.extra_href.trim()
-        : defaultBuyUrl()),
-  };
-}
-
-async function fetchMotionflowEntitlements(
-  host: "AE" | "PR",
-): Promise<CepMarketPayload | null> {
-  const token = readMotionflowAuth().token;
-  if (!token) return null;
-  const url = apiUrl(`${CEP_MARKET_ENDPOINT}?host=${encodeURIComponent(host)}`);
-  const result = await cepHttpRequest(url, {
-    method: "GET",
-    headers: authHeaders(token),
-  });
-  if (!result.ok) return null;
-  try {
-    const data = JSON.parse(result.text) as CepMarketPayload;
-    return {
-      subscription_active: Boolean(data.subscription_active),
-      subscribe_url: data.subscribe_url,
-      Packages: Array.isArray(data.Packages) ? data.Packages : [],
-    };
-  } catch {
-    return null;
+/** Compare dotted versions; returns negative if a < b, 0 if equal, positive if a > b. */
+export function compareDottedVersions(a: string, b: string): number {
+  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d;
   }
+  return 0;
+}
+
+export function checkPackVersionGates(
+  item: CepMarketPackage,
+  opts?: { extensionVersion?: string; hostVersion?: string | null },
+): { ok: true } | { ok: false; message: string } {
+  const extVer = opts?.extensionVersion ?? EXTENSION_VERSION;
+  if (
+    item.min_extension_version &&
+    compareDottedVersions(extVer, item.min_extension_version) < 0
+  ) {
+    return {
+      ok: false,
+      message: `This pack requires panel v${item.min_extension_version} or newer (you have ${extVer}).`,
+    };
+  }
+  const hostVer = opts?.hostVersion;
+  if (
+    item.min_host_version &&
+    hostVer &&
+    compareDottedVersions(hostVer, item.min_host_version) < 0
+  ) {
+    return {
+      ok: false,
+      message: `This pack requires host v${item.min_host_version} or newer (you have ${hostVer}).`,
+    };
+  }
+  return { ok: true };
+}
+
+function normalizePackage(raw: CepMarketPackage): CepMarketPackage {
+  const price =
+    typeof raw.custom_price === "number"
+      ? raw.custom_price
+      : Number(raw.custom_price) || 0;
+  return {
+    ...raw,
+    id: raw.id,
+    name: raw.name,
+    pack_name: raw.pack_name || raw.name,
+    primary_type: raw.primary_type,
+    image_url: raw.image_url || "",
+    custom_price: price,
+    owned: Boolean(raw.owned),
+    covered_by_subscription: Boolean(raw.covered_by_subscription),
+    action: raw.action,
+    install_url: raw.install_url ?? null,
+    buy_url: raw.buy_url ?? null,
+    details_url: raw.details_url ?? null,
+    min_extension_version: raw.min_extension_version ?? null,
+    min_host_version: raw.min_host_version ?? null,
+  };
+}
+
+/** Match a local install to a market catalog row (name + host). */
+export function installedPackMatchesMarketItem(
+  meta: InstalledPackMeta,
+  item: CepMarketPackage,
+): boolean {
+  const metaApp = (meta.appID || meta.load || "").toUpperCase();
+  const itemApp = (item.primary_type || "").toUpperCase();
+  if (metaApp && itemApp && metaApp !== itemApp) return false;
+
+  const installedName = (meta.name || "").trim().toLowerCase();
+  if (!installedName) return false;
+  const names = [item.pack_name, item.name]
+    .map((n) => (n || "").trim().toLowerCase())
+    .filter(Boolean);
+  return names.includes(installedName);
+}
+
+/**
+ * Uninstall local packs for the current host that are not listed in the
+ * market catalog (removed from API / never published). Leaves other-host
+ * installs alone when `host` is set.
+ */
+export function purgeInstalledPacksNotInMarketCatalog(
+  catalog: CepMarketPackage[] | null | undefined,
+  opts?: { host?: string | null },
+): InstalledPackMeta[] {
+  const catalogList = Array.isArray(catalog) ? catalog : [];
+  const host = (opts?.host || "").toUpperCase() || null;
+  const installed = readInstallablePackages();
+  const removed: InstalledPackMeta[] = [];
+
+  for (const meta of installed) {
+    const metaApp = (meta.appID || meta.load || "").toUpperCase();
+    if (host && metaApp && metaApp !== host) continue;
+
+    const listed = catalogList.some((item) =>
+      installedPackMatchesMarketItem(meta, item),
+    );
+    if (listed) continue;
+
+    if (uninstallPack(meta)) removed.push(meta);
+  }
+
+  if (removed.length > 0) {
+    try {
+      const active = panelStore.getItem(ACTIVE_PACK_STORAGE_KEY);
+      if (active && removed.some((m) => m.path === active)) {
+        panelStore.removeItem(ACTIVE_PACK_STORAGE_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return removed;
 }
 
 function mockPackages(host: "AE" | "PR"): CepMarketPackage[] {
@@ -141,85 +209,269 @@ function mockPackages(host: "AE" | "PR"): CepMarketPackage[] {
       action: "get_free",
       install_url: null,
       buy_url: null,
+      details_url: null,
+      min_extension_version: null,
+      min_host_version: null,
     },
     {
       id: "mock-buy",
       name: "Spunkram Library",
-      pack_name: "Spunkram Library",
+      pack_name: "spunkram-library",
       author: "Spunkram",
-      version: "4.0",
+      version: "4.0.0",
       primary_type: host,
       image_url: "https://placehold.co/640x360/0f3460/eee?text=Library",
       custom_price: host === "AE" ? 75 : 69,
       owned: false,
-      covered_by_subscription: true,
+      covered_by_subscription: false,
       action: "buy",
       install_url: null,
-      buy_url: defaultBuyUrl(),
+      buy_url: defaultSubscribeUrl(),
+      details_url: null,
+      min_extension_version: null,
+      min_host_version: null,
     },
   ];
 }
 
 /**
- * Load all author packs from get-atomx MAU, optionally merge Motionflow owned/action urls.
+ * Load author packs from Motionflow `GET /api/cep/market?host=`.
  */
 export async function fetchCepMarket(
   host: "AE" | "PR",
 ): Promise<{ data?: CepMarketPayload; error?: string }> {
-  let mau = await fetchMau(0);
-  if (mau.error) {
-    mau = await fetchMau(1);
-  }
-
-  const entitlements = await fetchMotionflowEntitlements(host);
-  const entitlementByKey = new Map<string, CepMarketPackage>();
-  for (const p of entitlements?.Packages ?? []) {
-    entitlementByKey.set(packKey(p.name, String(p.primary_type)), p);
-  }
-
-  if (mau.data?.market?.Packages && Array.isArray(mau.data.market.Packages)) {
-    const packages = mau.data.market.Packages.map((p) =>
-      mapMauPackage(
-        p,
-        entitlementByKey.get(packKey(p.name, String(p.primary_type))),
-      ),
-    );
-
-    // If subscribed on Motionflow, treat unpaid packs as installable via covered flag.
-    if (entitlements?.subscription_active) {
-      for (const p of packages) {
-        if (p.action === "buy") {
-          p.action = "install";
-          p.covered_by_subscription = true;
-        }
-      }
+  const token = getSessionToken();
+  if (!token) {
+    if (MOCK_ENABLED) {
+      return {
+        data: {
+          subscription_active: false,
+          subscribe_url: defaultSubscribeUrl(),
+          Packages: mockPackages(host),
+        },
+      };
     }
+    return { error: "UNAUTHORIZED" };
+  }
 
+  const url = apiUrl(`${CEP_MARKET_ENDPOINT}?host=${encodeURIComponent(host)}`);
+  const result = await cepHttpRequest(url, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+
+  if (!result.ok) {
+    if (result.status === 401) {
+      handleUnauthorized();
+      return { error: "UNAUTHORIZED" };
+    }
+    try {
+      const errBody = JSON.parse(result.text) as { error?: string; message?: string };
+      return { error: errBody.error || errBody.message || "NO_SUCCESS_LOAD" };
+    } catch {
+      return { error: result.error || "NO_SUCCESS_LOAD" };
+    }
+  }
+
+  try {
+    const data = JSON.parse(result.text) as CepMarketPayload;
+    const packages = Array.isArray(data.Packages)
+      ? data.Packages.map(normalizePackage)
+      : [];
     return {
       data: {
-        subscription_active: Boolean(entitlements?.subscription_active),
-        subscribe_url: entitlements?.subscribe_url || defaultBuyUrl(),
+        subscription_active: Boolean(data.subscription_active),
+        subscribe_url: data.subscribe_url || defaultSubscribeUrl(),
         Packages: packages,
       },
     };
+  } catch {
+    return { error: "NO_SUCCESS_LOAD" };
+  }
+}
+
+export type DownloadAndInstallResult =
+  | { ok: true; meta: InstalledPackMeta }
+  | {
+      ok: false;
+      code?: string;
+      message: string;
+      buy_url?: string | null;
+      subscribe_url?: string | null;
+      /** Zip kept on disk so install can be retried without re-download. */
+      cachedZipPath?: string;
+    };
+
+function resolvePackCacheDir(): string {
+  const prefPath = resolvePreferencesPath();
+  const base = prefPath
+    ? path.dirname(prefPath)
+    : path.join(os.tmpdir(), "spunkram-library");
+  const dir = path.join(base, "pack-cache");
+  if (typeof fs?.existsSync === "function" && !fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+/** Stable zip path per market pack id — overwritten on update/re-download. */
+export function resolveCachedPackZipPath(item: CepMarketPackage): string {
+  const safeId = String(item.id).replace(/[\\/:*?"<>|]/g, "_");
+  return path.join(resolvePackCacheDir(), `${safeId}.zip`);
+}
+
+export function hasCachedPackZip(item: CepMarketPackage): boolean {
+  try {
+    const p = resolveCachedPackZipPath(item);
+    if (typeof fs?.existsSync !== "function" || !fs.existsSync(p)) return false;
+    // Ignore empty / truncated leftovers.
+    if (typeof fs.statSync === "function") {
+      const st = fs.statSync(p);
+      if (!st || !st.size || st.size < 64) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeCachedPackZip(zipPath: string): void {
+  try {
+    if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function installFromZipPath(
+  zipPath: string,
+): Promise<DownloadAndInstallResult> {
+  const installed = await installPackFromFile(zipPath);
+  if (!installed.ok) {
+    return { ok: false, message: installed.message, cachedZipPath: zipPath };
+  }
+  removeCachedPackZip(zipPath);
+  return { ok: true, meta: installed.meta };
+}
+
+/**
+ * Install from a previously downloaded zip (no network).
+ * Does not fall back to download — caller decides whether to re-fetch.
+ */
+export async function installCachedPack(
+  item: CepMarketPackage,
+): Promise<DownloadAndInstallResult> {
+  const zipPath = resolveCachedPackZipPath(item);
+  if (!hasCachedPackZip(item)) {
+    return { ok: false, code: "NO_CACHE", message: "Cached pack zip not found." };
+  }
+  return installFromZipPath(zipPath);
+}
+
+/**
+ * Authenticated pack download: Bearer on first hop, follow redirects to CDN/R2
+ * without re-sending Authorization, then install from the zip.
+ *
+ * The zip is written to a stable pack-cache path and kept until install
+ * succeeds (or overwritten on the next download of the same pack).
+ */
+export async function downloadAndInstallPack(
+  item: CepMarketPackage,
+  opts?: {
+    subscribeUrl?: string | null;
+    onProgress?: (p: { bytesReceived: number; totalBytes: number | null }) => void;
+    /** When true and a cached zip exists, skip download and install from cache. */
+    preferCache?: boolean;
+    onPhase?: (phase: "downloading" | "installing") => void;
+    signal?: AbortSignal;
+  },
+): Promise<DownloadAndInstallResult> {
+  const gate = checkPackVersionGates(item);
+  if (!gate.ok) return { ok: false, message: gate.message };
+
+  const destPath = resolveCachedPackZipPath(item);
+
+  if (opts?.preferCache && hasCachedPackZip(item)) {
+    opts.onPhase?.("installing");
+    return installFromZipPath(destPath);
   }
 
-  // Fallback: Motionflow-only catalog (incomplete vs MAU).
-  if (entitlements) {
-    return { data: entitlements };
+  const token = getSessionToken();
+  if (!token) {
+    return { ok: false, code: "UNAUTHORIZED", message: "Sign in to install packs." };
   }
 
-  if (MOCK_ENABLED) {
-    return {
-      data: {
-        subscription_active: false,
-        subscribe_url: defaultBuyUrl(),
-        Packages: mockPackages(host),
+  const installUrl =
+    item.install_url ||
+    apiUrl(`/api/cep/market/download?pack_id=${encodeURIComponent(String(item.id))}`);
+
+  opts?.onPhase?.("downloading");
+
+  try {
+    await downloadToFile(installUrl, destPath, {
+      timeoutMs: 15 * 60 * 1000,
+      headers: sessionAuthHeaders(),
+      stripAuthOnRedirect: true,
+      onProgress: opts?.onProgress,
+      signal: opts?.signal,
+      onErrorBody: (status, body) => {
+        if (status === 401) {
+          handleUnauthorized();
+          throw Object.assign(new Error("Session expired — please sign in again."), {
+            code: "UNAUTHORIZED",
+            status,
+          });
+        }
+        try {
+          const parsed = JSON.parse(body) as { error?: string; message?: string };
+          const code = parsed.error || `HTTP_${status}`;
+          const message = parsed.message || code;
+          throw Object.assign(new Error(message), { code, status });
+        } catch (e) {
+          if (e && typeof e === "object" && "code" in e) throw e;
+          throw Object.assign(new Error(`Download failed (${status})`), {
+            code: `HTTP_${status}`,
+            status,
+          });
+        }
       },
+    });
+  } catch (e) {
+    const code =
+      e && typeof e === "object" && "code" in e
+        ? String((e as { code: unknown }).code)
+        : undefined;
+    const message = e instanceof Error ? e.message : String(e);
+    if (code === "ABORTED" || opts?.signal?.aborted) {
+      return { ok: false, code: "ABORTED", message: "Download cancelled" };
+    }
+    if (code === "NOT_OWNED" || code === "SUBSCRIPTION_REQUIRED") {
+      return {
+        ok: false,
+        code,
+        message,
+        buy_url: item.buy_url,
+        subscribe_url: opts?.subscribeUrl ?? defaultSubscribeUrl(),
+      };
+    }
+    if (code === "UNAUTHORIZED" || message.includes("(401)")) {
+      handleUnauthorized();
+      return { ok: false, code: "UNAUTHORIZED", message: "Session expired — please sign in again." };
+    }
+    return {
+      ok: false,
+      code,
+      message,
+      cachedZipPath: hasCachedPackZip(item) ? destPath : undefined,
     };
   }
 
-  return { error: mau.error || "NO_SUCCESS_LOAD" };
+  if (opts?.signal?.aborted) {
+    return { ok: false, code: "ABORTED", message: "Download cancelled" };
+  }
+
+  opts?.onPhase?.("installing");
+  return installFromZipPath(destPath);
 }
 
 export function openMarketUrl(url: string | null | undefined): void {

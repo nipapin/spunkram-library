@@ -21,12 +21,8 @@ interface QualityMenuProps {
   item: MediaItem;
   anchorEl: HTMLElement | null;
   onClose: (e?: React.MouseEvent | KeyboardEvent) => void;
-  onImport: (
-    url: string,
-    fileName: string,
-    duration: number,
-    downloadLocation: string,
-  ) => void;
+  /** Stock download goes through Motionflow proxy (provider + id). */
+  onImport: (item: MediaItem) => void;
 }
 
 export default function QualityMenu({
@@ -37,25 +33,19 @@ export default function QualityMenu({
 }: QualityMenuProps) {
   const open = Boolean(anchorEl);
 
-  const handleImageQualitySelect = (quality: ImageQuality, url: string) => {
+  const handleImageQualitySelect = (quality: ImageQuality) => {
     const ext = getExtension(item.name, ".jpg");
-    onImport(
-      url,
-      `${item.id}_${quality}${ext}`,
-      5,
-      item.links?.download_location ?? "",
-    );
+    // Proxy always returns the licensed full asset; label is informational.
+    onImport({ ...item, name: `${item.id}_${quality}${ext}` });
     onClose();
   };
 
   const handleVideoQualitySelect = (file: VideoFile) => {
     const ext = getExtension(item.name, ".mp4");
-    onImport(
-      file.link,
-      `${item.id}_${file.width}x${file.height}${ext}`,
-      item.duration ?? 0,
-      item.links?.download_location ?? "",
-    );
+    onImport({
+      ...item,
+      name: `${item.id}_${file.width}x${file.height}${ext}`,
+    });
     onClose();
   };
 
@@ -70,16 +60,22 @@ export default function QualityMenu({
 
 function renderImageOptions(
   item: MediaItem,
-  onSelect: (quality: ImageQuality, url: string) => void,
+  onSelect: (quality: ImageQuality) => void,
 ) {
-  if (!item.imageUrls) return null;
+  if (!item.imageUrls) {
+    return (
+      <GlassMenuItem onClick={() => onSelect("full")}>
+        <span>Import</span>
+      </GlassMenuItem>
+    );
+  }
   const urls = item.imageUrls as ImageUrls;
   return imageQualityOptions.map((quality) => {
     const width = getWidthFromQuality(urls[quality]) || item.width;
     const ratio = width / item.width;
     const height = Math.round(item.height * ratio);
     return (
-      <GlassMenuItem key={quality} onClick={() => onSelect(quality, urls[quality])}>
+      <GlassMenuItem key={quality} onClick={() => onSelect(quality)}>
         <span>{imageQualityLabels[quality]}</span>
         <span className="ml-1.5 text-muted-foreground">
           [{width}x{height}]
@@ -93,14 +89,28 @@ function renderVideoOptions(
   item: MediaItem,
   onSelect: (file: VideoFile) => void,
 ) {
-  if (!item.videoFiles) return null;
+  if (!item.videoFiles?.length) {
+    return (
+      <GlassMenuItem onClick={() => onSelect({
+        id: 0,
+        width: item.width,
+        height: item.height,
+        fps: 0,
+        link: item.downloadUrl || "",
+        size: 0,
+      })}>
+        <span>Import</span>
+      </GlassMenuItem>
+    );
+  }
   return [...item.videoFiles].reverse().map((file) => (
-    <GlassMenuItem key={file.id} onClick={() => onSelect(file)}>
+    <GlassMenuItem key={file.id || `${file.width}x${file.height}`} onClick={() => onSelect(file)}>
       <span>
         {file.width}x{file.height}
       </span>
       <span className="ml-1.5 text-muted-foreground">
-        {file.fps}fps · {formatFileSize(file.size)}
+        {file.fps ? `${file.fps}fps · ` : ""}
+        {formatFileSize(file.size)}
       </span>
     </GlassMenuItem>
   ));

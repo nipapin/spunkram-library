@@ -42,6 +42,9 @@ export {
 } from "./motionflow-auth";
 export {
   fetchCepMarket,
+  downloadAndInstallPack,
+  installCachedPack,
+  hasCachedPackZip,
   openMarketUrl,
   CEP_MARKET_ENDPOINT,
   type CepMarketPackage,

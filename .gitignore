@@ -7,8 +7,15 @@ dist
 yarn-error.log
 .media
 
-# Heavy runtime binaries — downloaded from CDN after install (see utils/ffmpeg.ts)
-src/js/lib/bin/win/*
+# Accidental duplicate of src/bin (packaging copies from src/bin → extension bin/)
+/bin/
+
+# Heavy runtime binaries — ffmpeg downloaded after install (see utils/ffmpeg.ts).
+# Motionflow.dll / Premiere bridge plugins are committed (required for FULL_PROJECT apply).
+src/js/lib/bin/win/ffmpeg*
+src/js/lib/bin/mac/ffmpeg*
+src/js/lib/bin/mac/*.zip
 !src/js/lib/bin/win/.gitkeep
-src/js/lib/bin/mac/*
 !src/js/lib/bin/mac/.gitkeep
+!src/js/lib/bin/win/Motionflow*
+!src/js/lib/bin/mac/Motionflow*

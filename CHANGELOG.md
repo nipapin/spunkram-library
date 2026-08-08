@@ -7,12 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-08
+
+### Fixed
+
+- Market pack install: accept composer `contents` tree, stream large zips, copy `Assets`/`Previews` bundles
+- FULL_PROJECT apply uses plaintext `.prproj` (removed `.atomxasset` / `.mgasset`); `$._copyPasteSystem` / customChain unchanged
+- Ship `Motionflow.dll` + Premiere bridge natives in extension `bin/win` on every build
+
 ### Added
 
-- **MotionFlow SDK** (`src/js/sdk`): UI calls `MotionFlow.AE.*` / `MotionFlow.PPRO.*` instead of raw `evalTS`
-- Beta ExtendScript port under `src/jsx/legacy/` (engine, composers, presets, undo, stock, …)
-- Host methods: `createComp`, `createText`, `addResponsiveBackground`, `addMogrt`, `importSequence`, undo groups
-- Docs: `docs/MOTIONFLOW_SDK.md`, `docs/sdk/INVENTORY.md`, `PARITY.md`, `AUTHOR_COOKBOOK.md`
+- Download manager with pack-cache retry; install logging for pack failures
 
 ## [0.4.4-beta.3] - 2026-08-02
 

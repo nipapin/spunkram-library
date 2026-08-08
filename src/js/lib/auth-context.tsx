@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from "react";
 import { authErrorMessage, type AuthDevice } from "@/lib/api/market-api";
+import { onSessionExpired } from "@/lib/api/session";
+import { cepWs } from "@/lib/cep-ws";
 import {
   listAccountSessions,
   readMotionflowAuth,
@@ -207,6 +209,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const clearSessionLocal = useCallback(() => {
+    try {
+      cepWs.stop();
+    } catch {
+      /* ignore */
+    }
     setSubscriptionUrls({});
     setAuth({});
     writeMotionflowAuth({});
@@ -216,6 +223,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMarketLoaded(false);
     refreshSavedAccounts();
   }, [refreshSavedAccounts]);
+
+  useEffect(() => {
+    return onSessionExpired(() => {
+      clearSessionLocal();
+    });
+  }, [clearSessionLocal]);
 
   const refreshProfile = useCallback(
     async (token: string, opts?: { removeAccountIdOnUnauthorized?: string }) => {

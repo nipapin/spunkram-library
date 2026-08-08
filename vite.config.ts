@@ -17,6 +17,17 @@ const src = path.resolve(__dirname, "src");
 const root = path.resolve(src, "js");
 const outDir = path.resolve(__dirname, "dist", cepDist);
 
+function copyDirRecursive(from: string, to: string): void {
+  if (!fs.existsSync(from)) return;
+  fs.mkdirSync(to, { recursive: true });
+  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    const srcPath = path.join(from, entry.name);
+    const destPath = path.join(to, entry.name);
+    if (entry.isDirectory()) copyDirRecursive(srcPath, destPath);
+    else fs.copyFileSync(srcPath, destPath);
+  }
+}
+
 /** Copy Beta legacy JSX into dist/cep/jsx/legacy for runtime $.evalFile. */
 function copyLegacyJsxPlugin(): Plugin {
   const from = path.resolve(__dirname, "src/jsx/legacy");
@@ -31,6 +42,32 @@ function copyLegacyJsxPlugin(): Plugin {
   };
   return {
     name: "copy-motionflow-legacy-jsx",
+    buildStart() {
+      copy();
+    },
+    writeBundle() {
+      copy();
+    },
+    configureServer() {
+      copy();
+    },
+  };
+}
+
+/**
+ * Ensure FULL_PROJECT natives land at extension `bin/win/Motionflow.dll`
+ * (same layout as Spunkram Beta). cep.config `copyAssets` alone can miss this
+ * on symlink/dev builds if dist wasn't refreshed after binaries were added.
+ */
+function copyMotionflowBinPlugin(): Plugin {
+  const from = path.resolve(__dirname, "src/bin");
+  const to = path.resolve(__dirname, "dist", cepDist, "bin");
+  const copy = () => {
+    if (!fs.existsSync(from)) return;
+    copyDirRecursive(from, to);
+  };
+  return {
+    name: "copy-motionflow-bin",
     buildStart() {
       copy();
     },
@@ -80,7 +117,7 @@ if (action) runAction(config, action);
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), cep(config), copyLegacyJsxPlugin()],
+  plugins: [react(), cep(config), copyLegacyJsxPlugin(), copyMotionflowBinPlugin()],
   define: {
     __APP_BRAND__: JSON.stringify("spunkram"),
     __CEP_API_MOCKS__: JSON.stringify(cepApiMocks),
@@ -105,6 +142,11 @@ export default defineConfig({
     // on :4000 — proxy avoids CORS in dev. Paths must end with `/` so Vite
     // modules under `src/js/api/` (e.g. `/api/cep-market.ts`) are not stolen.
     proxy: {
+      "/api/stock/": {
+        target: apiTarget,
+        changeOrigin: true,
+        secure: apiTarget.startsWith("https:"),
+      },
       "/api/generations/": {
         target: apiTarget,
         changeOrigin: true,
@@ -114,6 +156,7 @@ export default defineConfig({
         target: apiTarget,
         changeOrigin: true,
         secure: apiTarget.startsWith("https:"),
+        ws: true,
       },
       "/api/captions/": {
         target: apiTarget,

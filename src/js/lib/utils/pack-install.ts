@@ -9,10 +9,28 @@ import { loadPreferencesFile, resolvePreferencesPath, savePreferencesFile } from
 import { initPackageAsync, parsePackageFileFormat } from "./pack";
 import type { InstalledPackMeta } from "./pack-types";
 import { extractZipToFolder } from "./pack-zip";
-import { reportSupportError } from "@/api/support";
+import { reportSupportError, reportSupportInfo } from "@/api/support";
 
 function cepFsAvailable(): boolean {
   return typeof fs?.existsSync === "function";
+}
+
+function installLog(
+  phase: string,
+  extra?: Record<string, string | number | boolean | null>,
+): void {
+  const detail = extra
+    ? Object.entries(extra)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(" ")
+    : "";
+  const message = detail ? `${phase} ${detail}` : phase;
+  try {
+    console.info(`[pack.install] ${message}`);
+  } catch {
+    /* ignore */
+  }
+  reportSupportInfo("pack.install", message, extra);
 }
 
 /** `<same folder as preferences.json>/_ABS` — mirrors Beta's unified packages root. */
@@ -57,14 +75,23 @@ function copyFolderRecursive(source: string, destination: string): void {
   }
 }
 
-const SIBLING_FOLDER_NAMES = [
-  "Spunkram Preview Assets",
-  "Atom Preview Assets",
-  "Spunkram Premiere Pro",
-  "Atom Premiere Pro",
-  "Spunkram After Effects",
-  "Atom After Effects",
-];
+/**
+ * Copy the pack file and every sibling (Assets / Previews / Fonts /
+ * Spunkram Premiere Pro / …) into the managed install folder.
+ * Market composer zips use Assets+Previews; legacy packs use brand folders.
+ */
+function copyPackBundle(sourceDir: string, targetDir: string, packFilePath: string): void {
+  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+    const from = path.join(sourceDir, entry.name);
+    const to = path.join(targetDir, entry.name);
+    if (entry.isDirectory()) {
+      copyFolderRecursive(from, to);
+    } else if (from === packFilePath || entry.isFile()) {
+      fs.copyFileSync(from, to);
+    }
+  }
+}
 
 function sanitizeFolderName(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, "_").trim() || "Pack";
@@ -86,40 +113,64 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
 
   let packFilePath = sourcePath;
   let cleanupStagingDir: string | null = null;
+  const startedAt = Date.now();
 
   try {
+    const sourceStat =
+      typeof fs.statSync === "function" ? fs.statSync(sourcePath) : null;
+    installLog("start", {
+      sourcePath,
+      size: sourceStat?.size ?? null,
+      isZip: sourcePath.toLowerCase().endsWith(".zip"),
+    });
+
     if (sourcePath.toLowerCase().endsWith(".zip")) {
       const stagingDir = path.join(
         os.tmpdir(),
         `spunkram-install-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
       );
-      extractZipToFolder(sourcePath, stagingDir);
+      const extractStarted = Date.now();
+      installLog("extract.begin", { stagingDir });
+      const written = extractZipToFolder(sourcePath, stagingDir);
+      installLog("extract.done", {
+        files: written.length,
+        ms: Date.now() - extractStarted,
+      });
       cleanupStagingDir = stagingDir;
       const found = findPackFileRecursive(stagingDir);
       if (!found) {
+        installLog("extract.no_pack", { stagingDir });
         return { ok: false, message: "No .spunkram/.atom pack file found inside the ZIP." };
       }
       packFilePath = found;
+      installLog("extract.pack_found", { packFilePath });
     } else if (!parsePackageFileFormat(sourcePath)) {
       return { ok: false, message: "Pick a .spunkram, .atom, or .zip file." };
     }
 
     const pack = await initPackageAsync(packFilePath);
     const { main } = pack.settings;
+    installLog("parse.ok", {
+      name: main.name || null,
+      appID: main.software_id || null,
+      version: main.version || null,
+      treeFolders: Object.keys(pack.structure || {}).length,
+    });
+
     const folderName = sanitizeFolderName(
       `${main.name || "Pack"}${main.software_id ? ` - ${main.software_id}` : ""}`,
     );
     const installRoot = resolvePackagesInstallRoot();
     const targetDir = path.join(installRoot, folderName);
-    fs.mkdirSync(targetDir, { recursive: true });
-
     const sourceDir = path.dirname(packFilePath);
     const targetPackPath = path.join(targetDir, path.basename(packFilePath));
-    fs.copyFileSync(packFilePath, targetPackPath);
 
-    for (const siblingName of SIBLING_FOLDER_NAMES) {
-      copyFolderRecursive(path.join(sourceDir, siblingName), path.join(targetDir, siblingName));
-    }
+    const copyStarted = Date.now();
+    copyPackBundle(sourceDir, targetDir, packFilePath);
+    installLog("copy.done", {
+      targetDir,
+      ms: Date.now() - copyStarted,
+    });
 
     const meta: InstalledPackMeta = {
       name: main.name || path.basename(packFilePath),
@@ -138,9 +189,19 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
     prefs.packages = packages;
     savePreferencesFile(prefs);
 
+    installLog("done", {
+      name: meta.name,
+      appID: meta.appID || null,
+      path: meta.path,
+      ms: Date.now() - startedAt,
+    });
+
     return { ok: true, meta };
   } catch (e) {
-    reportSupportError("pack.install", e);
+    reportSupportError("pack.install", e, {
+      sourcePath,
+      ms: Date.now() - startedAt,
+    });
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   } finally {
     if (cleanupStagingDir) {

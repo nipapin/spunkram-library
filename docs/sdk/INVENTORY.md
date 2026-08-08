@@ -60,14 +60,16 @@ Status legend: **ported** (file in repo) · **wrapped** (SDK method live) · **t
 | `undoGroup.*` | `PremiereUndoGroups` | **ts** + legacy |
 | `tools.*` | `buttonActions` / resize | wrapped |
 | Captions / chapters / styles | existing `ppro.ts` | **ts** + wrapped |
-| `FULL_PROJECT` / `$._copyPasteSystem` | native DLL/exe | **native-only** (3.8) |
+| `FULL_PROJECT` / `$._copyPasteSystem` | native DLL + `copy-paste-apply.ts` | **shipped** (`src/bin/win/Motionflow.dll`) |
 
-## 3.8 Native dependencies (not shipped)
+## 3.8 Native dependencies
 
-Beta `bin\`:
+Shipped under `src/bin/` (copied to extension root `bin/`):
 
-- `Motionflow.dll` / mac bridge
-- `pprsequencer.exe`
-- PTX seeds (`template`, `colormatte`)
+- `win/Motionflow.dll` — ExternalObject for `cmd.edit.copy/paste`
+- `win/MotionflowBridge.acsrf` / `MotionflowInit.prm` — Premiere plug-ins (install into Adobe Common Plug-ins)
+- `template` / `colormatte` — PTX seeds → `%USER_DATA%/Adobe/Common/Spunkram/`
+- `mac/cep-plugins.zip` — Mac Motionflow.bundle + bridge
 
-`FULL_PROJECT` apply stays **unsupported** in SDK until binaries are licensed and shipped. Current pack apply maps `FULL_PROJECT` → plaintext `PROJECT` import.
+Apply path: `applyPackItemToHost` → `applyFullProjectViaCopyPaste` (Beta `customChain` port).
+MOGRT / FOOTAGE / AUDIO still use `ppro-apply-item.ts` import.

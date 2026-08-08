@@ -111,7 +111,17 @@ function persistFavoriteIds(ids: Set<string>) {
   }
 }
 
-export type StatusMessage = { text: string; tone: "info" | "success" | "error" };
+export type StatusMessage = {
+  text: string;
+  tone: "info" | "success" | "error";
+  /** Rich pack toast (WSS new/updated) — rendered as a compact card. */
+  card?: {
+    title: string;
+    subtitle?: string;
+    imageUrl?: string | null;
+    detailsUrl?: string | null;
+  };
+};
 
 type PanelUIContextValue = {
   playPreview: boolean;
@@ -139,7 +149,13 @@ type PanelUIContextValue = {
   applyingItemId: string | null;
   setApplyingItemId: (itemId: string | null) => void;
   statusMessage: StatusMessage | null;
-  showStatus: (text: string, tone?: StatusMessage["tone"], durationMs?: number) => void;
+  showStatus: (
+    text: string,
+    tone?: StatusMessage["tone"],
+    durationMs?: number,
+    card?: StatusMessage["card"],
+  ) => void;
+  clearStatus: () => void;
 };
 
 /** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
@@ -230,13 +246,24 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const showStatus = useCallback(
-    (text: string, tone: StatusMessage["tone"] = "info", durationMs = 4000) => {
+    (
+      text: string,
+      tone: StatusMessage["tone"] = "info",
+      durationMs = 4000,
+      card?: StatusMessage["card"],
+    ) => {
       if (statusTimer.current) clearTimeout(statusTimer.current);
-      setStatusMessage({ text, tone });
+      setStatusMessage({ text, tone, card });
       statusTimer.current = setTimeout(() => setStatusMessage(null), durationMs);
     },
     [],
   );
+
+  const clearStatus = useCallback(() => {
+    if (statusTimer.current) clearTimeout(statusTimer.current);
+    statusTimer.current = null;
+    setStatusMessage(null);
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -263,6 +290,7 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
       setApplyingItemId,
       statusMessage,
       showStatus,
+      clearStatus,
     }),
     [
       playPreview,
@@ -286,6 +314,7 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
       applyingItemId,
       statusMessage,
       showStatus,
+      clearStatus,
     ],
   );
 

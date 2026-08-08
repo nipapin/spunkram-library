@@ -1,18 +1,32 @@
 /**
  * Apply a pack item (transition/title/SFX/footage) to the host project.
- * Orchestration port of Spunkram Beta `applyItemPremiereProLikeAs` +
- * `prepareToApplyPremierePro` — decrypt (if needed) then hand off via
- * MotionFlow SDK → ExtendScript `applyPackItem`.
+ *
+ * Premiere Pro:
+ *   FULL_PROJECT → `$._copyPasteSystem` + Motionflow.dll (Beta customChain)
+ *   MOGRT        → seq.importMGT
+ *   FOOTAGE/AUDIO → importFiles + place
+ *
+ * After Effects:
+ *   PROJECT (.aep) / FOOTAGE / AUDIO → host applyPackItem
  */
 import { csi } from "./bolt";
 import { MotionFlow } from "@/sdk";
 import { fs, path } from "../cep/node";
-import { resolveItemSourceFile, type HostAppId } from "./pack-apply-paths";
-import { cleanupCacheFile, decodeBinAxFile, decodeMgAssetFile } from "./pack-protect";
+import {
+  resolveItemSourceFile,
+  resolvePackTemplatesPath,
+  type HostAppId,
+} from "./pack-apply-paths";
+import {
+  applyFullProjectViaCopyPaste,
+  resolveFullProjectAssetsPath,
+} from "./copy-paste-apply";
 import type { PackSettings, PackTreeItem } from "./pack-types";
 import { reportSupportError } from "@/api/support";
 
-export type ApplyItemOutcome = { ok: true } | { ok: false; message: string };
+export type ApplyItemOutcome =
+  | { ok: true; warning?: string }
+  | { ok: false; message: string };
 
 const REASON_MESSAGES: Record<string, string> = {
   SOURCE_MISSING: "Item file is missing from the pack on disk.",
@@ -32,7 +46,7 @@ export function currentHostAppId(): HostAppId | null {
   return null;
 }
 
-/** Resolve + decrypt (if needed) + apply a pack item to the active project/sequence. */
+/** Resolve + apply a pack item to the active project/sequence. */
 export async function applyPackItemToHost(
   item: PackTreeItem,
   packFilePath: string,
@@ -72,36 +86,47 @@ export async function applyPackItemToHost(
     };
   }
 
-  let filePath = resolved.file;
-  let decodedCachePath: string | null = null;
-  try {
-    if (resolved.encrypted === "BIN_AX") {
-      filePath = decodeBinAxFile(resolved.file, resolved.cacheName);
-      decodedCachePath = filePath;
-    } else if (resolved.encrypted === "MG_ASSET") {
-      filePath = decodeMgAssetFile(resolved.file, resolved.cacheName);
-      decodedCachePath = filePath;
+  const filePath = resolved.file;
+
+  // Premiere FULL_PROJECT — native copy/paste chain (not simplified importFiles).
+  if (appId === "PPRO" && resolved.ctype === "FULL_PROJECT") {
+    try {
+      const templatesDir = resolvePackTemplatesPath(packFilePath, "PPRO");
+      const assetsPath = resolveFullProjectAssetsPath(templatesDir, item);
+      const packName = settings?.main?.name || "Spunkram";
+      const result = await applyFullProjectViaCopyPaste({
+        projectPath: filePath,
+        assetsPath,
+        presetName: item.name,
+        packName,
+        groups: item.pathSegments,
+        keepAudio: true,
+      });
+      if (!result.ok) {
+        await reportSupportError("pack.apply_full_project", result.message, {
+          item: item.name,
+          ctype: "FULL_PROJECT",
+        });
+        return result;
+      }
+      return { ok: true };
+    } catch (e) {
+      await reportSupportError("pack.apply_full_project", e, { item: item.name });
+      return { ok: false, message: e instanceof Error ? e.message : String(e) };
     }
-  } catch (e) {
-    const msg = `Couldn't decode item file: ${e instanceof Error ? e.message : String(e)}`;
-    await reportSupportError("pack.decode_item", e, { item: item.name });
-    return {
-      ok: false,
-      message: msg,
-    };
   }
 
-  // FULL_PROJECT is imported the same way as PROJECT once resolved/decrypted.
-  const ctype = resolved.ctype === "FULL_PROJECT" ? "PROJECT" : resolved.ctype;
+  // Host ctype: FULL_PROJECT never reaches here; AE PROJECT / MOGRT / media do.
+  const ctype =
+    resolved.ctype === "FULL_PROJECT" ? "PROJECT" : resolved.ctype;
 
   try {
     const wrapped = await MotionFlow.applyPackItem({
-      ctype,
+      ctype: ctype as "PROJECT" | "MOGRT" | "AUDIO" | "FOOTAGE",
       filePath,
       itemName: item.name,
       binName: "Spunkram Assets",
     });
-    cleanupCacheFile(decodedCachePath);
 
     if (!wrapped.ok) {
       await reportSupportError("pack.apply_item", wrapped.error, {
@@ -129,7 +154,6 @@ export async function applyPackItemToHost(
     }
     return { ok: true };
   } catch (e) {
-    cleanupCacheFile(decodedCachePath);
     await reportSupportError("pack.apply_item", e, { item: item.name, ctype });
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }

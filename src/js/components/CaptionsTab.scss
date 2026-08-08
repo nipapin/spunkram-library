@@ -35,15 +35,24 @@
 
 .captions-tab__landing-actions {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 8px;
+
+  // Beat `.ai-tools-scope .btn--primary` (46px) / `.btn--ghost` (36px) mismatch.
+  .captions-tab__transcribe-btn.btn.btn--primary,
+  .captions-tab__load-btn.btn.btn--ghost {
+    height: 36px;
+    min-height: 36px;
+    max-height: 36px;
+    box-sizing: border-box;
+    padding: 0 14px;
+    font-size: 12px;
+    border-radius: var(--radius-xl);
+  }
 }
 
 .captions-tab__load-btn.btn--ghost {
   flex-shrink: 0;
-  height: 46px;
-  padding: 0 14px;
-  border-radius: var(--radius-xl);
 }
 
 .captions-tab__transcribe-btn.btn--primary {

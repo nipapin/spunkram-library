@@ -8,15 +8,17 @@ CEP знает только `client: "spunkram-cep"` + Bearer и рисует UI
 Клиентские модули:
 
 - `src/js/api/motionflow-auth.ts` — auth / me / devices
-- `src/js/api/cep-market.ts` — каталог: **get-atomx `mau`** + merge `/api/cep/market`
-- `src/js/lib/api/market-api.ts` — `fetchMau` → `https://api.get-atomx.com/atomx/v1/mau?king=`
+- `src/js/api/cep-market.ts` — каталог + download/install: `GET /api/cep/market`, Bearer download
+- `src/js/lib/api/stock-api.ts` — footages: `/api/stock/unsplash`, `/pexels/videos`, `/download`
+- `src/js/lib/api/market-api.ts` — shared helpers only (no AtomX)
 - `src/js/api/credits.ts` — баланс генераций
 - `src/js/api/config.ts` — пути эндпоинтов
 
 Base URL (Motionflow): **`https://motionflow.pro`**  
 Auth: **`Authorization: Bearer <token>`**.
 
-Каталог паков автора (AtomX): **`GET …/atomx/v1/mau?king=SpunkramTemp`** — все Packages автора (как в Spunkram Beta `js/sync.js`).
+Каталог паков: **`GET /api/cep/market?host=AE|PR`** (author resolved from `client` on server).  
+Canonical contract: next-app `CEP_API.md`. AtomX MAU **removed** (Отречение).
 
 ---
 
@@ -264,11 +266,32 @@ Token обязан позволять серверу узнать `client` (clai
 
 ## 3. Download / Install gate
 
-`install_url` (signed или session-checked):
+`GET /api/cep/market/download?pack_id=` (prefer pack `install_url`):
 
-- Разрешать только если: sold_items **или** авторская подписка **или** free-pack entitlement.
-- Иначе `403` + `{ "error": "NOT_OWNED" }` / `SUBSCRIPTION_REQUIRED`.
-- Не доверять клиентскому `owned`.
+- **Headers:** `Authorization: Bearer <token>`
+- Success: **HTTP 302** → zip on CDN / short-lived R2 (panel follows redirects; **no** Bearer on final host)
+- Gate: sold_items **or** author subscription **or** free-pack entitlement
+- Else JSON (no redirect): `403` `{ "error": "NOT_OWNED" }` / `401 UNAUTHORIZED` / `404 NOT_FOUND` / `NO_DOWNLOAD`
+
+CEP: `downloadAndInstallPack` → zip (cached under preferences `pack-cache/` until install succeeds; overwritten on re-download) → `installPackFromFile` → `_ABS` packages root.
+
+Plaintext `.spunkram` JSON uses `settings` + `content` (tree). Legacy `structure` is still accepted and normalized to the in-memory `structure` field.
+
+See next-app `CEP_API.md` §3.
+
+---
+
+## 4. Stock (footages)
+
+| Goal | Method | Path |
+|------|--------|------|
+| Unsplash images | `GET` | `/api/stock/unsplash?query&orientation&page&perPage` |
+| Pexels videos | `GET` | `/api/stock/pexels/videos?…` |
+| Download + attribution | `GET` | `/api/stock/download?provider&kind&id` |
+
+Download accepts **web session cookie** or **CEP Bearer** (`mfcep_…`). Search is public (server holds Unsplash/Pexels keys).
+
+CEP client: `src/js/lib/api/stock-api.ts`.
 
 ---
 
@@ -454,7 +477,7 @@ Rate limit: ~1 одинаковый report / мин на IP+action+error → `42
 ## 7. CORS / CEP HTTP
 
 Production CEP ходит Node `http(s)` без CORS.  
-Vite-dev проксирует `/api/cep/*`, `/api/generations/*`.
+Vite-dev проксирует `/api/cep/*`, `/api/stock/*`, `/api/generations/*`.
 
 ---
 

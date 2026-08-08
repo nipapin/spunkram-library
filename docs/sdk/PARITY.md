@@ -6,9 +6,10 @@
 | Chapters markers | — | full | SDK wrapped |
 | Voiceover import | stock-like | full | SDK wrapped |
 | Stock import | `stockassets.jsx` | `*-import-media.ts` | SDK; legacy supersed |
-| Pack apply MOGRT (PR) | full `addMOGRT` + relink/fit | simplified `importMGT` | SDK `addMogrt` + legacy available |
-| Pack apply PROJECT/AEP | full composer | simplified import | SDK + legacy `applyComp` |
-| Pack apply FULL_PROJECT | native copy/paste | mapped to PROJECT | still no native DLL |
+| Pack apply FULL_PROJECT | native copy/paste | `$._copyPasteSystem` + `copy-paste-apply.ts` | shipped DLL |
+| Pack apply MOGRT (PR) | full `addMOGRT` + relink/fit | `importMGT` | SDK |
+| Pack apply FOOTAGE/AUDIO | import + place | `ppro-apply-item` | SDK |
+| Pack apply AEP (AE) | full composer | simplified `.aep` import | SDK + legacy |
 | AE `.ffx` presets | `ae_preset_manager` | UNSUPPORTED in path resolver | legacy in repo; SDK wrapped |
 | AE text presets | `ae_text_presets` | — | legacy + SDK |
 | Text/photo animator | `ae_composer` | — | legacy + SDK |
@@ -20,6 +21,6 @@
 
 ## Intentional differences
 
-1. **Apply path stays Node-side decrypt** then host plaintext — no `$._pack` JSXBIN requirement for new packs.
-2. **No AtomX MAU** in host SDK.
+1. **Apply path prefers plaintext packs**; soft-legacy Node-side decrypt remains for already-installed AtomX-era packs (reinstall CTA).
+2. **No AtomX MAU** in host SDK — market is Motionflow `/api/cep/market` only.
 3. Legacy Atom namespaces remain inside `src/jsx/legacy` until group 7 rename; public name is only `MotionFlow`.

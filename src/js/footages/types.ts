@@ -47,6 +47,8 @@ export type MediaItem = {
     color: string | null;
     blurHash: string | null;
     user: MediaAuthor;
+    /** Motionflow stock provider — used for authenticated download. */
+    provider?: "unsplash" | "pexels";
 
     imageUrls?: ImageUrls;
     downloadUrl?: string;

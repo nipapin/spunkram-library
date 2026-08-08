@@ -17,12 +17,7 @@ interface GalleryCardProps {
   aspect: string;
   masonry?: boolean;
   onDownload: (e: React.MouseEvent) => void;
-  onImportUrl: (
-    url: string,
-    fileName: string,
-    duration: number,
-    downloadLocation: string,
-  ) => void;
+  onImportUrl: (item: MediaItem) => void;
   onView: (e: React.MouseEvent) => void;
 }
 

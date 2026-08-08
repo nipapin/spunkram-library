@@ -23,7 +23,7 @@ export type PrefSettings = {
   autofillValues: { email: string };
 };
 
-/** Legacy AtomX marketplace auth (kept for market catalog compatibility). */
+/** Legacy AtomX marketplace auth (unused after Отречение; kept for prefs migration). */
 export type PersonalAuth = {
   usid?: string;
   email?: string;
@@ -50,6 +50,8 @@ export const MAX_MOTIONFLOW_ACCOUNTS = 5;
 
 export type PreferencesFile = {
   packages?: unknown[];
+  /** Legacy / alternate casing seen in some installs. */
+  Packages?: unknown[];
   PrefSettings?: Partial<PrefSettings>;
   personalAuthSystem?: PersonalAuth;
   motionflowAuth?: MotionflowAuth;
@@ -144,6 +146,32 @@ export function savePreferencesFile(data: PreferencesFile): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Wipe preferences.json (Beta `clearPrefJSON_File`). Next load rebuilds defaults.
+ */
+export function clearPreferencesFile(): boolean {
+  const prefPath = resolvePreferencesPath();
+  if (!prefPath || typeof fs?.writeFileSync !== "function") return false;
+  try {
+    const dir = path.dirname(prefPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(prefPath, "", { encoding: "utf8" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Clear installed pack list (`packages` / `Packages`) in preferences.json. */
+export function clearInstalledPackagesInPreferences(): boolean {
+  const file = loadPreferencesFile();
+  file.packages = [];
+  if ("Packages" in file) file.Packages = [];
+  return savePreferencesFile(file);
 }
 
 export function readPrefSettings(): PrefSettings {

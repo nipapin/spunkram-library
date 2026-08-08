@@ -12,24 +12,25 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import {
   asBool,
-  loadPreferencesFile,
+  clearInstalledPackagesInPreferences,
+  clearPreferencesFile,
   resolvePreferencesPath,
-  savePreferencesFile,
-  DEFAULT_PREF_SETTINGS,
   type PrefSettings,
 } from "@/lib/api/preferences";
 import { selectFolder } from "@/lib/utils/bolt";
 import { EXTENSION_VERSION } from "@/lib/config/masked";
-import { fs, path } from "@/lib/cep/node";
 import {
   fetchSpunkramVersions,
   isReleaseAdminEmail,
   type SpunkramVersionEntry,
 } from "@/api/update";
 import { applyExtensionUpdate } from "@/utils/extension-update";
+import * as panelStore from "@/lib/userdata-store";
 
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
+
+const ACTIVE_PACK_STORAGE_KEY = "spunkram.activePackPath";
 
 function ToggleRow({
   label,
@@ -249,44 +250,27 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
 
   function resetAllSettings() {
     setBusy(true);
-    const file = loadPreferencesFile();
-    file.PrefSettings = { ...DEFAULT_PREF_SETTINGS };
-    savePreferencesFile(file);
-    setPrefs({ ...DEFAULT_PREF_SETTINGS });
-    setBusy(false);
     setConfirm(null);
+    // Match Beta: empty the prefs file; reload rebuilds defaults from scratch.
+    clearPreferencesFile();
+    try {
+      panelStore.removeItem(ACTIVE_PACK_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
     reloadExtension();
   }
 
   function removePackageFiles() {
     setBusy(true);
+    setConfirm(null);
+    clearInstalledPackagesInPreferences();
     try {
-      const file = loadPreferencesFile();
-      const packages = Array.isArray(file.packages) ? file.packages : [];
-      for (const pkg of packages) {
-        const packPath =
-          pkg && typeof pkg === "object" && "path" in pkg
-            ? String((pkg as { path?: string }).path || "")
-            : "";
-        if (!packPath || typeof fs?.existsSync !== "function") continue;
-        const dir = path.dirname(packPath);
-        // Best-effort: remove sibling preview assets folder only; leave pack removal to host.
-        const assets = path.join(dir, "Spunkram Preview Assets");
-        if (fs.existsSync(assets) && typeof fs.rmSync === "function") {
-          try {
-            fs.rmSync(assets, { recursive: true, force: true });
-          } catch {
-            // ignore
-          }
-        }
-      }
-      file.packages = [];
-      savePreferencesFile(file);
-    } finally {
-      setBusy(false);
-      setConfirm(null);
-      reloadExtension();
+      panelStore.removeItem(ACTIVE_PACK_STORAGE_KEY);
+    } catch {
+      // ignore
     }
+    reloadExtension();
   }
 
   return (
@@ -520,7 +504,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
       {confirm === "reset" && (
         <ConfirmDialog
           title="Reset all settings?"
-          body="Preferences will be restored to defaults. Installed packages stay listed."
+          body="preferences.json will be cleared. You will need to sign in again."
           confirmLabel={busy ? "Working…" : "Reset"}
           onConfirm={resetAllSettings}
           onCancel={() => setConfirm(null)}
@@ -529,7 +513,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
       {confirm === "remove" && (
         <ConfirmDialog
           title="Remove package files?"
-          body="Clears installed package list and tries to remove preview asset folders. This cannot be undone."
+          body="Clears all installed package entries from preferences.json. This cannot be undone."
           confirmLabel={busy ? "Working…" : "Remove"}
           destructive
           onConfirm={removePackageFiles}
