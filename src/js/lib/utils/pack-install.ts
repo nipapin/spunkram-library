@@ -5,10 +5,16 @@
  * the pack in `preferences.json`, so it shows up immediately in Editing.
  */
 import { fs, os, path } from "../cep/node";
-import { loadPreferencesFile, resolvePreferencesPath, savePreferencesFile } from "../api/preferences";
+import {
+  loadPreferencesFile,
+  readPrefSettings,
+  resolvePreferencesPath,
+  savePreferencesFile,
+} from "../api/preferences";
 import { initPackageAsync, parsePackageFileFormat } from "./pack";
 import type { InstalledPackMeta } from "./pack-types";
 import { extractZipToFolder } from "./pack-zip";
+import { installPackFonts } from "./pack-fonts";
 import { reportSupportError, reportSupportInfo } from "@/api/support";
 
 function cepFsAvailable(): boolean {
@@ -33,13 +39,31 @@ function installLog(
   reportSupportInfo("pack.install", message, extra);
 }
 
-/** `<same folder as preferences.json>/_ABS` — mirrors Beta's unified packages root. */
-export function resolvePackagesInstallRoot(): string {
+function defaultPackagesInstallRoot(): string {
   const prefPath = resolvePreferencesPath();
   const base = prefPath ? path.dirname(prefPath) : "";
-  const root = base
+  return base
     ? path.join(base, "_ABS")
     : path.join(os.tmpdir(), "spunkram-library-packages");
+}
+
+/**
+ * Packages install root.
+ * When Settings → "Use custom path for packages" is on and a folder is set,
+ * installs land there; otherwise `<prefs dir>/_ABS`.
+ */
+export function resolvePackagesInstallRoot(): string {
+  let root = defaultPackagesInstallRoot();
+  try {
+    const prefs = readPrefSettings();
+    const useCustom = Boolean(Number(prefs.useCustomPathBySubscription));
+    const custom = (prefs.absCustomAbsolutePath || "").trim();
+    if (useCustom && custom) {
+      root = path.normalize(custom);
+    }
+  } catch {
+    // fall back to default
+  }
   if (cepFsAvailable() && !fs.existsSync(root)) fs.mkdirSync(root, { recursive: true });
   return root;
 }
@@ -172,6 +196,17 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
       ms: Date.now() - copyStarted,
     });
 
+    try {
+      const fontsInstalled = await installPackFonts(targetPackPath);
+      if (fontsInstalled > 0) {
+        installLog("fonts.done", { installed: fontsInstalled });
+      }
+    } catch (fontErr) {
+      installLog("fonts.failed", {
+        error: fontErr instanceof Error ? fontErr.message : String(fontErr),
+      });
+    }
+
     const meta: InstalledPackMeta = {
       name: main.name || path.basename(packFilePath),
       author: main.cc_author_username || "Unknown",
@@ -222,9 +257,13 @@ export function uninstallPack(meta: InstalledPackMeta): boolean {
     prefs.packages = packages.filter((p) => p.path !== meta.path);
     savePreferencesFile(prefs);
 
-    const installRoot = resolvePackagesInstallRoot();
-    const packDir = path.dirname(meta.path);
-    if (cepFsAvailable() && packDir.startsWith(installRoot) && fs.existsSync(packDir)) {
+    const installRoot = path.normalize(resolvePackagesInstallRoot());
+    const packDir = path.normalize(path.dirname(meta.path));
+    if (
+      cepFsAvailable() &&
+      (packDir === installRoot || packDir.startsWith(installRoot + path.sep)) &&
+      fs.existsSync(packDir)
+    ) {
       fs.rmSync(packDir, { recursive: true, force: true });
     }
     return true;

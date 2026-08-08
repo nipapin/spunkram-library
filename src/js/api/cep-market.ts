@@ -15,15 +15,11 @@ import { openLinkInBrowser } from "@/lib/utils/bolt";
 import { fs, os, path } from "@/lib/cep/node";
 import { resolvePreferencesPath } from "@/lib/api/preferences";
 import { downloadToFile } from "@/utils/download-file";
-import { installPackFromFile, uninstallPack } from "@/lib/utils/pack-install";
-import { readInstallablePackages } from "@/lib/utils/pack";
+import { installPackFromFile } from "@/lib/utils/pack-install";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
-import * as panelStore from "@/lib/userdata-store";
 import { version as EXTENSION_VERSION } from "../../shared/shared";
 
 export const CEP_MARKET_ENDPOINT = "/api/cep/market";
-
-const ACTIVE_PACK_STORAGE_KEY = "spunkram.activePackPath";
 
 const SITE_ORIGIN = import.meta.env.DEV
   ? "http://localhost:3000"
@@ -151,46 +147,6 @@ export function installedPackMatchesMarketItem(
     .map((n) => (n || "").trim().toLowerCase())
     .filter(Boolean);
   return names.includes(installedName);
-}
-
-/**
- * Uninstall local packs for the current host that are not listed in the
- * market catalog (removed from API / never published). Leaves other-host
- * installs alone when `host` is set.
- */
-export function purgeInstalledPacksNotInMarketCatalog(
-  catalog: CepMarketPackage[] | null | undefined,
-  opts?: { host?: string | null },
-): InstalledPackMeta[] {
-  const catalogList = Array.isArray(catalog) ? catalog : [];
-  const host = (opts?.host || "").toUpperCase() || null;
-  const installed = readInstallablePackages();
-  const removed: InstalledPackMeta[] = [];
-
-  for (const meta of installed) {
-    const metaApp = (meta.appID || meta.load || "").toUpperCase();
-    if (host && metaApp && metaApp !== host) continue;
-
-    const listed = catalogList.some((item) =>
-      installedPackMatchesMarketItem(meta, item),
-    );
-    if (listed) continue;
-
-    if (uninstallPack(meta)) removed.push(meta);
-  }
-
-  if (removed.length > 0) {
-    try {
-      const active = panelStore.getItem(ACTIVE_PACK_STORAGE_KEY);
-      if (active && removed.some((m) => m.path === active)) {
-        panelStore.removeItem(ACTIVE_PACK_STORAGE_KEY);
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  return removed;
 }
 
 function mockPackages(host: "AE" | "PR"): CepMarketPackage[] {

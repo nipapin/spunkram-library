@@ -235,9 +235,6 @@ function MarketCard({
             <h3 className="truncate text-xs font-medium text-foreground" title={item.name}>
               {item.name}
             </h3>
-            <p className="truncate text-[10px] text-muted-foreground">
-              by <span className="text-foreground/80">{item.author || "Spunkram"}</span>
-            </p>
           </div>
           <span className="shrink-0 rounded-md border border-white/10 bg-secondary/50 px-1.5 py-0.5 text-[9px] font-medium uppercase text-muted-foreground">
             {item.primary_type}

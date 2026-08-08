@@ -441,20 +441,84 @@ $._copyPasteSystem = {
     return prepareA === prepareB;
   },
   resolveMissingFootages: function (assetsPath, presetName) {
+    try {
+      this.getAuthorFolder();
+    } catch (eAuth) {}
+
     var footages = this.findMissingFootages();
-    var sep = isWin ? "\\" : "/";
-    for (var i = 0; i < footages.length; i++) {
-      var footage = footages[i];
-      var footageMedia = footage.getMediaPath();
-      var footageSeparate = footageMedia.indexOf("\\") > -1 ? "\\" : "/";
-      var footageName = footageMedia.split(footageSeparate).pop();
-      if (footage.canChangeMediaPath()) {
-        footage.changeMediaPath(assetsPath + sep + footageName);
-      }
-      if (footageName.indexOf(".aegraphic") !== -1 && footageName.indexOf(presetName) !== -1) {
-        footage.changeMediaPath(assetsPath + sep + footageName, true);
+    if (!footages || footages.length === 0) {
+      // Import may place clips outside insertionBin; search author pack bin too.
+      if (this.authorFolder) {
+        footages = this.findMissingFootages(this.authorFolder);
       }
     }
+    if (!assetsPath) return "NO_ASSETS_PATH";
+
+    var assetsFolder = new Folder(assetsPath);
+    if (!assetsFolder.exists) {
+      // Tolerate forward-slash paths from CEP on Windows.
+      assetsFolder = new Folder(String(assetsPath).replace(/\//g, isWin ? "\\" : "/"));
+    }
+    if (!assetsFolder.exists) return "ASSETS_MISSING:" + assetsPath;
+
+    var resolved = 0;
+    for (var i = 0; i < footages.length; i++) {
+      var footage = footages[i];
+      var footageName = "";
+      try {
+        var footageMedia = footage.getMediaPath();
+        if (footageMedia) {
+          var footageSeparate = footageMedia.indexOf("\\") > -1 ? "\\" : "/";
+          footageName = footageMedia.split(footageSeparate).pop();
+        }
+      } catch (ePath) {}
+      if (!footageName && footage && footage.name) {
+        footageName = footage.name;
+      }
+      if (!footageName) continue;
+
+      var targetFile = this.findMediaFileRecursive_(assetsFolder, footageName, 0);
+      if (!targetFile || !targetFile.exists) continue;
+
+      var targetPath = targetFile.fsName;
+      try {
+        if (footage.canChangeMediaPath()) {
+          footage.changeMediaPath(targetPath);
+          resolved++;
+        }
+      } catch (eChange) {}
+
+      // .aegraphic often needs the force flag (Beta parity).
+      if (
+        footageName.indexOf(".aegraphic") !== -1 &&
+        presetName &&
+        footageName.indexOf(presetName) !== -1
+      ) {
+        try {
+          footage.changeMediaPath(targetPath, true);
+        } catch (eForce) {}
+      }
+    }
+    return "RESOLVED:" + resolved + "/" + footages.length;
+  },
+  /** Depth-limited search for a media file by basename under assets root. */
+  findMediaFileRecursive_: function (folder, fileName, depth) {
+    if (!folder || !folder.exists || depth > 6) return null;
+    var direct = new File(folder.fsName + (isWin ? "\\" : "/") + fileName);
+    if (direct.exists) return direct;
+
+    var entries = folder.getFiles();
+    if (!entries) return null;
+    for (var i = 0; i < entries.length; i++) {
+      var entry = entries[i];
+      if (entry instanceof Folder) {
+        var found = this.findMediaFileRecursive_(entry, fileName, depth + 1);
+        if (found) return found;
+      } else if (entry instanceof File && entry.name === fileName) {
+        return entry;
+      }
+    }
+    return null;
   },
   findMissingFootages: function (overrideBin) {
     var result = [];

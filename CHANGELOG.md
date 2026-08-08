@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-08
+
+### Fixed
+
+- Stop auto-deleting installed packs when Market catalog mismatches on reload
+- Pack install respects Settings → custom packages path
+- Prefer simplified pack folders `Assets` / `Previews` / `Fonts` (legacy brand / pack-name folders still work)
+- FULL_PROJECT media relink: native Windows paths, recursive search under `_Assets`, fallback when insertion bin is empty
+
+### Changed
+
+- Market cards no longer show redundant "by Spunkram" author line
+
+### Added
+
+- Install pack `Fonts` into the OS user fonts folder on install (Beta `fonts.js` parity)
+
 ## [0.5.1] - 2026-08-08
 
 ### Fixed

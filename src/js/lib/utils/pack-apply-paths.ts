@@ -4,10 +4,10 @@
  * Port of Spunkram Beta `getItemFilepath` (`js/filesystem.js`) — PR + AE branches.
  *
  * Market packs ship plaintext `.prproj` / `.mogrt` only (no encrypted sidecars).
+ * Folders: prefer `Assets` / `Previews` (see pack-folders.ts).
  */
 import { fs, path } from "../cep/node";
-import { MASKED } from "../config/masked";
-import { resolvePackAssetsPath } from "./pack";
+import { resolvePackTemplatesPath } from "./pack-folders";
 import { resolveItemAssetSegments } from "./pack-tree";
 import type { PackPreviewItem, PackSettings, PackTreeItem } from "./pack-types";
 
@@ -29,39 +29,11 @@ export type ResolvedItemFile = {
   cacheName: string;
 };
 
-function cepFsAvailable(): boolean {
-  return typeof fs?.existsSync === "function";
-}
-
 function sanitizeName(id: string): string {
   return id.replace(/[^a-z0-9._-]/gi, "_");
 }
 
-/** Resolve the template folder (.prproj / .aep source files) next to the pack file. */
-export function resolvePackTemplatesPath(
-  packFilePath: string,
-  hostAppId: HostAppId,
-): string {
-  if (typeof path?.dirname !== "function" || typeof path?.join !== "function") {
-    return "";
-  }
-  const dir = path.dirname(packFilePath);
-  const modern =
-    hostAppId === "PPRO"
-      ? `${MASKED.name} Premiere Pro`
-      : `${MASKED.name} After Effects`;
-  const legacy = hostAppId === "PPRO" ? "Atom Premiere Pro" : "Atom After Effects";
-  // Market composer zips ship templates under `Assets/` (not Spunkram Premiere Pro).
-  const candidates = [
-    path.join(dir, modern),
-    path.join(dir, legacy),
-    path.join(dir, "Assets"),
-  ];
-  for (const candidate of candidates) {
-    if (cepFsAvailable() && fs.existsSync(candidate)) return candidate;
-  }
-  return candidates[0];
-}
+export { resolvePackTemplatesPath } from "./pack-folders";
 
 function previewEntryFor(item: PackTreeItem): PackPreviewItem | undefined {
   return item.group.preview?.[item.previewKey];
@@ -95,17 +67,18 @@ export function resolveItemSourceFile(
 ): ResolvedItemFile | null {
   const group = item.group;
   const customArgs = customArgsFor(item);
+  const templatesDir = resolvePackTemplatesPath(packFilePath, hostAppId);
 
   if (group.is_presets) {
     return { ctype: "UNSUPPORTED", file: "", cacheName: "" };
   }
 
   if (group.is_audio) {
-    const assetsPath = resolvePackAssetsPath(packFilePath);
+    // Audio lives under Assets (same tree as projects), not Previews.
     const segments = resolveItemAssetSegments(item);
     const ext =
       typeof customArgs.filetype === "string" ? customArgs.filetype : "wav";
-    const baseWithoutExt = path.join(assetsPath, ...segments);
+    const baseWithoutExt = path.join(templatesDir, ...segments);
     const itemNameAudio = group.preview_name_instead_id
       ? item.name
       : item.previewKey;
@@ -119,7 +92,6 @@ export function resolveItemSourceFile(
     };
   }
 
-  const templatesDir = resolvePackTemplatesPath(packFilePath, hostAppId);
   const groupDir = path.join(templatesDir, ...item.pathSegments);
 
   if (group.is_footage) {

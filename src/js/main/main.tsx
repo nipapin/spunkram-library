@@ -24,8 +24,7 @@ import { fetchUpdateInfo, isRemoteNewer } from "@/api/update";
 import { fetchGenerationsStatus } from "@/api/credits";
 import { applyExtensionUpdate } from "@/utils/extension-update";
 import { ensureFfmpeg } from "@/utils/ffmpeg";
-import { purgeInstalledPacksNotInMarketCatalog, openMarketUrl } from "@/api/cep-market";
-import { currentHostAppId } from "@/lib/utils/apply-item";
+import { openMarketUrl } from "@/api/cep-market";
 import { version as LOCAL_VERSION } from "../../shared/shared";
 import {
   loadInstalledPack,
@@ -437,7 +436,7 @@ function EditingWorkspace({
 }
 
 function AppShell() {
-  const { signedIn, authReady, generationLimit, isFreeUser, market, refreshMarket } =
+  const { signedIn, authReady, generationLimit, isFreeUser, refreshMarket } =
     useAuth();
   const { setShowFavoritesOnly, showStatus } = usePanelUI();
   const { onExtensionUpdateHint } = useNotifications();
@@ -523,24 +522,11 @@ function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load market once signed in so orphan local packs can be purged even
-  // before the user opens the Market tab.
+  // Prefetch market catalog once signed in (Market tab / notifications).
   useEffect(() => {
     if (!authReady || !signedIn) return;
     void refreshMarket();
   }, [authReady, signedIn, refreshMarket]);
-
-  // Drop installs that are no longer listed in the market API for this host.
-  useEffect(() => {
-    if (!market) return;
-    const host = currentHostAppId();
-    const hostType = host === "PPRO" ? "PR" : host === "AEFT" ? "AE" : null;
-    const removed = purgeInstalledPacksNotInMarketCatalog(market.Packages, {
-      host: hostType,
-    });
-    if (removed.length === 0) return;
-    reloadPackList();
-  }, [market, reloadPackList]);
 
   // Prefetch ffmpeg into userdata on panel start (not on first Captions use).
   useEffect(() => {

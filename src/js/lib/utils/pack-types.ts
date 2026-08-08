@@ -5,7 +5,7 @@ export type PackageFiletype = (typeof PACKAGE_FILETYPES)[number];
 /** Join char for category instance paths (legacy: Typography-@-Basic). */
 export const INSTANCE_GROUP_JOIN_CHAR = "-@-";
 
-export const PACK_ASSETS_FOLDER = "Spunkram Preview Assets";
+export const PACK_ASSETS_FOLDER = "Previews";
 
 export type PackPreviewItem = {
   enabled?: boolean;

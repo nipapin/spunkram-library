@@ -6,6 +6,8 @@ import { csi, evalES } from "@/lib/utils/bolt";
 import { fs, os, path, zlib } from "@/lib/cep/node";
 import { loadLegacyJsx, legacyLoaded } from "@/sdk/legacy-loader";
 
+export { resolveFullProjectAssetsPath } from "./pack-folders";
+
 export type FullProjectApplyArgs = {
   /** Absolute path to decrypted .prproj */
   projectPath: string;
@@ -162,21 +164,6 @@ async function preparePtxProject(
 }
 
 /**
- * Resolve `_Assets/<folder>` used to relink media inside imported .prproj.
- * templatesDir = Spunkram Premiere Pro/; assets live beside it under `_Assets`.
- */
-export function resolveFullProjectAssetsPath(
-  templatesDir: string,
-  item: { group: { custom_assets_folder?: string }; pathSegments: string[] },
-): string {
-  const folder =
-    (typeof item.group.custom_assets_folder === "string" && item.group.custom_assets_folder) ||
-    item.pathSegments[item.pathSegments.length - 1] ||
-    "";
-  return path.join(templatesDir, "_Assets", folder);
-}
-
-/**
  * Apply a FULL_PROJECT .prproj onto the active Premiere sequence via copy/paste injection.
  */
 export async function applyFullProjectViaCopyPaste(
@@ -264,10 +251,12 @@ export async function applyFullProjectViaCopyPaste(
       };
     }
 
-    if (args.assetsPath && fs.existsSync(args.assetsPath)) {
-      const assetsEs = args.assetsPath.replace(/\\/g, "/");
+    // Relink offline media from pack `_Assets`. Use native OS separators —
+    // Premiere changeMediaPath breaks on mixed `/` + `\` paths (Beta kept `\`).
+    const assetsNative = args.assetsPath ? path.normalize(args.assetsPath) : "";
+    if (assetsNative) {
       await cps(
-        `$._copyPasteSystem.resolveMissingFootages(${esQuote(assetsEs)}, ${esQuote(args.presetName)})`,
+        `$._copyPasteSystem.resolveMissingFootages(${esQuote(assetsNative)}, ${esQuote(args.presetName)})`,
       );
     }
 

@@ -7,6 +7,7 @@ import {
   pdRefractoring,
 } from "./pack-decode";
 import { noteLegacyEncryptedPack } from "./pack-legacy-warn";
+import { resolvePackPreviewsPath } from "./pack-folders";
 import type {
   InstalledPackMeta,
   PackContent,
@@ -271,22 +272,10 @@ export function packInitErrorMessage(error: string): string {
 
 /**
  * Resolve preview-media folder next to the pack file
- * (`Spunkram Preview Assets` / legacy `Atom Preview Assets` / Market `Previews`).
+ * (`Previews` / legacy `Spunkram Preview Assets` / `Atom Preview Assets` / `* Preview Assets`).
  */
 export function resolvePackAssetsPath(packFilePath: string): string {
-  if (typeof path?.dirname !== "function" || typeof path?.join !== "function") {
-    return "";
-  }
-  const dir = path.dirname(packFilePath);
-  const candidates = [
-    path.join(dir, "Spunkram Preview Assets"),
-    path.join(dir, "Atom Preview Assets"),
-    path.join(dir, "Previews"),
-  ];
-  for (const candidate of candidates) {
-    if (cepFsAvailable() && fs.existsSync(candidate)) return candidate;
-  }
-  return candidates[0];
+  return resolvePackPreviewsPath(packFilePath);
 }
 
 /** Default preferences.json locations used by Spunkram / Atom installs. */
