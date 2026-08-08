@@ -1,5 +1,6 @@
 /**
  * CEP WebSocket client — auth frame then hello(host); reconnect with backoff.
+ * Receives pack lifecycle events + extension.update (new ZXP on CDN).
  */
 import { apiUrl } from "@/api/config";
 import { getSessionToken, handleUnauthorized } from "@/lib/api/session";
@@ -21,7 +22,19 @@ export type CepPackEvent = {
   author_id?: number;
 };
 
-type EventHandler = (event: CepPackEvent) => void;
+export type CepExtensionUpdateEvent = {
+  type: "extension.update";
+  version: string;
+  zxp_url?: string;
+  changelog?: string;
+  channel?: "stable" | "beta";
+  published_at?: string;
+  ts: number;
+};
+
+export type CepWsEvent = CepPackEvent | CepExtensionUpdateEvent;
+
+type EventHandler = (event: CepWsEvent) => void;
 
 function wsUrl(): string {
   const base = apiUrl("/api/cep/ws");
@@ -74,7 +87,7 @@ class CepWsClient {
     this.ws = null;
   }
 
-  private emit(event: CepPackEvent): void {
+  private emit(event: CepWsEvent): void {
     for (const h of this.handlers) {
       try {
         h(event);
@@ -132,6 +145,10 @@ class CepWsClient {
           type === "pack.deleted"
         ) {
           this.emit(msg as unknown as CepPackEvent);
+          return;
+        }
+        if (type === "extension.update" && typeof msg.version === "string") {
+          this.emit(msg as unknown as CepExtensionUpdateEvent);
         }
       };
 

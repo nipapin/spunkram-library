@@ -4,12 +4,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { usePanelUI } from "@/lib/panel-ui-context";
-import { cepWs, type CepPackEvent } from "@/lib/cep-ws";
+import { cepWs, type CepPackEvent, type CepWsEvent } from "@/lib/cep-ws";
 import { onSessionExpired } from "@/lib/api/session";
 
 export type AppNotification = {
@@ -26,6 +27,8 @@ type NotificationsContextValue = {
   unreadMarketCount: number;
   clearUnread: () => void;
   dismiss: (id: string) => void;
+  /** Fired when WSS says a newer panel build may be available (after /update check). */
+  onExtensionUpdateHint: (handler: (version: string) => void) => () => void;
 };
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
@@ -47,8 +50,16 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { signedIn, authReady, refreshMarket, market } = useAuth();
   const { showStatus } = usePanelUI();
   const [items, setItems] = useState<AppNotification[]>([]);
+  const extensionHandlers = useRef(new Set<(version: string) => void>());
 
-  const pushEvent = useCallback(
+  const onExtensionUpdateHint = useCallback((handler: (version: string) => void) => {
+    extensionHandlers.current.add(handler);
+    return () => {
+      extensionHandlers.current.delete(handler);
+    };
+  }, []);
+
+  const pushPackEvent = useCallback(
     (ev: CepPackEvent) => {
       // Always refresh catalog; deleted packs should not toast.
       void refreshMarket(true);
@@ -87,19 +98,37 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     [market?.Packages, refreshMarket, showStatus],
   );
 
+  const handleWsEvent = useCallback(
+    (ev: CepWsEvent) => {
+      if (ev.type === "extension.update") {
+        // Hint listeners (main UpdateBanner) re-check GET /api/cep/update for beta gate.
+        for (const h of extensionHandlers.current) {
+          try {
+            h(ev.version);
+          } catch {
+            /* ignore */
+          }
+        }
+        return;
+      }
+      pushPackEvent(ev);
+    },
+    [pushPackEvent],
+  );
+
   useEffect(() => {
     if (!authReady) return;
     if (!signedIn) {
       cepWs.stop();
       return;
     }
-    const off = cepWs.onEvent(pushEvent);
+    const off = cepWs.onEvent(handleWsEvent);
     cepWs.start();
     return () => {
       off();
       cepWs.stop();
     };
-  }, [signedIn, authReady, pushEvent]);
+  }, [signedIn, authReady, handleWsEvent]);
 
   useEffect(() => {
     return onSessionExpired(() => {
@@ -121,8 +150,14 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ items, unreadMarketCount, clearUnread, dismiss }),
-    [items, unreadMarketCount, clearUnread, dismiss],
+    () => ({
+      items,
+      unreadMarketCount,
+      clearUnread,
+      dismiss,
+      onExtensionUpdateHint,
+    }),
+    [items, unreadMarketCount, clearUnread, dismiss, onExtensionUpdateHint],
   );
 
   return (
@@ -140,6 +175,7 @@ export function useNotifications(): NotificationsContextValue {
       unreadMarketCount: 0,
       clearUnread: () => undefined,
       dismiss: () => undefined,
+      onExtensionUpdateHint: () => () => undefined,
     };
   }
   return ctx;

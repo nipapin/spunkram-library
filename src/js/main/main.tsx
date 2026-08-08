@@ -15,7 +15,7 @@ import { UpdateBanner } from "@/components/update-banner";
 import { FootagesPanel } from "@/footages";
 import { PanelUIProvider, usePanelUI } from "@/lib/panel-ui-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
-import { NotificationsProvider } from "@/lib/notifications-context";
+import { NotificationsProvider, useNotifications } from "@/lib/notifications-context";
 import {
   DownloadManagerProvider,
   useDownloadManager,
@@ -440,6 +440,7 @@ function AppShell() {
   const { signedIn, authReady, generationLimit, isFreeUser, market, refreshMarket } =
     useAuth();
   const { setShowFavoritesOnly, showStatus } = usePanelUI();
+  const { onExtensionUpdateHint } = useNotifications();
   const [nav, setNav] = useState(() =>
     readInstallablePackages().length === 0 ? "market" : "editing",
   );
@@ -573,6 +574,22 @@ function AppShell() {
       cancelled = true;
     };
   }, [authReady, signedIn]);
+
+  // WSS wake-up when a new ZXP is uploaded — re-check /api/cep/update (beta gate).
+  useEffect(() => {
+    if (!authReady || !signedIn) return;
+    return onExtensionUpdateHint(() => {
+      void fetchUpdateInfo().then((info) => {
+        if (!info?.version || !info.zxpUrl) return;
+        if (!isRemoteNewer(LOCAL_VERSION, info.version)) return;
+        setUpdateVersion(info.version);
+        setUpdateZxpUrl(info.zxpUrl);
+        setUpdateChangelog(typeof info.changelog === "string" ? info.changelog : "");
+        setUpdateChannel(info.channel === "beta" ? "beta" : "stable");
+        showStatus(`Update available: v${info.version}`, "info", 8000);
+      });
+    });
+  }, [authReady, signedIn, onExtensionUpdateHint, showStatus]);
 
   const handleApplyUpdate = useCallback(async () => {
     if (!updateZxpUrl || !updateVersion || updateBusy) return;
