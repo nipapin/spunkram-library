@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
-  Download,
   ExternalLink,
   Loader2,
   Play,
@@ -36,19 +35,12 @@ function hostPrimaryType(): "AE" | "PR" | null {
   return null;
 }
 
-function priceLabel(
-  item: CepMarketPackage,
-  subscriptionActive: boolean,
-): { label: string } {
+function priceLabel(item: CepMarketPackage): { label: string } {
+  if (item.owned) return { label: "Owned" };
   const price = item.custom_price;
   const free = !price || price === 0;
-  if (item.owned) return { label: "Owned" };
-  if (subscriptionActive || item.action === "install") {
-    return { label: free ? "Included" : "Covered by Subscription" };
-  }
-  if (item.action === "get_free") return { label: "Free" };
-  if (free) return { label: "Free" };
-  return { label: `$${price}` };
+  if (free || item.action === "get_free") return { label: "Free" };
+  return { label: "In subscription" };
 }
 
 function uiActionForItem(
@@ -102,67 +94,43 @@ function jobStatusLabel(job: DownloadJob): string {
   }
 }
 
-function UseWhenReadySwitch({
-  checked,
-  onChange,
-  disabled,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label="Use when ready"
-      disabled={disabled}
-      title="Use when ready"
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors",
-        disabled && "cursor-not-allowed opacity-50",
-        checked ? "bg-primary" : "bg-secondary",
-      )}
-    >
-      <span
-        className={cn(
-          "pointer-events-none block size-3 rounded-full bg-background shadow transition-transform",
-          checked ? "translate-x-3.5" : "translate-x-0.5",
-        )}
-      />
-    </button>
-  );
-}
-
 function MarketCard({
   item,
-  subscriptionActive,
   subscribeUrl,
   installedMeta,
   activePackPath,
-  installing,
+  job,
   onSwitchPack,
   onRemovePack,
   onInstall,
+  onCancelJob,
+  onRetryJob,
 }: {
   item: CepMarketPackage;
-  subscriptionActive: boolean;
   subscribeUrl?: string | null;
   installedMeta?: InstalledPackMeta;
   activePackPath?: string;
-  installing: boolean;
+  job?: DownloadJob;
   onSwitchPack: (meta: InstalledPackMeta) => void;
   onRemovePack: (meta: InstalledPackMeta) => void;
   onInstall: (item: CepMarketPackage) => void;
+  onCancelJob: (jobId: string) => void;
+  onRetryJob: (jobId: string) => void;
 }) {
   const installed = Boolean(installedMeta);
   const active = Boolean(installedMeta && installedMeta.path === activePackPath);
-  const { label: price } = priceLabel(item, subscriptionActive);
+  const { label: price } = priceLabel(item);
   const action = uiActionForItem(item, { installed, active });
   const imageSrc = `${item.image_url}${item.image_url.includes("?") ? "&" : "?"}v=${item.version || "1"}`;
   const showSubHint = action.type === "buy";
+  const detailsUrl = item.details_url?.trim() || null;
+  const jobBusy =
+    job &&
+    (job.status === "queued" ||
+      job.status === "downloading" ||
+      job.status === "installing");
+  const jobFailed = job && (job.status === "error" || job.status === "cancelled");
+  const showJobProgress = Boolean(jobBusy || jobFailed);
 
   function runAction(type: string) {
     if (type === "switch" && installedMeta) {
@@ -250,7 +218,7 @@ function MarketCard({
         <div className="flex gap-1">
           <button
             type="button"
-            disabled={action.disabled || installing}
+            disabled={action.disabled || Boolean(jobBusy)}
             onClick={() => runAction(action.type)}
             className={cn(
               "flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-[10px] font-semibold transition-colors",
@@ -259,7 +227,7 @@ function MarketCard({
                 : ACCENT_PILL,
             )}
           >
-            {installing && action.type === "install" ? (
+            {jobBusy && action.type === "install" ? (
               <>
                 <Loader2 className="size-3 animate-spin" />
                 Installing…
@@ -268,6 +236,15 @@ function MarketCard({
               action.label
             )}
           </button>
+          {detailsUrl && (
+            <button
+              type="button"
+              onClick={() => openMarketUrl(detailsUrl)}
+              className="flex flex-1 items-center justify-center gap-1 rounded-full border border-white/10 bg-secondary/50 px-2 py-1.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+            >
+              Details
+            </button>
+          )}
           {installedMeta && (
             <button
               type="button"
@@ -279,150 +256,60 @@ function MarketCard({
             </button>
           )}
         </div>
+
+        {showJobProgress && job && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <p
+                className={cn(
+                  "min-w-0 truncate text-[10px]",
+                  job.status === "error" ? "text-destructive" : "text-muted-foreground",
+                )}
+                title={job.error}
+              >
+                {jobStatusLabel(job)}
+              </p>
+              <div className="flex shrink-0 items-center gap-1">
+                {jobBusy && (
+                  <button
+                    type="button"
+                    aria-label="Cancel"
+                    onClick={() => onCancelJob(job.id)}
+                    className="flex size-5 items-center justify-center rounded-full border border-white/10 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-2.5" />
+                  </button>
+                )}
+                {jobFailed && (
+                  <button
+                    type="button"
+                    aria-label={job.hasCache ? "Retry install" : "Re-download"}
+                    title={job.hasCache ? "Retry install from cached zip" : "Re-download"}
+                    onClick={() => onRetryJob(job.id)}
+                    className="flex size-5 items-center justify-center rounded-full border border-white/10 text-muted-foreground hover:text-foreground"
+                  >
+                    <RotateCcw className="size-2.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+            {jobBusy && (
+              <div className="h-1 overflow-hidden rounded-full bg-black/30">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{
+                    width: `${Math.max(
+                      job.status === "queued" ? 4 : 8,
+                      job.progress,
+                    )}%`,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </article>
-  );
-}
-
-function DownloadsList({
-  jobs,
-  onSetUseWhenReady,
-  onCancel,
-  onRetry,
-  onClearFinished,
-}: {
-  jobs: DownloadJob[];
-  onSetUseWhenReady: (jobId: string, value: boolean) => void;
-  onCancel: (jobId: string) => void;
-  onRetry: (jobId: string) => void;
-  onClearFinished: () => void;
-}) {
-  const finished = jobs.some(
-    (j) => j.status === "done" || j.status === "cancelled" || j.status === "error",
-  );
-
-  if (jobs.length === 0) {
-    return (
-      <div className="flex h-full min-h-40 flex-col items-center justify-center gap-1 text-center text-muted-foreground">
-        <Download className="size-5 opacity-40" />
-        <p className="text-xs font-medium text-foreground">No downloads yet</p>
-        <p className="text-[10px]">Install a pack from the market to see progress here</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      {finished && (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={onClearFinished}
-            className="rounded-full px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-          >
-            Clear finished
-          </button>
-        </div>
-      )}
-      {jobs.map((job) => {
-        const busy =
-          job.status === "queued" ||
-          job.status === "downloading" ||
-          job.status === "installing";
-        const canToggleReady = busy || job.status === "error" || job.status === "cancelled";
-        const imageSrc = `${job.pack.image_url}${job.pack.image_url.includes("?") ? "&" : "?"}v=${job.pack.version || "1"}`;
-
-        return (
-          <div
-            key={job.id}
-            className="flex gap-2.5 rounded-xl border border-white/10 bg-card/60 p-2.5"
-          >
-            <div className="relative size-12 shrink-0 overflow-hidden rounded-lg bg-secondary/40">
-              <img
-                src={imageSrc}
-                alt=""
-                className="size-full object-cover"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
-                }}
-              />
-            </div>
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-medium text-foreground">
-                    {job.pack.name}
-                  </p>
-                  <p
-                    className={cn(
-                      "truncate text-[10px]",
-                      job.status === "error"
-                        ? "text-destructive"
-                        : job.status === "done"
-                          ? "text-emerald-300"
-                          : "text-muted-foreground",
-                    )}
-                    title={job.error}
-                  >
-                    {jobStatusLabel(job)}
-                    {job.status === "error" && job.hasCache
-                      ? " · zip kept for retry"
-                      : ""}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  {busy && (
-                    <button
-                      type="button"
-                      aria-label="Cancel"
-                      onClick={() => onCancel(job.id)}
-                      className="flex size-6 items-center justify-center rounded-full border border-white/10 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  )}
-                  {(job.status === "error" || job.status === "cancelled") && (
-                    <button
-                      type="button"
-                      aria-label={job.hasCache ? "Retry install" : "Re-download"}
-                      title={job.hasCache ? "Retry install from cached zip" : "Re-download"}
-                      onClick={() => onRetry(job.id)}
-                      className="flex size-6 items-center justify-center rounded-full border border-white/10 text-muted-foreground hover:text-foreground"
-                    >
-                      <RotateCcw className="size-3" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {busy && (
-                <div className="h-1 overflow-hidden rounded-full bg-black/30">
-                  <div
-                    className="h-full bg-primary transition-all"
-                    style={{
-                      width: `${Math.max(
-                        job.status === "queued" ? 4 : 8,
-                        job.progress,
-                      )}%`,
-                    }}
-                  />
-                </div>
-              )}
-
-              {canToggleReady && (
-                <label className="flex cursor-pointer items-center justify-between gap-2 text-[10px] text-muted-foreground">
-                  <span>Use when ready</span>
-                  <UseWhenReadySwitch
-                    checked={job.useWhenReady}
-                    onChange={(v) => onSetUseWhenReady(job.id, v)}
-                  />
-                </label>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
@@ -445,18 +332,9 @@ export function MarketPanel({
     refreshMarket,
     subscription,
   } = useAuth();
-  const {
-    enqueue,
-    jobs,
-    activeCount,
-    setUseWhenReady,
-    cancel,
-    retry,
-    clearFinished,
-  } = useDownloadManager();
+  const { enqueue, jobs, cancel, retry } = useDownloadManager();
   const [packTick, setPackTick] = useState(0);
   const [installError, setInstallError] = useState<string | null>(null);
-  const [view, setView] = useState<"market" | "downloads">("market");
 
   const hostType = useMemo(() => hostPrimaryType(), []);
   const hostLabel =
@@ -486,21 +364,30 @@ export function MarketPanel({
         onSelectPack?.(meta);
       },
     });
-    setView("downloads");
   }
 
-  const busyPackIds = useMemo(() => {
-    const ids = new Set<string>();
+  const jobsByPackId = useMemo(() => {
+    const map = new Map<string, DownloadJob>();
     for (const j of jobs) {
-      if (
+      const id = String(j.pack.id);
+      const prev = map.get(id);
+      if (!prev) {
+        map.set(id, j);
+        continue;
+      }
+      const prevBusy =
+        prev.status === "queued" ||
+        prev.status === "downloading" ||
+        prev.status === "installing";
+      const nextBusy =
         j.status === "queued" ||
         j.status === "downloading" ||
-        j.status === "installing"
-      ) {
-        ids.add(String(j.pack.id));
+        j.status === "installing";
+      if (nextBusy || (!prevBusy && j.status !== "done")) {
+        map.set(id, j);
       }
     }
-    return ids;
+    return map;
   }, [jobs]);
 
   useEffect(() => {
@@ -540,32 +427,11 @@ export function MarketPanel({
       <div className="flex flex-wrap items-center gap-2 border-b border-white/5 px-2.5 py-2">
         <button
           type="button"
-          onClick={() => {
-            if (view === "downloads") setView("market");
-            else onBack();
-          }}
-          className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+          onClick={onBack}
+          className="mr-auto flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" />
           Back
-        </button>
-        <button
-          type="button"
-          onClick={() => setView((v) => (v === "downloads" ? "market" : "downloads"))}
-          className={cn(
-            "mr-auto flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition-colors",
-            view === "downloads"
-              ? "border-primary/50 bg-primary/15 text-foreground"
-              : "border-white/10 bg-card/40 text-muted-foreground hover:border-primary/40 hover:text-foreground",
-          )}
-        >
-          <Download className="size-3" />
-          Downloads
-          {activeCount > 0 && (
-            <span className="rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-semibold text-primary-foreground">
-              {activeCount}
-            </span>
-          )}
         </button>
         <button
           type="button"
@@ -577,7 +443,7 @@ export function MarketPanel({
         </button>
       </div>
 
-      {view === "market" && !subscriptionActive && (
+      {!subscriptionActive && (
         <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-2 text-[11px] text-foreground">
           <span className="flex-1">
             Packs are available free with a Spunkram subscription from{" "}
@@ -603,15 +469,7 @@ export function MarketPanel({
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
-        {view === "downloads" ? (
-          <DownloadsList
-            jobs={jobs}
-            onSetUseWhenReady={setUseWhenReady}
-            onCancel={cancel}
-            onRetry={retry}
-            onClearFinished={clearFinished}
-          />
-        ) : marketLoading && !market ? (
+        {marketLoading && !market ? (
           <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="size-5 animate-spin text-primary" />
             <p className="text-xs font-medium text-foreground">Please wait</p>
@@ -640,14 +498,15 @@ export function MarketPanel({
                 <MarketCard
                   key={String(item.id)}
                   item={item}
-                  subscriptionActive={subscriptionActive}
                   subscribeUrl={subscribeUrl}
                   installedMeta={meta}
                   activePackPath={resolvedActivePath}
-                  installing={busyPackIds.has(String(item.id))}
+                  job={jobsByPackId.get(String(item.id))}
                   onSwitchPack={handleSwitch}
                   onRemovePack={handleRemove}
                   onInstall={handleInstall}
+                  onCancelJob={cancel}
+                  onRetryJob={retry}
                 />
               );
             })}
