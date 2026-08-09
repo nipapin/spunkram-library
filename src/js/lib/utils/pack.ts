@@ -16,6 +16,13 @@ import type {
   PackageFiletype,
 } from "./pack-types";
 import { PACKAGE_FILETYPES } from "./pack-types";
+import {
+  currentPackHost,
+  normalizePackHost,
+  resolveInstalledPackHost,
+  packMetaMatchesHost,
+  type PackHostId,
+} from "./pack-host";
 
 export type InitPackageCallback = (
   result: PackInitResult | false,
@@ -324,11 +331,23 @@ export function readInstalledPackagesFromPreferences(
   return [];
 }
 
-/** All installed packages that look like valid `.spunkram`/`.atom` pack files. */
-export function readInstallablePackages(): InstalledPackMeta[] {
+/** All installed pack files (any host). Prefer {@link readInstallablePackages}. */
+export function readAllInstallablePackages(): InstalledPackMeta[] {
   return readInstalledPackagesFromPreferences().filter(
     (p) => p.path && parsePackageFileFormat(p.path),
   );
+}
+
+/**
+ * Installed packs for a host. Defaults to the current CEP host.
+ * Packs with unknown/mismatched `appID` are excluded.
+ */
+export function readInstallablePackages(
+  host: PackHostId | null = currentPackHost(),
+): InstalledPackMeta[] {
+  const all = readAllInstallablePackages();
+  if (!host) return [];
+  return all.filter((p) => packMetaMatchesHost(p, host));
 }
 
 /** Load one specific installed pack (used by the multi-pack switcher). */
@@ -337,7 +356,19 @@ export async function loadInstalledPack(meta: InstalledPackMeta): Promise<{
   pack: PackInitResult;
   assetsPath: string;
 }> {
+  const host = currentPackHost();
   const pack = await initPackageAsync(meta.path);
+  const resolvedHost =
+    resolveInstalledPackHost(meta) ||
+    normalizePackHost(pack.settings.main.software_id);
+  if (host && (!resolvedHost || resolvedHost !== host)) {
+    const other = host === "AE" ? "Premiere Pro" : "After Effects";
+    throw new Error(
+      resolvedHost
+        ? `This pack is for ${other}. Open it there.`
+        : "This pack has no host app id and can't be opened here.",
+    );
+  }
   return {
     meta,
     pack,
@@ -346,7 +377,7 @@ export async function loadInstalledPack(meta: InstalledPackMeta): Promise<{
 }
 
 /**
- * Load the first installed pack from preferences (if any).
+ * Load the first installed pack for the current host (if any).
  */
 export async function loadFirstInstalledPack(): Promise<{
   meta: InstalledPackMeta;

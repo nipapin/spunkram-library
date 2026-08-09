@@ -32,6 +32,13 @@ import {
   readInstallablePackages,
 } from "@/lib/utils/pack";
 import {
+  activePackStorageKey,
+  currentPackHost,
+  LEGACY_ACTIVE_PACK_STORAGE_KEY,
+  packMetaMatchesHost,
+  type PackHostId,
+} from "@/lib/utils/pack-host";
+import {
   buildPackTree,
   collectAllContentSections,
   collectContentSections,
@@ -52,9 +59,40 @@ import {
 } from "@/lib/config/entitlements";
 import "./main.scss";
 
-const ACTIVE_PACK_STORAGE_KEY = "spunkram.activePackPath";
 const CATEGORY_BY_PACK_KEY = "spunkram.categoryByPack";
 const GENERATIONS_STORAGE_KEY = "spunkram.generations";
+
+function hostActivePackKey(host: PackHostId | null = currentPackHost()): string | null {
+  return host ? activePackStorageKey(host) : null;
+}
+
+function readActivePackPath(host: PackHostId | null = currentPackHost()): string | null {
+  const key = hostActivePackKey(host);
+  if (!key) return null;
+  try {
+    const scoped = panelStore.getItem(key);
+    if (scoped) return scoped;
+    // One-time migration from pre-split key: only if path is in this host's list.
+    const legacy = panelStore.getItem(LEGACY_ACTIVE_PACK_STORAGE_KEY);
+    if (!legacy || !host) return null;
+    const match = readInstallablePackages(host).some((p) => p.path === legacy);
+    if (!match) return null;
+    panelStore.setItem(key, legacy);
+    return legacy;
+  } catch {
+    return null;
+  }
+}
+
+function writeActivePackPath(packPath: string, host: PackHostId | null = currentPackHost()) {
+  const key = hostActivePackKey(host);
+  if (!key || !packPath) return;
+  try {
+    panelStore.setItem(key, packPath);
+  } catch {
+    // ignore storage errors
+  }
+}
 
 function loadCategoryByPack(): Record<string, string> {
   try {
@@ -477,11 +515,7 @@ function AppShell() {
         setPackSettings(loaded.pack.settings);
         setCategory(resolveCategoryForPack(nextTree, loaded.meta.path));
         setPackError(null);
-        try {
-          panelStore.setItem(ACTIVE_PACK_STORAGE_KEY, loaded.meta.path);
-        } catch {
-          // ignore storage errors
-        }
+        writeActivePackPath(loaded.meta.path);
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
@@ -507,13 +541,10 @@ function AppShell() {
       return;
     }
 
-    let preferredPath: string | null = null;
-    try {
-      preferredPath = panelStore.getItem(ACTIVE_PACK_STORAGE_KEY);
-    } catch {
-      // ignore storage errors
-    }
-    const preferred = installed.find((p) => p.path === preferredPath);
+    const preferredPath = readActivePackPath();
+    const preferred = preferredPath
+      ? installed.find((p) => p.path === preferredPath)
+      : undefined;
     applyPack(preferred ?? installed[0]);
   }, [applyPack]);
 
@@ -754,6 +785,8 @@ function AppShell() {
             onPacksChanged={reloadPackList}
             activePackPath={packFilePath}
             onSelectPack={(meta) => {
+              const host = currentPackHost();
+              if (host && !packMetaMatchesHost(meta, host)) return;
               applyPack(meta);
               // Stay on current nav so background "Use when ready" doesn't yank the user.
             }}

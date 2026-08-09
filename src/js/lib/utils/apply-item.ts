@@ -23,6 +23,7 @@ import {
 } from "./copy-paste-apply";
 import type { PackSettings, PackTreeItem } from "./pack-types";
 import { reportSupportError } from "@/api/support";
+import { currentPackHost, normalizePackHost } from "./pack-host";
 
 export type ApplyItemOutcome =
   | { ok: true; warning?: string }
@@ -34,6 +35,7 @@ const REASON_MESSAGES: Record<string, string> = {
   IMPORT_FAILED: "The host application couldn't import this item.",
   PLACE_FAILED: "Imported into the project, but couldn't be placed on the timeline.",
   MOGRT_NOT_SUPPORTED_IN_AE: "This item's format (.mogrt) isn't supported in After Effects.",
+  NO_SUPPORT_APP: "This pack doesn't support the current host application.",
 };
 
 function friendlyReason(reason: string): string {
@@ -58,6 +60,15 @@ export async function applyPackItemToHost(
   }
   if (!packFilePath) {
     return { ok: false, message: "No pack loaded." };
+  }
+
+  const packHost = normalizePackHost(settings?.main?.software_id);
+  const host = currentPackHost();
+  if (host && packHost && packHost !== host) {
+    return {
+      ok: false,
+      message: friendlyReason("NO_SUPPORT_APP"),
+    };
   }
 
   let resolved;

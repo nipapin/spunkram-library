@@ -6,7 +6,12 @@ import { openMarketUrl, type CepMarketPackage, installedPackMatchesMarketItem } 
 import { openYoutube } from "@/lib/api/market-api";
 import { readInstallablePackages } from "@/lib/utils/pack";
 import { uninstallPack } from "@/lib/utils/pack-install";
-import { currentHostAppId } from "@/lib/utils/apply-item";
+import {
+  activePackStorageKey,
+  currentPackHost,
+  LEGACY_ACTIVE_PACK_STORAGE_KEY,
+  type PackHostId,
+} from "@/lib/utils/pack-host";
 import { openMotionflowSubscribe } from "@/api/motionflow-auth";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 import * as panelStore from "@/lib/userdata-store";
@@ -15,13 +20,23 @@ import { useDownloadManager, type DownloadJob } from "@/lib/download-manager-con
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
 
-const ACTIVE_PACK_STORAGE_KEY = "spunkram.activePackPath";
+function hostPrimaryType(): PackHostId | null {
+  return currentPackHost();
+}
 
-function hostPrimaryType(): "AE" | "PR" | null {
-  const host = currentHostAppId();
-  if (host === "AEFT") return "AE";
-  if (host === "PPRO") return "PR";
-  return null;
+function readActivePackPathForHost(host: PackHostId | null): string | undefined {
+  if (!host) return undefined;
+  try {
+    const scoped = panelStore.getItem(activePackStorageKey(host));
+    if (scoped) return scoped;
+    const legacy = panelStore.getItem(LEGACY_ACTIVE_PACK_STORAGE_KEY);
+    if (!legacy) return undefined;
+    if (!readInstallablePackages(host).some((p) => p.path === legacy)) return undefined;
+    panelStore.setItem(activePackStorageKey(host), legacy);
+    return legacy;
+  } catch {
+    return undefined;
+  }
 }
 
 function priceLabel(item: CepMarketPackage): { label: string } {
@@ -163,7 +178,7 @@ function MarketCard({
   activePackPath?: string;
   job?: DownloadJob;
   onSwitchPack: (meta: InstalledPackMeta) => void;
-  onRemovePack: (meta: InstalledPackMeta) => void;
+  onRemovePack: (meta: InstalledPackMeta, marketPackId: string | number) => void;
   onInstall: (item: CepMarketPackage) => void;
   onCancelJob: (jobId: string) => void;
   onRetryJob: (jobId: string) => void;
@@ -322,7 +337,11 @@ function MarketCard({
             <button
               type="button"
               aria-label={`Remove ${item.name}`}
-              onClick={() => onRemovePack(installedMeta)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onRemovePack(installedMeta, item.id);
+              }}
               className="flex size-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-secondary/50 text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
             >
               <Trash2 className="size-3" />
@@ -347,7 +366,7 @@ export function MarketPanel({
   activePackPath?: string;
 }) {
   const { market, marketLoading, marketError, refreshMarket, subscription } = useAuth();
-  const { enqueue, jobs, cancel, retry } = useDownloadManager();
+  const { enqueue, jobs, cancel, retry, dismissPackJobs } = useDownloadManager();
   const [packTick, setPackTick] = useState(0);
   const [installError, setInstallError] = useState<string | null>(null);
   const onPacksChangedRef = useRef(onPacksChanged);
@@ -360,8 +379,24 @@ export function MarketPanel({
   const subscriptionActive = Boolean(market?.subscription_active) || subscription.subscribed;
   const subscribeUrl = market?.subscribe_url;
 
-  function handleRemove(meta: InstalledPackMeta) {
+  function handleRemove(meta: InstalledPackMeta, marketPackId: string | number) {
     uninstallPack(meta);
+    dismissPackJobs(marketPackId);
+    if (meta.marketId != null && String(meta.marketId) !== String(marketPackId)) {
+      dismissPackJobs(meta.marketId);
+    }
+    // Clear host active pack if this was the open one.
+    if (hostType) {
+      try {
+        const key = activePackStorageKey(hostType);
+        const active = panelStore.getItem(key);
+        if (active && pathsEqual(active, meta.path)) {
+          panelStore.removeItem(key);
+        }
+      } catch {
+        // ignore
+      }
+    }
     setPackTick((t) => t + 1);
     onPacksChanged?.();
   }
@@ -433,12 +468,8 @@ export function MarketPanel({
 
   const resolvedActivePath = useMemo(() => {
     if (activePackPath) return activePackPath;
-    try {
-      return panelStore.getItem(ACTIVE_PACK_STORAGE_KEY) || undefined;
-    } catch {
-      return undefined;
-    }
-  }, [activePackPath, packTick]);
+    return readActivePackPathForHost(hostType);
+  }, [activePackPath, packTick, hostType]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -508,9 +539,9 @@ export function MarketPanel({
           <div className="grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2">
             {filtered.map((item) => {
               const job = jobsByPackId.get(String(item.id));
-              const meta =
-                findInstalledMeta(item, installedList) ??
-                (job?.status === "done" && job.meta ? job.meta : undefined);
+              // Installed state comes only from disk/prefs — never from a stale
+              // done job.meta (that made Remove look like a no-op).
+              const meta = findInstalledMeta(item, installedList);
               return (
                 <MarketCard
                   key={String(item.id)}

@@ -26,11 +26,10 @@ import {
 } from "@/api/update";
 import { applyExtensionUpdate } from "@/utils/extension-update";
 import * as panelStore from "@/lib/userdata-store";
+import { clearAllActivePackStorageKeys } from "@/lib/utils/pack-host";
 
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
-
-const ACTIVE_PACK_STORAGE_KEY = "spunkram.activePackPath";
 
 function ToggleRow({
   label,
@@ -254,7 +253,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
     // Match Beta: empty the prefs file; reload rebuilds defaults from scratch.
     clearPreferencesFile();
     try {
-      panelStore.removeItem(ACTIVE_PACK_STORAGE_KEY);
+      clearAllActivePackStorageKeys((key) => panelStore.removeItem(key));
     } catch {
       // ignore
     }
@@ -266,7 +265,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
     setConfirm(null);
     clearInstalledPackagesInPreferences();
     try {
-      panelStore.removeItem(ACTIVE_PACK_STORAGE_KEY);
+      clearAllActivePackStorageKeys((key) => panelStore.removeItem(key));
     } catch {
       // ignore
     }

@@ -21,6 +21,7 @@ import {
 import { downloadToFile } from "@/utils/download-file";
 import { installPackFromFile } from "@/lib/utils/pack-install";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
+import { normalizePackHost } from "@/lib/utils/pack-host";
 import { version as EXTENSION_VERSION } from "../../shared/shared";
 
 export const CEP_MARKET_ENDPOINT = "/api/cep/market";
@@ -136,14 +137,6 @@ function normalizePackage(raw: CepMarketPackage): CepMarketPackage {
   };
 }
 
-function normalizeHostApp(id: string): string {
-  const u = id.trim().toUpperCase();
-  if (!u) return "";
-  if (u === "AE" || u === "AEFT" || u.includes("AFTER")) return "AE";
-  if (u === "PR" || u === "PPRO" || u.includes("PREMIERE")) return "PR";
-  return u;
-}
-
 /** Collapse "Wedding Pack" / "Wedding Package for Premiere Pro" → "wedding". */
 function normalizePackLabel(value: string): string {
   return value
@@ -164,8 +157,8 @@ export function installedPackMatchesMarketItem(
     return true;
   }
 
-  const metaApp = normalizeHostApp(meta.appID || meta.load || "");
-  const itemApp = normalizeHostApp(item.primary_type || "");
+  const metaApp = normalizePackHost(meta.appID || meta.load || "");
+  const itemApp = normalizePackHost(item.primary_type || "");
   if (metaApp && itemApp && metaApp !== itemApp) return false;
 
   const installedName = (meta.name || "").trim().toLowerCase();

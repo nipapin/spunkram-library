@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-08-09
+
+### Fixed
+
+- Keep AE and Premiere packs strictly host-separated (list, open, install, apply, active pack)
+- Market Remove button: stop ghosting installed state from finished download jobs
+
+### Changed
+
+- New installs land under host subfolders (`_ABS/AE`, `_ABS/PR`); active pack keys are host-scoped
+
 ## [0.6.1] - 2026-08-09
 
 ### Fixed

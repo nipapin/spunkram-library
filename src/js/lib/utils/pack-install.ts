@@ -16,6 +16,7 @@ import type { InstalledPackMeta } from "./pack-types";
 import { extractZipToFolder } from "./pack-zip";
 import { installPackFonts } from "./pack-fonts";
 import { reportSupportError, reportSupportInfo } from "@/api/support";
+import { currentPackHost, normalizePackHost, type PackHostId } from "./pack-host";
 
 function cepFsAvailable(): boolean {
   return typeof fs?.existsSync === "function";
@@ -51,8 +52,9 @@ function defaultPackagesInstallRoot(): string {
  * Packages install root.
  * When Settings → "Use custom path for packages" is on and a folder is set,
  * installs land there; otherwise `<prefs dir>/_ABS`.
+ * Pass a pack host to install under `<root>/AE` or `<root>/PR`.
  */
-export function resolvePackagesInstallRoot(): string {
+export function resolvePackagesInstallRoot(host?: PackHostId | null): string {
   let root = defaultPackagesInstallRoot();
   try {
     const prefs = readPrefSettings();
@@ -63,6 +65,10 @@ export function resolvePackagesInstallRoot(): string {
     }
   } catch {
     // fall back to default
+  }
+  const packHost = host === undefined ? currentPackHost() : host;
+  if (packHost) {
+    root = path.join(root, packHost);
   }
   if (cepFsAvailable() && !fs.existsSync(root)) fs.mkdirSync(root, { recursive: true });
   return root;
@@ -174,6 +180,8 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
 
     const pack = await initPackageAsync(packFilePath);
     const { main } = pack.settings;
+    const packHost = normalizePackHost(main.software_id);
+    const host = currentPackHost();
     installLog("parse.ok", {
       name: main.name || null,
       appID: main.software_id || null,
@@ -181,10 +189,26 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
       treeFolders: Object.keys(pack.structure || {}).length,
     });
 
+    if (host && packHost && packHost !== host) {
+      return {
+        ok: false,
+        message:
+          host === "AE"
+            ? "This pack is for Premiere Pro and can't be installed in After Effects."
+            : "This pack is for After Effects and can't be installed in Premiere Pro.",
+      };
+    }
+    if (host && !packHost) {
+      return {
+        ok: false,
+        message: "This pack has no host app id (AE/PR) and can't be installed safely.",
+      };
+    }
+
     const folderName = sanitizeFolderName(
       `${main.name || "Pack"}${main.software_id ? ` - ${main.software_id}` : ""}`,
     );
-    const installRoot = resolvePackagesInstallRoot();
+    const installRoot = resolvePackagesInstallRoot(packHost || host);
     const targetDir = path.join(installRoot, folderName);
     const sourceDir = path.dirname(packFilePath);
     const targetPackPath = path.join(targetDir, path.basename(packFilePath));
@@ -254,14 +278,42 @@ export function uninstallPack(meta: InstalledPackMeta): boolean {
   try {
     const prefs = loadPreferencesFile();
     const packages = Array.isArray(prefs.packages) ? (prefs.packages as InstalledPackMeta[]) : [];
-    prefs.packages = packages.filter((p) => p.path !== meta.path);
+    const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    const targetPath = norm(meta.path || "");
+    const targetMarketId =
+      meta.marketId != null ? String(meta.marketId) : null;
+
+    prefs.packages = packages.filter((p) => {
+      if (targetPath && p.path && norm(p.path) === targetPath) return false;
+      if (
+        targetMarketId &&
+        p.marketId != null &&
+        String(p.marketId) === targetMarketId
+      ) {
+        return false;
+      }
+      // Same name + host (legacy installs without marketId).
+      const metaHost = normalizePackHost(meta.appID || meta.load);
+      const entryHost = normalizePackHost(p.appID || p.load);
+      if (
+        meta.name &&
+        p.name === meta.name &&
+        metaHost &&
+        entryHost &&
+        metaHost === entryHost
+      ) {
+        return false;
+      }
+      return true;
+    });
     savePreferencesFile(prefs);
 
-    const installRoot = path.normalize(resolvePackagesInstallRoot());
+    const baseRoot = path.normalize(resolvePackagesInstallRoot(null));
     const packDir = path.normalize(path.dirname(meta.path));
     if (
       cepFsAvailable() &&
-      (packDir === installRoot || packDir.startsWith(installRoot + path.sep)) &&
+      meta.path &&
+      (packDir === baseRoot || packDir.startsWith(baseRoot + path.sep)) &&
       fs.existsSync(packDir)
     ) {
       fs.rmSync(packDir, { recursive: true, force: true });

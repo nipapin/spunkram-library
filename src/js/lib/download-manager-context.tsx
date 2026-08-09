@@ -48,6 +48,8 @@ type DownloadManagerContextValue = {
   enqueue: (pack: CepMarketPackage, opts?: EnqueueOpts) => string;
   cancel: (jobId: string) => void;
   clearFinished: () => void;
+  /** Drop finished/error jobs for a market pack (after uninstall). */
+  dismissPackJobs: (packId: string | number) => void;
   setUseWhenReady: (jobId: string, value: boolean) => void;
   /** Retry install from cached zip (or re-download if cache missing). */
   retry: (jobId: string) => void;
@@ -293,6 +295,21 @@ export function DownloadManagerProvider({
     );
   }, []);
 
+  const dismissPackJobs = useCallback((packId: string | number) => {
+    const id = String(packId);
+    setJobs((prev) =>
+      prev.filter((j) => {
+        if (String(j.pack.id) !== id) return true;
+        // Keep in-flight jobs; drop terminal ones that would ghost "installed".
+        return (
+          j.status === "queued" ||
+          j.status === "downloading" ||
+          j.status === "installing"
+        );
+      }),
+    );
+  }, []);
+
   const setUseWhenReady = useCallback((jobId: string, value: boolean) => {
     setJobs((prev) =>
       prev.map((j) => (j.id === jobId ? { ...j, useWhenReady: value } : j)),
@@ -346,10 +363,20 @@ export function DownloadManagerProvider({
       enqueue,
       cancel,
       clearFinished,
+      dismissPackJobs,
       setUseWhenReady,
       retry,
     }),
-    [jobs, activeCount, enqueue, cancel, clearFinished, setUseWhenReady, retry],
+    [
+      jobs,
+      activeCount,
+      enqueue,
+      cancel,
+      clearFinished,
+      dismissPackJobs,
+      setUseWhenReady,
+      retry,
+    ],
   );
 
   return (
@@ -368,6 +395,7 @@ export function useDownloadManager(): DownloadManagerContextValue {
       enqueue: () => "",
       cancel: () => undefined,
       clearFinished: () => undefined,
+      dismissPackJobs: () => undefined,
       setUseWhenReady: () => undefined,
       retry: () => undefined,
     };
