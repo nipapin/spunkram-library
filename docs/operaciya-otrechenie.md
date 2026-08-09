@@ -7,6 +7,8 @@
 
 Локальные пути: [`PATHS.md`](./PATHS.md). Текущий контракт API: [`BACKEND_CEP_API.md`](./BACKEND_CEP_API.md) · next-app `CEP_API.md`.
 
+Host/SDK выход из Beta JSX (отдельный трек): [`sdk/POLNOE_OTRECHENIE.md`](./sdk/POLNOE_OTRECHENIE.md).
+
 ---
 
 ## Цель для панели

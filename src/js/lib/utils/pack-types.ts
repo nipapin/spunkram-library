@@ -147,4 +147,6 @@ export type InstalledPackMeta = {
   pcsc?: string;
   abs?: boolean;
   hbs?: string;
+  /** Market catalog id when installed from CEP Market (stable match key). */
+  marketId?: string;
 };

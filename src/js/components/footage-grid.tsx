@@ -24,43 +24,15 @@ const GRID_GAP_PX = 4;
 const SECTION_GAP_PX = 16;
 /** Show skeleton until the grid mounts when the list is large enough to hitch. */
 const SKELETON_THRESHOLD = 64;
-/** Cap simultaneous Play Preview video decodes in weak CEP Chromium. */
-const MAX_CONCURRENT_VIDEOS = 4;
 
-// --- Concurrent Play Preview slot manager -----------------------------------
+// --- Exclusive hover (AutoPlay off) — only one card plays at a time ----------
 
-const activeVideoIds = new Set<string>();
-const videoSlotListeners = new Set<() => void>();
-
-/** Exclusive hover id when Autplay is off — only one card plays at a time. */
+/** Exclusive hover id when AutoPlay is off — only one card plays at a time. */
 let exclusiveHoverId: string | null = null;
 const exclusiveHoverListeners = new Set<() => void>();
 
-function notifyVideoSlots(): void {
-  for (const listener of videoSlotListeners) listener();
-}
-
 function notifyExclusiveHover(): void {
   for (const listener of exclusiveHoverListeners) listener();
-}
-
-function tryAcquireVideoSlot(id: string): boolean {
-  if (activeVideoIds.has(id)) return true;
-  if (activeVideoIds.size >= MAX_CONCURRENT_VIDEOS) return false;
-  activeVideoIds.add(id);
-  return true;
-}
-
-function releaseVideoSlot(id: string): void {
-  if (!activeVideoIds.delete(id)) return;
-  notifyVideoSlots();
-}
-
-function subscribeVideoSlots(listener: () => void): () => void {
-  videoSlotListeners.add(listener);
-  return () => {
-    videoSlotListeners.delete(listener);
-  };
 }
 
 function setExclusiveHoverId(id: string | null): void {
@@ -78,6 +50,16 @@ function subscribeExclusiveHover(listener: () => void): () => void {
 
 function clearExclusiveHover(): void {
   setExclusiveHoverId(null);
+}
+
+function closestScrollParent(el: HTMLElement | null): Element | null {
+  let node = el?.parentElement ?? null;
+  while (node) {
+    const oy = getComputedStyle(node).overflowY;
+    if (oy === "auto" || oy === "scroll" || oy === "overlay") return node;
+    node = node.parentElement;
+  }
+  return null;
 }
 
 /** One shared listener for all cards — stop hover playback when leaving the CEP panel. */
@@ -130,10 +112,11 @@ const PreviewCard = memo(function PreviewCard({
     showNewBadges,
   } = usePanelUI();
   const [hovered, setHovered] = useState(false);
-  const [hasVideoSlot, setHasVideoSlot] = useState(false);
+  const [inView, setInView] = useState(false);
   const [posterFailed, setPosterFailed] = useState(false);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [motionUrl, setMotionUrl] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const itemIdRef = useRef(item.id);
   itemIdRef.current = item.id;
@@ -151,15 +134,16 @@ const PreviewCard = memo(function PreviewCard({
   const isApplying = applyingItemId === item.id;
   const isNew = showNewBadges && !!item.group.is_new_mark;
   const isPremium = !!item.group.premium;
+  // AutoPlay must stay silent even when footer audio is on; sound only on hover.
+  const shouldMute = playPreview || !audioEnabled;
 
   // Reset media state whenever the cell binds a different item.
   useEffect(() => {
     setHovered(false);
-    setHasVideoSlot(false);
+    setInView(false);
     setPosterFailed(false);
     setPosterUrl(media.posterUrl);
     setMotionUrl(null);
-    releaseVideoSlot(item.id);
     if (exclusiveHoverId === item.id) clearExclusiveHover();
   }, [item.id, media.posterUrl]);
 
@@ -193,38 +177,36 @@ const PreviewCard = memo(function PreviewCard({
     return subscribeExclusiveHover(sync);
   }, [playPreview, item.id]);
 
-  // Leave the CEP panel / tab → stop hover playback (Autplay keeps playing).
+  // Leave the CEP panel / tab → stop hover playback (AutoPlay keeps playing).
   useEffect(() => {
     ensurePanelLeaveListeners(playPreview);
   }, [playPreview]);
 
-  // Mounted + Play Preview on ⇒ eligible for motion; otherwise hover-only.
-  const wantMotion = playPreview || hovered;
-  const showMotion =
-    !!motion && !!motionUrl && wantMotion && (!isVideoMotion || hasVideoSlot);
-
+  // AutoPlay: play every card currently in the scroll viewport (not just a cap of 4).
   useEffect(() => {
-    if (!isVideoMotion || !wantMotion) {
-      releaseVideoSlot(item.id);
-      setHasVideoSlot(false);
+    if (!playPreview) {
+      setInView(false);
       return;
     }
+    const el = cardRef.current;
+    if (!el) return;
 
-    const trySlot = () => {
-      setHasVideoSlot(tryAcquireVideoSlot(item.id));
-    };
-    trySlot();
-    const unsubscribe = subscribeVideoSlots(trySlot);
-    return () => {
-      unsubscribe();
-      releaseVideoSlot(item.id);
-    };
-  }, [isVideoMotion, wantMotion, item.id]);
+    const root = closestScrollParent(el);
+    const io = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { root, rootMargin: "80px 0px", threshold: 0.01 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [playPreview, item.id]);
+
+  // AutoPlay ⇒ visible cards; otherwise hover-only.
+  const wantMotion = playPreview ? inView : hovered;
+  const showMotion = !!motion && !!motionUrl && wantMotion;
 
   useEffect(() => {
     if (!motion) return;
     if (!wantMotion) return;
-    if (isVideoMotion && !hasVideoSlot) return;
 
     const id = item.id;
     const path = motion.path;
@@ -236,7 +218,7 @@ const PreviewCard = memo(function PreviewCard({
     return () => {
       cancelled = true;
     };
-  }, [wantMotion, motion, isVideoMotion, hasVideoSlot, item.id]);
+  }, [wantMotion, motion, item.id]);
 
   // Drop motion when leaving hover / play mode so a recycled cell can't flash old video.
   useEffect(() => {
@@ -248,7 +230,7 @@ const PreviewCard = memo(function PreviewCard({
     if (!video || !isVideoMotion || !motionUrl || !showMotion) return;
 
     let cancelled = false;
-    video.muted = !audioEnabled;
+    video.muted = shouldMute;
     if (!playPreview) {
       try {
         video.currentTime = 0;
@@ -264,7 +246,7 @@ const PreviewCard = memo(function PreviewCard({
       cancelled = true;
       video.pause();
     };
-  }, [showMotion, isVideoMotion, motionUrl, audioEnabled, playPreview]);
+  }, [showMotion, isVideoMotion, motionUrl, shouldMute, playPreview]);
 
   const resolvedPoster = posterUrl ?? media.posterUrl;
   const gifSrc = showMotion && isGifMotion && motionUrl ? motionUrl : null;
@@ -325,6 +307,7 @@ const PreviewCard = memo(function PreviewCard({
 
   return (
     <div
+      ref={cardRef}
       role="button"
       tabIndex={0}
       title={locked ? `${item.name} (premium — sign in to apply)` : item.name}
@@ -368,7 +351,7 @@ const PreviewCard = memo(function PreviewCard({
           ref={videoRef}
           src={motionUrl}
           poster={resolvedPoster ?? undefined}
-          muted={!audioEnabled}
+          muted={shouldMute}
           loop
           playsInline
           preload="metadata"

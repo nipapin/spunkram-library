@@ -1,13 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  ArrowLeft,
-  ExternalLink,
-  Loader2,
-  Play,
-  RotateCcw,
-  Trash2,
-  X,
-} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ExternalLink, Loader2, Play, RotateCcw, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { openMarketUrl, type CepMarketPackage, installedPackMatchesMarketItem } from "@/api/cep-market";
@@ -18,10 +10,7 @@ import { currentHostAppId } from "@/lib/utils/apply-item";
 import { openMotionflowSubscribe } from "@/api/motionflow-auth";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 import * as panelStore from "@/lib/userdata-store";
-import {
-  useDownloadManager,
-  type DownloadJob,
-} from "@/lib/download-manager-context";
+import { useDownloadManager, type DownloadJob } from "@/lib/download-manager-context";
 
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
@@ -68,11 +57,14 @@ function uiActionForItem(
   return { label: "Buy", type: "buy" };
 }
 
-function findInstalledMeta(
-  item: CepMarketPackage,
-  installed: InstalledPackMeta[],
-): InstalledPackMeta | undefined {
+function findInstalledMeta(item: CepMarketPackage, installed: InstalledPackMeta[]): InstalledPackMeta | undefined {
   return installed.find((p) => installedPackMatchesMarketItem(p, item));
+}
+
+function pathsEqual(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  return norm(a) === norm(b);
 }
 
 function jobStatusLabel(job: DownloadJob): string {
@@ -92,6 +84,65 @@ function jobStatusLabel(job: DownloadJob): string {
     default:
       return job.status;
   }
+}
+
+function jobWipeProgress(job: DownloadJob): number {
+  if (job.status === "queued") return 0;
+  if (job.status === "installing") return Math.max(95, job.progress || 0);
+  return Math.max(0, Math.min(100, job.progress || 0));
+}
+
+/** Circular ring with cancel (Epic-style) — progress 0–100. */
+function CancelProgressButton({
+  progress,
+  label,
+  onCancel,
+}: {
+  progress: number;
+  label: string;
+  onCancel: () => void;
+}) {
+  const size = 22;
+  const stroke = 2;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(100, progress));
+  const offset = c - (pct / 100) * c;
+
+  return (
+    <button
+      type="button"
+      aria-label={`Cancel — ${label}`}
+      title={label}
+      onClick={onCancel}
+      className="relative flex size-[22px] shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:text-destructive"
+    >
+      <svg className="absolute inset-0 -rotate-90" width={size} height={size} aria-hidden>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          className="text-white/20"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          className="text-primary transition-[stroke-dashoffset] duration-200"
+        />
+      </svg>
+      <X className="relative z-10 size-2.5" />
+    </button>
+  );
 }
 
 function MarketCard({
@@ -118,19 +169,16 @@ function MarketCard({
   onRetryJob: (jobId: string) => void;
 }) {
   const installed = Boolean(installedMeta);
-  const active = Boolean(installedMeta && installedMeta.path === activePackPath);
+  const active = Boolean(installedMeta && pathsEqual(installedMeta.path, activePackPath));
   const { label: price } = priceLabel(item);
   const action = uiActionForItem(item, { installed, active });
   const imageSrc = `${item.image_url}${item.image_url.includes("?") ? "&" : "?"}v=${item.version || "1"}`;
   const showSubHint = action.type === "buy";
-  const detailsUrl = item.details_url?.trim() || null;
-  const jobBusy =
-    job &&
-    (job.status === "queued" ||
-      job.status === "downloading" ||
-      job.status === "installing");
+  const detailsUrl = item.details_url?.trim() || "";
+  const jobBusy = job && (job.status === "queued" || job.status === "downloading" || job.status === "installing");
   const jobFailed = job && (job.status === "error" || job.status === "cancelled");
-  const showJobProgress = Boolean(jobBusy || jobFailed);
+  const wipePct = jobBusy && job ? jobWipeProgress(job) : 0;
+  const colorRevealRight = 100 - wipePct;
 
   function runAction(type: string) {
     if (type === "switch" && installedMeta) {
@@ -149,6 +197,10 @@ function MarketCard({
     }
   }
 
+  function onImageError(e: { currentTarget: HTMLImageElement }) {
+    e.currentTarget.style.opacity = "0.2";
+  }
+
   return (
     <article
       className={cn(
@@ -158,14 +210,23 @@ function MarketCard({
       )}
     >
       <div className="relative aspect-video overflow-hidden bg-secondary/40">
+        {/* Base grayscale + color linear-wipe (left → right) */}
         <img
           src={imageSrc}
           alt=""
-          className="size-full object-cover"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
-          }}
+          className={cn("size-full object-cover transition-[filter] duration-200", jobBusy && "grayscale")}
+          onError={onImageError}
         />
+        {jobBusy && (
+          <img
+            src={imageSrc}
+            alt=""
+            aria-hidden
+            className="pointer-events-none absolute inset-0 size-full object-cover transition-[clip-path] duration-200 ease-out"
+            style={{ clipPath: `inset(0 ${colorRevealRight}% 0 0)` }}
+            onError={onImageError}
+          />
+        )}
         <div className="absolute left-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
           {price}
         </div>
@@ -183,7 +244,7 @@ function MarketCard({
             installed
           </div>
         ) : null}
-        {item.video_id && (
+        {item.video_id && !jobBusy && (
           <button
             type="button"
             aria-label="Play preview"
@@ -198,53 +259,65 @@ function MarketCard({
       </div>
 
       <div className="space-y-2 p-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="truncate text-xs font-medium text-foreground" title={item.name}>
-              {item.name}
-            </h3>
-          </div>
-          <span className="shrink-0 rounded-md border border-white/10 bg-secondary/50 px-1.5 py-0.5 text-[9px] font-medium uppercase text-muted-foreground">
-            {item.primary_type}
-          </span>
+        <div className="flex items-center justify-between gap-2">
+          <h3
+            className={cn(
+              "min-w-0 flex-1 truncate text-xs font-medium text-foreground",
+              jobBusy && "grayscale",
+            )}
+            title={item.name}
+          >
+            {item.name}
+          </h3>
+          {jobBusy && job && (
+            <CancelProgressButton
+              progress={wipePct}
+              label={jobStatusLabel(job)}
+              onCancel={() => onCancelJob(job.id)}
+            />
+          )}
+          {jobFailed && job && (
+            <button
+              type="button"
+              aria-label={job.hasCache ? "Retry install" : "Re-download"}
+              title={job.hasCache ? "Retry install from cached zip" : "Re-download"}
+              onClick={() => onRetryJob(job.id)}
+              className="flex size-[22px] shrink-0 items-center justify-center rounded-full border border-white/10 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+            >
+              <RotateCcw className="size-2.5" />
+            </button>
+          )}
         </div>
 
-        {showSubHint && (
-          <p className="text-[10px] leading-snug text-muted-foreground">
-            Available free with Spunkram subscription
+        {jobFailed && job && (
+          <p className="truncate text-[10px] text-destructive" title={job.error}>
+            {jobStatusLabel(job)}
           </p>
         )}
 
-        <div className="flex gap-1">
+        {showSubHint && <p className="text-[10px] leading-snug text-muted-foreground">Available free with Spunkram subscription</p>}
+
+        <div className={cn("flex gap-1", jobBusy && "grayscale")}>
           <button
             type="button"
             disabled={action.disabled || Boolean(jobBusy)}
             onClick={() => runAction(action.type)}
             className={cn(
               "flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-[10px] font-semibold transition-colors",
-              action.disabled
-                ? "cursor-not-allowed border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                : ACCENT_PILL,
+              action.disabled ? "cursor-not-allowed border border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : ACCENT_PILL,
             )}
           >
-            {jobBusy && action.type === "install" ? (
-              <>
-                <Loader2 className="size-3 animate-spin" />
-                Installing…
-              </>
-            ) : (
-              action.label
-            )}
+            {jobBusy && action.type === "install" ? "Installing…" : action.label}
           </button>
-          {detailsUrl && (
-            <button
-              type="button"
-              onClick={() => openMarketUrl(detailsUrl)}
-              className="flex flex-1 items-center justify-center gap-1 rounded-full border border-white/10 bg-secondary/50 px-2 py-1.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-            >
-              Details
-            </button>
-          )}
+
+          <button
+            type="button"
+            onClick={() => openMarketUrl(detailsUrl)}
+            className="flex items-center justify-center gap-1 rounded-full border border-white/10 bg-secondary/50 px-2 py-1.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+          >
+            Details
+          </button>
+
           {installedMeta && (
             <button
               type="button"
@@ -256,58 +329,6 @@ function MarketCard({
             </button>
           )}
         </div>
-
-        {showJobProgress && job && (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <p
-                className={cn(
-                  "min-w-0 truncate text-[10px]",
-                  job.status === "error" ? "text-destructive" : "text-muted-foreground",
-                )}
-                title={job.error}
-              >
-                {jobStatusLabel(job)}
-              </p>
-              <div className="flex shrink-0 items-center gap-1">
-                {jobBusy && (
-                  <button
-                    type="button"
-                    aria-label="Cancel"
-                    onClick={() => onCancelJob(job.id)}
-                    className="flex size-5 items-center justify-center rounded-full border border-white/10 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="size-2.5" />
-                  </button>
-                )}
-                {jobFailed && (
-                  <button
-                    type="button"
-                    aria-label={job.hasCache ? "Retry install" : "Re-download"}
-                    title={job.hasCache ? "Retry install from cached zip" : "Re-download"}
-                    onClick={() => onRetryJob(job.id)}
-                    className="flex size-5 items-center justify-center rounded-full border border-white/10 text-muted-foreground hover:text-foreground"
-                  >
-                    <RotateCcw className="size-2.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-            {jobBusy && (
-              <div className="h-1 overflow-hidden rounded-full bg-black/30">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{
-                    width: `${Math.max(
-                      job.status === "queued" ? 4 : 8,
-                      job.progress,
-                    )}%`,
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </article>
   );
@@ -325,23 +346,18 @@ export function MarketPanel({
   onSelectPack?: (meta: InstalledPackMeta) => void;
   activePackPath?: string;
 }) {
-  const {
-    market,
-    marketLoading,
-    marketError,
-    refreshMarket,
-    subscription,
-  } = useAuth();
+  const { market, marketLoading, marketError, refreshMarket, subscription } = useAuth();
   const { enqueue, jobs, cancel, retry } = useDownloadManager();
   const [packTick, setPackTick] = useState(0);
   const [installError, setInstallError] = useState<string | null>(null);
+  const onPacksChangedRef = useRef(onPacksChanged);
+  onPacksChangedRef.current = onPacksChanged;
+  const handledDoneJobIdsRef = useRef(new Set<string>());
 
   const hostType = useMemo(() => hostPrimaryType(), []);
-  const hostLabel =
-    hostType === "AE" ? "After Effects" : hostType === "PR" ? "Premiere Pro" : "this host";
+  const hostLabel = hostType === "AE" ? "After Effects" : hostType === "PR" ? "Premiere Pro" : "this host";
 
-  const subscriptionActive =
-    Boolean(market?.subscription_active) || subscription.subscribed;
+  const subscriptionActive = Boolean(market?.subscription_active) || subscription.subscribed;
   const subscribeUrl = market?.subscribe_url;
 
   function handleRemove(meta: InstalledPackMeta) {
@@ -375,14 +391,8 @@ export function MarketPanel({
         map.set(id, j);
         continue;
       }
-      const prevBusy =
-        prev.status === "queued" ||
-        prev.status === "downloading" ||
-        prev.status === "installing";
-      const nextBusy =
-        j.status === "queued" ||
-        j.status === "downloading" ||
-        j.status === "installing";
+      const prevBusy = prev.status === "queued" || prev.status === "downloading" || prev.status === "installing";
+      const nextBusy = j.status === "queued" || j.status === "downloading" || j.status === "installing";
       if (nextBusy || (!prevBusy && j.status !== "done")) {
         map.set(id, j);
       }
@@ -390,16 +400,24 @@ export function MarketPanel({
     return map;
   }, [jobs]);
 
+  // Refresh installed list once per newly completed job (done jobs stay in `jobs`).
   useEffect(() => {
-    if (jobs.some((j) => j.status === "done")) {
-      setPackTick((t) => t + 1);
-      onPacksChanged?.();
+    let sawNewDone = false;
+    for (const j of jobs) {
+      if (j.status !== "done" || handledDoneJobIdsRef.current.has(j.id)) continue;
+      handledDoneJobIdsRef.current.add(j.id);
+      sawNewDone = true;
     }
-  }, [jobs, onPacksChanged]);
+    if (!sawNewDone) return;
+    setPackTick((t) => t + 1);
+    onPacksChangedRef.current?.();
+  }, [jobs]);
 
   useEffect(() => {
     void refreshMarket();
-  }, [refreshMarket]);
+    // Mount-only: refreshMarket identity changes after catalog load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const packages = market?.Packages ?? [];
 
@@ -446,16 +464,12 @@ export function MarketPanel({
       {!subscriptionActive && (
         <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-2 text-[11px] text-foreground">
           <span className="flex-1">
-            Packs are available free with a Spunkram subscription from{" "}
-            <strong>$9.9/month</strong>
+            Packs are available free with a Spunkram subscription from <strong>$9.9/month</strong>
           </span>
           <button
             type="button"
             onClick={openMotionflowSubscribe}
-            className={cn(
-              "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold",
-              ACCENT_PILL,
-            )}
+            className={cn("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold", ACCENT_PILL)}
           >
             Subscribe
           </button>
@@ -493,7 +507,10 @@ export function MarketPanel({
         ) : (
           <div className="grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2">
             {filtered.map((item) => {
-              const meta = findInstalledMeta(item, installedList);
+              const job = jobsByPackId.get(String(item.id));
+              const meta =
+                findInstalledMeta(item, installedList) ??
+                (job?.status === "done" && job.meta ? job.meta : undefined);
               return (
                 <MarketCard
                   key={String(item.id)}
@@ -501,7 +518,7 @@ export function MarketPanel({
                   subscribeUrl={subscribeUrl}
                   installedMeta={meta}
                   activePackPath={resolvedActivePath}
-                  job={jobsByPackId.get(String(item.id))}
+                  job={job}
                   onSwitchPack={handleSwitch}
                   onRemovePack={handleRemove}
                   onInstall={handleInstall}

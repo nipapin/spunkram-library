@@ -19,7 +19,7 @@ $[extensionId]  +  src/jsx/legacy/* (Beta port)
 - **Host TS**: [`src/jsx/aeft/`](../src/jsx/aeft/), [`src/jsx/ppro/`](../src/jsx/ppro/), [`src/jsx/shared/`](../src/jsx/shared/)
 - **Legacy Beta port**: [`src/jsx/legacy/`](../src/jsx/legacy/) (loaded after Bolt `index.js`)
 
-Inventory: [`docs/sdk/INVENTORY.md`](./sdk/INVENTORY.md) · Parity: [`docs/sdk/PARITY.md`](./sdk/PARITY.md) · Author guide: [`docs/sdk/AUTHOR_COOKBOOK.md`](./sdk/AUTHOR_COOKBOOK.md)
+Inventory: [`docs/sdk/INVENTORY.md`](./sdk/INVENTORY.md) · Parity: [`docs/sdk/PARITY.md`](./sdk/PARITY.md) · Author guide: [`docs/sdk/AUTHOR_COOKBOOK.md`](./sdk/AUTHOR_COOKBOOK.md) · Full legacy exit: [`docs/sdk/POLNOE_OTRECHENIE.md`](./sdk/POLNOE_OTRECHENIE.md)
 
 ## Result shape
 

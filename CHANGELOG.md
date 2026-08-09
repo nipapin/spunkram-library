@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-09
+
+### Fixed
+
+- Match installed packs to Market catalog by `marketId`, normalized host (AE/PR), and fuzzy pack labels
+- Persist catalog `marketId` onto installed pack prefs after install
+
+### Changed
+
+- Market panel / footage grid install UX refinements (Details, ownership, progress)
+
 ## [0.6.0] - 2026-08-08
 
 ### Fixed

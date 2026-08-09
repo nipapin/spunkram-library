@@ -13,7 +13,11 @@ import {
 } from "@/lib/api/session";
 import { openLinkInBrowser } from "@/lib/utils/bolt";
 import { fs, os, path } from "@/lib/cep/node";
-import { resolvePreferencesPath } from "@/lib/api/preferences";
+import {
+  loadPreferencesFile,
+  resolvePreferencesPath,
+  savePreferencesFile,
+} from "@/lib/api/preferences";
 import { downloadToFile } from "@/utils/download-file";
 import { installPackFromFile } from "@/lib/utils/pack-install";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
@@ -132,21 +136,80 @@ function normalizePackage(raw: CepMarketPackage): CepMarketPackage {
   };
 }
 
-/** Match a local install to a market catalog row (name + host). */
+function normalizeHostApp(id: string): string {
+  const u = id.trim().toUpperCase();
+  if (!u) return "";
+  if (u === "AE" || u === "AEFT" || u.includes("AFTER")) return "AE";
+  if (u === "PR" || u === "PPRO" || u.includes("PREMIERE")) return "PR";
+  return u;
+}
+
+/** Collapse "Wedding Pack" / "Wedding Package for Premiere Pro" → "wedding". */
+function normalizePackLabel(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/for\s+(premiere\s*pro|after\s*effects)/g, " ")
+    .replace(/\b(packages?|packs?)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/** Match a local install to a market catalog row (marketId, then name + host). */
 export function installedPackMatchesMarketItem(
   meta: InstalledPackMeta,
   item: CepMarketPackage,
 ): boolean {
-  const metaApp = (meta.appID || meta.load || "").toUpperCase();
-  const itemApp = (item.primary_type || "").toUpperCase();
+  if (meta.marketId != null && String(meta.marketId) === String(item.id)) {
+    return true;
+  }
+
+  const metaApp = normalizeHostApp(meta.appID || meta.load || "");
+  const itemApp = normalizeHostApp(item.primary_type || "");
   if (metaApp && itemApp && metaApp !== itemApp) return false;
 
   const installedName = (meta.name || "").trim().toLowerCase();
   if (!installedName) return false;
-  const names = [item.pack_name, item.name]
+  const catalogNames = [item.pack_name, item.name]
     .map((n) => (n || "").trim().toLowerCase())
     .filter(Boolean);
-  return names.includes(installedName);
+  if (catalogNames.includes(installedName)) return true;
+
+  const installedNorm = normalizePackLabel(meta.name || "");
+  if (!installedNorm) return false;
+  return catalogNames.some((n) => {
+    const catalogNorm = normalizePackLabel(n);
+    if (!catalogNorm) return false;
+    return (
+      catalogNorm === installedNorm ||
+      catalogNorm.includes(installedNorm) ||
+      installedNorm.includes(catalogNorm)
+    );
+  });
+}
+
+/** Persist market catalog id onto an installed prefs entry (and return updated meta). */
+export function tagInstalledPackWithMarketId(
+  meta: InstalledPackMeta,
+  marketId: string | number,
+): InstalledPackMeta {
+  const id = String(marketId);
+  const tagged: InstalledPackMeta = { ...meta, marketId: id };
+  try {
+    const prefs = loadPreferencesFile();
+    const packages = Array.isArray(prefs.packages)
+      ? [...(prefs.packages as InstalledPackMeta[])]
+      : [];
+    const idx = packages.findIndex((p) => p.path === meta.path);
+    if (idx >= 0) {
+      packages[idx] = { ...packages[idx], marketId: id };
+      prefs.packages = packages;
+      savePreferencesFile(prefs);
+    }
+  } catch {
+    // best-effort — matching still works via fuzzy name for this session
+  }
+  return tagged;
 }
 
 function mockPackages(host: "AE" | "PR"): CepMarketPackage[] {
@@ -301,13 +364,17 @@ function removeCachedPackZip(zipPath: string): void {
 
 async function installFromZipPath(
   zipPath: string,
+  item?: CepMarketPackage,
 ): Promise<DownloadAndInstallResult> {
   const installed = await installPackFromFile(zipPath);
   if (!installed.ok) {
     return { ok: false, message: installed.message, cachedZipPath: zipPath };
   }
+  const meta = item
+    ? tagInstalledPackWithMarketId(installed.meta, item.id)
+    : installed.meta;
   removeCachedPackZip(zipPath);
-  return { ok: true, meta: installed.meta };
+  return { ok: true, meta };
 }
 
 /**
@@ -321,7 +388,7 @@ export async function installCachedPack(
   if (!hasCachedPackZip(item)) {
     return { ok: false, code: "NO_CACHE", message: "Cached pack zip not found." };
   }
-  return installFromZipPath(zipPath);
+  return installFromZipPath(zipPath, item);
 }
 
 /**
@@ -349,7 +416,7 @@ export async function downloadAndInstallPack(
 
   if (opts?.preferCache && hasCachedPackZip(item)) {
     opts.onPhase?.("installing");
-    return installFromZipPath(destPath);
+    return installFromZipPath(destPath, item);
   }
 
   const token = getSessionToken();
@@ -427,7 +494,7 @@ export async function downloadAndInstallPack(
   }
 
   opts?.onPhase?.("installing");
-  return installFromZipPath(destPath);
+  return installFromZipPath(destPath, item);
 }
 
 export function openMarketUrl(url: string | null | undefined): void {
