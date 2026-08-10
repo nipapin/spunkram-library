@@ -25,7 +25,7 @@ export const AUTH_ENDPOINTS = {
   token: "/api/cep/auth/token",
   me: "/api/cep/me",
   revokeDevice: "/api/cep/devices/revoke",
-  subscribe: `${SITE_ORIGIN}/spunkram#pricing`,
+  subscribe: `${SITE_ORIGIN}/spunkram`,
   manageSubscription: `${PUBLIC_AUTH_ORIGIN}/profile/subscriptions?${clientQuery()}`,
 } as const;
 

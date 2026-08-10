@@ -1,0 +1,37 @@
+---
+description: Distinguish "push" (commit+push) from "release" (npm run release:*)
+alwaysApply: true
+---
+
+# Push vs Release
+
+In this repo these words are **not** interchangeable.
+
+## «Запушить» / push / commit
+
+Only:
+
+1. `git add` relevant files
+2. `git commit` (ask first if the user did not explicitly request a commit)
+3. `git push` to the current branch
+
+Do **not** bump version, build ZXP, tag, or upload to CDN.
+
+## «Релиз» / release
+
+Run the project release script for the requested variant — nothing more elaborate unless asked:
+
+```bash
+npm run release:patch
+npm run release:minor
+npm run release:major
+npm run release:beta
+```
+
+That script already bumps version, builds ZXP, commits, pushes, tags, and uploads.
+
+- If the user says only «зарелизь минор» → `npm run release:minor`
+- If they say «закоммить и запушь» → commit + push only
+- If they say both («запушь и зарелизь») → do commit+push of WIP only if needed, then `npm run release:…` (release may commit again if dirty)
+
+Do not invent a long manual release pipeline when `npm run release:*` exists.
