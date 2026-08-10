@@ -45,6 +45,16 @@ async function cps(script: string): Promise<string> {
   return evalES(script, true);
 }
 
+/** Best-effort release of Motionflow.dll so Windows can overwrite it on update. */
+export async function unloadMotionflowLibrary(): Promise<void> {
+  try {
+    await ensureLegacy();
+    await cps(`$._copyPasteSystem.unloadLibrary()`);
+  } catch {
+    /* ignore — may not be loaded / host not PPro */
+  }
+}
+
 async function ensureLegacy(): Promise<void> {
   if (!legacyLoaded()) {
     await loadLegacyJsx();
@@ -322,5 +332,12 @@ export async function applyFullProjectViaCopyPaste(
       ok: false,
       message: err instanceof Error ? err.message : String(err),
     };
+  } finally {
+    // Don't keep Motionflow.dll mapped — blocks in-panel updates (EBUSY on Windows).
+    try {
+      await cps(`$._copyPasteSystem.unloadLibrary()`);
+    } catch {
+      /* ignore */
+    }
   }
 }

@@ -73,6 +73,8 @@ $._copyPasteSystem = {
   },
   initializeLibrary: function (libraryBasePath, platform) {
     try {
+      // Drop any prior mapping so Windows can replace Motionflow.dll on update.
+      $._copyPasteSystem.unloadLibrary();
       const ext = platform === 'win' ? '.dll' : '.bundle';
       const path = platform === 'win'
         ? [libraryBasePath, 'bin', platform, "Motionflow" + ext].join('/')
@@ -81,6 +83,30 @@ $._copyPasteSystem = {
       return JSON.stringify({ ready: true });
     } catch (err) {
       return JSON.stringify({ ready: false, error: [err.message, err.line].join("\n") });
+    }
+  },
+  /**
+   * Release Motionflow.dll / .bundle so the file is not locked by Premiere
+   * (needed for in-panel extension updates without quitting the host).
+   */
+  unloadLibrary: function () {
+    try {
+      var lib = $._copyPasteSystem.externalLibrary;
+      if (!lib) return JSON.stringify({ unloaded: true });
+      try {
+        if (typeof lib.terminate === "function") lib.terminate();
+        else if (typeof lib.unload === "function") lib.unload();
+      } catch (e) {
+        /* best-effort */
+      }
+      $._copyPasteSystem.externalLibrary = null;
+      return JSON.stringify({ unloaded: true });
+    } catch (err) {
+      $._copyPasteSystem.externalLibrary = null;
+      return JSON.stringify({
+        unloaded: false,
+        error: [err.message, err.line].join("\n"),
+      });
     }
   },
   executeCommand: function (command) {
