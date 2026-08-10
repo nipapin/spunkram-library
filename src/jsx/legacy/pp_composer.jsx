@@ -73,12 +73,17 @@ $._copyPasteSystem = {
   },
   initializeLibrary: function (libraryBasePath, platform) {
     try {
+      // Reuse the live instance. Creating a new ExternalObject on every apply
+      // without terminate() leaks wrappers → "Unknown error exception 27"
+      // (stack overrun) when the panel/host tears them down on close.
+      // terminate()+reload between applies breaks execute() in the same session.
+      if ($._copyPasteSystem.externalLibrary) {
+        return JSON.stringify({ ready: true, reused: true });
+      }
       const ext = platform === 'win' ? '.dll' : '.bundle';
       const path = platform === 'win'
         ? [libraryBasePath, 'bin', platform, "Motionflow" + ext].join('/')
         : [libraryBasePath, "Motionflow" + ext].join('/');
-      // Always construct — same as Beta. Do NOT terminate() between applies:
-      // unload+reload in one Premiere session breaks subsequent execute().
       $._copyPasteSystem.externalLibrary = new ExternalObject("lib:" + path);
       return JSON.stringify({ ready: true });
     } catch (err) {

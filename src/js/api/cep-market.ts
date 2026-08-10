@@ -22,9 +22,18 @@ import { downloadToFile } from "@/utils/download-file";
 import { installPackFromFile } from "@/lib/utils/pack-install";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 import { normalizePackHost } from "@/lib/utils/pack-host";
+import { installPackFonts } from "@/lib/utils/pack-fonts";
+import { extractZipToFolder } from "@/lib/utils/pack-zip";
+import {
+  readLocalPackManifest,
+  removeFilesNotInManifest,
+  resolvePackBundleDir,
+  writeLocalPackManifest,
+} from "@/lib/utils/pack-manifest";
 import { version as EXTENSION_VERSION } from "../../shared/shared";
 
 export const CEP_MARKET_ENDPOINT = "/api/cep/market";
+export const CEP_MARKET_DIFF_ENDPOINT = "/api/cep/market/diff";
 
 const SITE_ORIGIN = import.meta.env.DEV
   ? "http://localhost:3000"
@@ -488,6 +497,213 @@ export async function downloadAndInstallPack(
 
   opts?.onPhase?.("installing");
   return installFromZipPath(destPath, item);
+}
+
+/** True when catalog version differs from the installed prefs entry. */
+export function installedPackNeedsUpdate(
+  meta: InstalledPackMeta,
+  item: CepMarketPackage,
+): boolean {
+  const remote = (item.version || "").trim();
+  const local = (meta.version || "").trim();
+  if (!remote || !local) return Boolean(remote && remote !== local);
+  if (remote === local) return false;
+  return compareDottedVersions(local, remote) !== 0;
+}
+
+function updateInstalledPackVersion(
+  meta: InstalledPackMeta,
+  version: string,
+  marketId?: string | number,
+): InstalledPackMeta {
+  const next: InstalledPackMeta = {
+    ...meta,
+    version,
+    ...(marketId != null ? { marketId: String(marketId) } : {}),
+  };
+  try {
+    const prefs = loadPreferencesFile();
+    const packages = Array.isArray(prefs.packages)
+      ? [...(prefs.packages as InstalledPackMeta[])]
+      : [];
+    const idx = packages.findIndex((p) => p.path === meta.path);
+    if (idx >= 0) {
+      packages[idx] = { ...packages[idx], ...next };
+      prefs.packages = packages;
+      savePreferencesFile(prefs);
+    }
+  } catch {
+    /* best-effort */
+  }
+  return next;
+}
+
+/**
+ * Incremental pack update: POST local manifest → diff zip → extract over pack folder.
+ * Falls back to full zip when the server has no R2 content prefix (`NO_DIFF_SOURCE`).
+ */
+export async function downloadAndApplyPackDiff(
+  item: CepMarketPackage,
+  meta: InstalledPackMeta,
+  opts?: {
+    onProgress?: (p: { bytesReceived: number; totalBytes: number | null }) => void;
+    onPhase?: (phase: "downloading" | "installing") => void;
+    signal?: AbortSignal;
+  },
+): Promise<DownloadAndInstallResult> {
+  const gate = checkPackVersionGates(item);
+  if (!gate.ok) return { ok: false, message: gate.message };
+
+  const token = getSessionToken();
+  if (!token) {
+    return { ok: false, code: "UNAUTHORIZED", message: "Sign in to update packs." };
+  }
+
+  const packDir = resolvePackBundleDir(meta.path);
+  const localManifest = readLocalPackManifest(packDir);
+  if (localManifest == null) {
+    return downloadAndInstallPack(item, opts);
+  }
+
+  const destPath = path.join(
+    resolvePackCacheDir(),
+    `${String(item.id).replace(/[\\/:*?"<>|]/g, "_")}-diff.zip`,
+  );
+
+  opts?.onPhase?.("downloading");
+
+  try {
+    await downloadToFile(apiUrl(CEP_MARKET_DIFF_ENDPOINT), destPath, {
+      method: "POST",
+      timeoutMs: 15 * 60 * 1000,
+      headers: {
+        ...sessionAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        pack_id: Number(item.id) || item.id,
+        manifest: localManifest,
+      }),
+      onProgress: opts?.onProgress,
+      signal: opts?.signal,
+      onErrorBody: (status, body) => {
+        if (status === 401) {
+          handleUnauthorized();
+          throw Object.assign(new Error("Session expired — please sign in again."), {
+            code: "UNAUTHORIZED",
+            status,
+          });
+        }
+        try {
+          const parsed = JSON.parse(body) as { error?: string; message?: string };
+          const code = parsed.error || `HTTP_${status}`;
+          const message = parsed.message || code;
+          throw Object.assign(new Error(message), { code, status });
+        } catch (e) {
+          if (e && typeof e === "object" && "code" in e) throw e;
+          throw Object.assign(new Error(`Diff download failed (${status})`), {
+            code: `HTTP_${status}`,
+            status,
+          });
+        }
+      },
+    });
+  } catch (e) {
+    const code =
+      e && typeof e === "object" && "code" in e
+        ? String((e as { code: unknown }).code)
+        : undefined;
+    const message = e instanceof Error ? e.message : String(e);
+    if (code === "ABORTED" || opts?.signal?.aborted) {
+      return { ok: false, code: "ABORTED", message: "Download cancelled" };
+    }
+    if (
+      code === "NO_DIFF_SOURCE" ||
+      code === "NO_DOWNLOAD_KEY" ||
+      code === "NO_BUCKET"
+    ) {
+      return downloadAndInstallPack(item, opts);
+    }
+    if (code === "NOT_OWNED" || code === "SUBSCRIPTION_REQUIRED") {
+      return {
+        ok: false,
+        code,
+        message,
+        buy_url: item.buy_url,
+        subscribe_url: defaultSubscribeUrl(),
+      };
+    }
+    if (code === "UNAUTHORIZED" || message.includes("(401)")) {
+      handleUnauthorized();
+      return {
+        ok: false,
+        code: "UNAUTHORIZED",
+        message: "Session expired — please sign in again.",
+      };
+    }
+    // Network / server errors: try full zip as last resort
+    return downloadAndInstallPack(item, opts);
+  }
+
+  if (opts?.signal?.aborted) {
+    return { ok: false, code: "ABORTED", message: "Download cancelled" };
+  }
+
+  opts?.onPhase?.("installing");
+  try {
+    const oldManifest = localManifest;
+    extractZipToFolder(destPath, packDir);
+    const newManifest = readLocalPackManifest(packDir) ?? oldManifest;
+    removeFilesNotInManifest(packDir, oldManifest, newManifest);
+    if (newManifest != null) writeLocalPackManifest(packDir, newManifest);
+
+    try {
+      await installPackFonts(meta.path);
+    } catch {
+      /* fonts best-effort */
+    }
+
+    const version = (item.version || meta.version || "1.0").trim();
+    const updated = updateInstalledPackVersion(meta, version, item.id);
+
+    try {
+      if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+    } catch {
+      /* ignore */
+    }
+
+    return { ok: true, meta: updated };
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+/**
+ * Install or update a market pack. Uses file-diff when an install with
+ * `manifest.json` already exists; otherwise full zip.
+ */
+export async function downloadAndInstallOrUpdatePack(
+  item: CepMarketPackage,
+  installed: InstalledPackMeta | undefined,
+  opts?: {
+    subscribeUrl?: string | null;
+    onProgress?: (p: { bytesReceived: number; totalBytes: number | null }) => void;
+    preferCache?: boolean;
+    onPhase?: (phase: "downloading" | "installing") => void;
+    signal?: AbortSignal;
+  },
+): Promise<DownloadAndInstallResult> {
+  if (
+    installed &&
+    installedPackNeedsUpdate(installed, item) &&
+    readLocalPackManifest(resolvePackBundleDir(installed.path)) != null
+  ) {
+    return downloadAndApplyPackDiff(item, installed, opts);
+  }
+  return downloadAndInstallPack(item, opts);
 }
 
 export function openMarketUrl(url: string | null | undefined): void {

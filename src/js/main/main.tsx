@@ -23,7 +23,10 @@ import {
 import { PackagesPathGateProvider } from "@/lib/packages-path-gate";
 import { fetchUpdateInfo, isRemoteNewer } from "@/api/update";
 import { fetchGenerationsStatus } from "@/api/credits";
-import { applyExtensionUpdate } from "@/utils/extension-update";
+import {
+  applyExtensionUpdate,
+  finalizePendingNativeUpdate,
+} from "@/utils/extension-update";
 import { ensureFfmpeg } from "@/utils/ffmpeg";
 import { openMarketUrl } from "@/api/cep-market";
 import { version as LOCAL_VERSION } from "../../shared/shared";
@@ -570,6 +573,25 @@ function AppShell() {
     });
   }, []);
 
+  // Promote Motionflow.dll (etc.) written as *.pending-update while host held the lock.
+  useEffect(() => {
+    try {
+      const { remaining } = finalizePendingNativeUpdate();
+      if (remaining.length > 0) {
+        showStatus(
+          "Restart Premiere Pro / After Effects to finish the native plugin update.",
+          "info",
+          12000,
+        );
+      }
+    } catch (err) {
+      console.warn(
+        "[spunkram] pending native finalize failed:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }, [showStatus]);
+
   // Re-check after sign-in so beta testers get beta.json (Bearer required).
   useEffect(() => {
     if (!authReady || !signedIn) return;
@@ -615,7 +637,7 @@ function AppShell() {
     setUpdateError(null);
     setUpdateProgress(`Downloading v${updateVersion}…`);
     try {
-      await applyExtensionUpdate(updateZxpUrl, (p) => {
+      const result = await applyExtensionUpdate(updateZxpUrl, (p) => {
         if (p.phase === "download") {
           if (p.totalBytes && p.totalBytes > 0) {
             const pct = Math.min(99, Math.round((p.bytesReceived / p.totalBytes) * 100));
@@ -631,12 +653,20 @@ function AppShell() {
           setUpdateProgress("Reloading…");
         }
       });
+      if (result.pendingNatives.length > 0) {
+        setUpdateProgress("Reloading… Restart host to finish natives.");
+        showStatus(
+          "Panel updated. Restart Premiere Pro / After Effects to finish the native plugin update.",
+          "info",
+          12000,
+        );
+      }
     } catch (err) {
       setUpdateBusy(false);
       setUpdateProgress(undefined);
       setUpdateError(err instanceof Error ? err.message : String(err));
     }
-  }, [updateZxpUrl, updateVersion, updateBusy]);
+  }, [updateZxpUrl, updateVersion, updateBusy, showStatus]);
 
   useEffect(() => {
     const hex = packSettings?.inside_option_sets?.header_color_hex;

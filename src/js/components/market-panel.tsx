@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ExternalLink, Loader2, Play, RotateCcw, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
-import { openMarketUrl, type CepMarketPackage, installedPackMatchesMarketItem } from "@/api/cep-market";
+import { openMarketUrl, type CepMarketPackage, installedPackMatchesMarketItem, installedPackNeedsUpdate } from "@/api/cep-market";
 import { openYoutube } from "@/lib/api/market-api";
 import { readInstallablePackages } from "@/lib/utils/pack";
 import { uninstallPack } from "@/lib/utils/pack-install";
@@ -50,8 +50,11 @@ function priceLabel(item: CepMarketPackage): { label: string } {
 
 function uiActionForItem(
   item: CepMarketPackage,
-  opts: { installed: boolean; active: boolean },
+  opts: { installed: boolean; active: boolean; needsUpdate: boolean },
 ): { label: string; type: string; disabled?: boolean } {
+  if (opts.installed && opts.needsUpdate) {
+    return { label: "Update", type: "update" };
+  }
   if (opts.installed && opts.active) {
     return { label: "Active", type: "active", disabled: true };
   }
@@ -186,8 +189,11 @@ function MarketCard({
 }) {
   const installed = Boolean(installedMeta);
   const active = Boolean(installedMeta && pathsEqual(installedMeta.path, activePackPath));
+  const needsUpdate = Boolean(
+    installedMeta && installedPackNeedsUpdate(installedMeta, item),
+  );
   const { label: price } = priceLabel(item);
-  const action = uiActionForItem(item, { installed, active });
+  const action = uiActionForItem(item, { installed, active, needsUpdate });
   const imageSrc = `${item.image_url}${item.image_url.includes("?") ? "&" : "?"}v=${item.version || "1"}`;
   const showSubHint = action.type === "buy";
   const detailsUrl = item.details_url?.trim() || "";
@@ -202,7 +208,7 @@ function MarketCard({
       return;
     }
     if (type === "active") return;
-    if (type === "install") {
+    if (type === "install" || type === "update") {
       onInstall(item);
       return;
     }
@@ -323,7 +329,11 @@ function MarketCard({
               action.disabled ? "cursor-not-allowed border border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : ACCENT_PILL,
             )}
           >
-            {jobBusy && action.type === "install" ? "Installing…" : action.label}
+            {jobBusy && (action.type === "install" || action.type === "update")
+              ? action.type === "update"
+                ? "Updating…"
+                : "Installing…"
+              : action.label}
           </button>
 
           <button

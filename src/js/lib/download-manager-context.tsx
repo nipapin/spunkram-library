@@ -8,13 +8,15 @@ import {
   type ReactNode,
 } from "react";
 import {
-  downloadAndInstallPack,
+  downloadAndInstallOrUpdatePack,
   hasCachedPackZip,
   installCachedPack,
+  installedPackMatchesMarketItem,
   type CepMarketPackage,
 } from "@/api/cep-market";
 import { handleUnauthorized } from "@/lib/api/session";
 import { usePanelUI } from "@/lib/panel-ui-context";
+import { readInstallablePackages } from "@/lib/utils/pack";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 
 export type DownloadJobStatus =
@@ -112,8 +114,14 @@ export function DownloadManagerProvider({
       return;
     }
 
+    const installedList = readInstallablePackages();
+    const installedMeta = installedList.find((p) =>
+      installedPackMatchesMarketItem(p, jobSnap.pack),
+    );
+
     const preferCache =
-      preferCacheRef.current.has(nextId) || hasCachedPackZip(jobSnap.pack);
+      !installedMeta &&
+      (preferCacheRef.current.has(nextId) || hasCachedPackZip(jobSnap.pack));
     preferCacheRef.current.delete(nextId);
 
     const controller = new AbortController();
@@ -129,7 +137,7 @@ export function DownloadManagerProvider({
     try {
       let result = preferCache
         ? await installCachedPack(jobSnap.pack)
-        : await downloadAndInstallPack(jobSnap.pack, {
+        : await downloadAndInstallOrUpdatePack(jobSnap.pack, installedMeta, {
             signal: controller.signal,
             onProgress: ({ bytesReceived, totalBytes }) => {
               if (cancelledRef.current.has(nextId)) return;
@@ -156,7 +164,7 @@ export function DownloadManagerProvider({
           return;
         }
         updateJob(nextId, { status: "downloading", progress: 0, hasCache: false });
-        result = await downloadAndInstallPack(jobSnap.pack, {
+        result = await downloadAndInstallOrUpdatePack(jobSnap.pack, installedMeta, {
           signal: controller.signal,
           onProgress: ({ bytesReceived, totalBytes }) => {
             if (cancelledRef.current.has(nextId)) return;
@@ -195,7 +203,11 @@ export function DownloadManagerProvider({
           meta: result.meta,
           hasCache: false,
         });
-        showStatus(`Installed: ${jobSnap.pack.name}`, "success", 4000);
+        showStatus(
+          installedMeta ? `Updated: ${jobSnap.pack.name}` : `Installed: ${jobSnap.pack.name}`,
+          "success",
+          4000,
+        );
         // Re-read useWhenReady from latest job state (user may have toggled Switch).
         const latest = await new Promise<DownloadJob | undefined>((resolve) => {
           setJobs((prev) => {

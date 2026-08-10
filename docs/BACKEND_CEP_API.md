@@ -8,7 +8,7 @@ CEP знает только `client: "spunkram-cep"` + Bearer и рисует UI
 Клиентские модули:
 
 - `src/js/api/motionflow-auth.ts` — auth / me / devices
-- `src/js/api/cep-market.ts` — каталог + download/install: `GET /api/cep/market`, Bearer download
+- `src/js/api/cep-market.ts` — каталог + download/install/diff: `GET /api/cep/market`, Bearer download, `POST /api/cep/market/diff`
 - `src/js/lib/api/stock-api.ts` — footages: `/api/stock/unsplash`, `/pexels/videos`, `/download`
 - `src/js/lib/api/market-api.ts` — shared helpers only (no AtomX)
 - `src/js/api/credits.ts` — баланс генераций
@@ -273,11 +273,22 @@ Token обязан позволять серверу узнать `client` (clai
 - Gate: sold_items **or** author subscription **or** free-pack entitlement
 - Else JSON (no redirect): `403` `{ "error": "NOT_OWNED" }` / `401 UNAUTHORIZED` / `404 NOT_FOUND` / `NO_DOWNLOAD`
 
-CEP: `downloadAndInstallPack` → zip (cached under preferences `pack-cache/` until install succeeds; overwritten on re-download) → `installPackFromFile` → `_ABS` packages root.
+CEP: `downloadAndInstallPack` → zip (cached under preferences `pack-cache/` until install succeeds; overwritten on re-download) → `installPackFromFile` → packages root (`absCustomAbsolutePath` / `AE|PR`).
 
 Plaintext `.spunkram` JSON uses `settings` + `content` (tree). Legacy `structure` is still accepted and normalized to the in-memory `structure` field.
 
-See next-app `CEP_API.md` §3.
+### 3.1 Incremental update — `POST /api/cep/market/diff`
+
+When an installed pack has `manifest.json` and the market version differs, CEP posts the local manifest and receives a zip of only changed files from the R2 prefix `{stem}/` (stem = basename of `download_key` without `.zip`).
+
+- **Auth / gate:** same as full download
+- **Body:** `{ pack_id, manifest }` (array `[{path,hash,…}]` or `{files:{…}}`)
+- **200:** `application/zip` + `X-Diff-Count` / `X-Delete-Count`
+- **409 `NO_DIFF_SOURCE`:** no remote `{stem}/manifest.json` → client falls back to full zip
+
+CEP: `downloadAndApplyPackDiff` / `downloadAndInstallOrUpdatePack`.
+
+See next-app `CEP_API.md` §3b.
 
 ---
 
