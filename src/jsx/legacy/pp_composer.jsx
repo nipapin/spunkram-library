@@ -73,12 +73,12 @@ $._copyPasteSystem = {
   },
   initializeLibrary: function (libraryBasePath, platform) {
     try {
-      // Drop any prior mapping so Windows can replace Motionflow.dll on update.
-      $._copyPasteSystem.unloadLibrary();
       const ext = platform === 'win' ? '.dll' : '.bundle';
       const path = platform === 'win'
         ? [libraryBasePath, 'bin', platform, "Motionflow" + ext].join('/')
         : [libraryBasePath, "Motionflow" + ext].join('/');
+      // Always construct — same as Beta. Do NOT terminate() between applies:
+      // unload+reload in one Premiere session breaks subsequent execute().
       $._copyPasteSystem.externalLibrary = new ExternalObject("lib:" + path);
       return JSON.stringify({ ready: true });
     } catch (err) {
@@ -86,8 +86,8 @@ $._copyPasteSystem = {
     }
   },
   /**
-   * Release Motionflow.dll / .bundle so the file is not locked by Premiere
-   * (needed for in-panel extension updates without quitting the host).
+   * Prefer rename-then-replace for locked DLLs on update. terminate() often
+   * prevents a working reload until Premiere restarts.
    */
   unloadLibrary: function () {
     try {

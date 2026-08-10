@@ -1,5 +1,4 @@
 import { child_process, fs, os, path } from "../lib/cep/node";
-import { unloadMotionflowLibrary } from "../lib/utils/copy-paste-apply";
 import { csi } from "../lib/utils/bolt";
 import { downloadToFile, type DownloadProgress } from "./download-file";
 
@@ -231,8 +230,8 @@ export async function applyExtensionUpdate(
     }
 
     onProgress?.({ phase: "apply", bytesReceived: 0, totalBytes: null });
-    // Release Motionflow.dll if a FULL_PROJECT apply loaded it this session.
-    await unloadMotionflowLibrary();
+    // Do not ExternalObject.terminate() here — that breaks reloading Motionflow.dll
+    // for the rest of the Premiere session. Locked natives use rename-then-replace.
     cleanupUpdateBackups(extRoot);
     copyDirOverwrite(payloadRoot, extRoot);
 
