@@ -345,6 +345,26 @@ export const selectFolder = (
   }
 };
 
+/** Promise wrapper around {@link selectFolder}; resolves `null` if the user cancels. */
+export const selectFolderAsync = (
+  dir: string,
+  msg: string,
+): Promise<string | null> =>
+  new Promise((resolve) => {
+    try {
+      const result = (
+        window.cep.fs.showOpenDialogEx || window.cep.fs.showOpenDialog
+      )(false, true, msg, dir) as IOpenDialogResult;
+      if (result.data?.length > 0) {
+        resolve(decodeURIComponent(result.data[0].replace("file://", "")));
+      } else {
+        resolve(null);
+      }
+    } catch {
+      resolve(null);
+    }
+  });
+
 export const selectFile = (
   dir: string,
   msg: string,

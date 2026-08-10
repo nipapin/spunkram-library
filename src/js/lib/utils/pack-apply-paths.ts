@@ -101,7 +101,8 @@ export function resolveItemSourceFile(
         : typeof group.is_footage === "string"
           ? group.is_footage
           : "mp4";
-    const file = path.join(groupDir, `${item.name}.${String(ext).toLowerCase()}`);
+    const stem = group.preview_name_instead_id ? item.name : item.previewKey;
+    const file = path.join(groupDir, `${stem}.${String(ext).toLowerCase()}`);
     return { ctype: "FOOTAGE", file, cacheName: path.basename(file) };
   }
 
@@ -115,15 +116,24 @@ export function resolveItemSourceFile(
 
   // PPRO: FULL_PROJECT (.prproj via $._copyPasteSystem) or MOGRT.
   // Legacy per-item PROJECT path is removed — treat "PROJECT" as FULL_PROJECT.
+  // Precedence: item custom_args → group custom_source_type → pack source_type.
+  const groupSourceType =
+    typeof group.custom_source_type === "string" && group.custom_source_type
+      ? group.custom_source_type
+      : undefined;
   const rawSourceType =
     (customArgs.custom_source_type as string | undefined) ||
+    groupSourceType ||
     settings?.inside_option_sets?.source_type ||
     "FULL_PROJECT";
   const sourceType =
     rawSourceType === "PROJECT" ? "FULL_PROJECT" : rawSourceType;
 
   if (sourceType === "MOGRT") {
-    const stem = (customArgs.multiuse_ref_mogrt as string) || item.name;
+    const stem =
+      (typeof customArgs.multiuse_ref_mogrt === "string" &&
+        customArgs.multiuse_ref_mogrt) ||
+      (group.preview_name_instead_id ? item.name : item.previewKey);
     const file = withCustomFilesFolder(
       path.join(groupDir, `${stem}.mogrt`),
       templatesDir,

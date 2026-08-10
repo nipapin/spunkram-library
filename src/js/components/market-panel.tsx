@@ -16,6 +16,7 @@ import { openMotionflowSubscribe } from "@/api/motionflow-auth";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 import * as panelStore from "@/lib/userdata-store";
 import { useDownloadManager, type DownloadJob } from "@/lib/download-manager-context";
+import { usePackagesPathGate } from "@/lib/packages-path-gate";
 
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
@@ -367,6 +368,7 @@ export function MarketPanel({
 }) {
   const { market, marketLoading, marketError, refreshMarket, subscription } = useAuth();
   const { enqueue, jobs, cancel, retry, dismissPackJobs } = useDownloadManager();
+  const { ensurePackagesPath } = usePackagesPathGate();
   const [packTick, setPackTick] = useState(0);
   const [installError, setInstallError] = useState<string | null>(null);
   const onPacksChangedRef = useRef(onPacksChanged);
@@ -378,6 +380,23 @@ export function MarketPanel({
 
   const subscriptionActive = Boolean(market?.subscription_active) || subscription.subscribed;
   const subscribeUrl = market?.subscribe_url;
+
+  async function gatePackagesPath(): Promise<boolean> {
+    const ok = await ensurePackagesPath();
+    if (!ok) {
+      setInstallError("Choose a packages folder to install packs.");
+      return false;
+    }
+    return true;
+  }
+
+  function handleRetryJob(jobId: string) {
+    setInstallError(null);
+    void (async () => {
+      if (!(await gatePackagesPath())) return;
+      retry(jobId);
+    })();
+  }
 
   function handleRemove(meta: InstalledPackMeta, marketPackId: string | number) {
     uninstallPack(meta);
@@ -407,14 +426,17 @@ export function MarketPanel({
 
   function handleInstall(item: CepMarketPackage) {
     setInstallError(null);
-    enqueue(item, {
-      useWhenReady: true,
-      onReady: (meta) => {
-        setPackTick((t) => t + 1);
-        onPacksChanged?.();
-        onSelectPack?.(meta);
-      },
-    });
+    void (async () => {
+      if (!(await gatePackagesPath())) return;
+      enqueue(item, {
+        useWhenReady: true,
+        onReady: (meta) => {
+          setPackTick((t) => t + 1);
+          onPacksChanged?.();
+          onSelectPack?.(meta);
+        },
+      });
+    })();
   }
 
   const jobsByPackId = useMemo(() => {
@@ -554,7 +576,7 @@ export function MarketPanel({
                   onRemovePack={handleRemove}
                   onInstall={handleInstall}
                   onCancelJob={cancel}
-                  onRetryJob={retry}
+                  onRetryJob={handleRetryJob}
                 />
               );
             })}

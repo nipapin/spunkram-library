@@ -20,6 +20,7 @@ import {
   DownloadManagerProvider,
   useDownloadManager,
 } from "@/lib/download-manager-context";
+import { PackagesPathGateProvider } from "@/lib/packages-path-gate";
 import { fetchUpdateInfo, isRemoteNewer } from "@/api/update";
 import { fetchGenerationsStatus } from "@/api/credits";
 import { applyExtensionUpdate } from "@/utils/extension-update";
@@ -832,9 +833,11 @@ export const App = () => {
     <AuthProvider>
       <PanelUIProvider>
         <NotificationsProvider>
-          <DownloadManagerProvider>
-            <AppShell />
-          </DownloadManagerProvider>
+          <PackagesPathGateProvider>
+            <DownloadManagerProvider>
+              <AppShell />
+            </DownloadManagerProvider>
+          </PackagesPathGateProvider>
         </NotificationsProvider>
       </PanelUIProvider>
     </AuthProvider>

@@ -249,6 +249,17 @@ export const getCurrentTime = () => {
   return { time: comp.time, compId: comp.id, trackIndex: undefined as number | undefined };
 };
 
+/** Parent folder of the saved .aep, or null if the project is unsaved. */
+export const getProjectFolderPath = (): string | null => {
+  try {
+    const file = app.project.file;
+    if (!file) return null;
+    return file.parent ? file.parent.fsName : null;
+  } catch (e) {
+    return null;
+  }
+};
+
 // РєР»РёРє РїРѕ caption РІ РїР°РЅРµР»Рё вЂ” РїРµСЂРµСЃС‚Р°РІР»СЏРµРј РїР»РµР№С…РµРґ Р°РєС‚РёРІРЅРѕР№ РєРѕРјРїРѕР·РёС†РёРё РЅР° РЅР°С‡Р°Р»Рѕ СЃРµРіРјРµРЅС‚Р°
 export const setCurrentTime = ({ time }: { time: number }) => {
   const comp = getActiveComp();

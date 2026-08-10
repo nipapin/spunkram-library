@@ -1,7 +1,7 @@
 /**
  * Premiere Pro SDK host surface — addMogrt, undo groups, import helpers.
  */
-import { ensureTopVideoTrack } from "./ppro-utils";
+import { findFreeAudioTrack, findFreeVideoTrack } from "./ppro-utils";
 import {
   bindPack,
   setEngine,
@@ -26,6 +26,8 @@ export type AddMogrtOptions = {
   itemName?: string;
   trackIndex?: number;
   startTicks?: string;
+  /** Seconds for free-track search when `trackIndex` is omitted. */
+  durationSeconds?: number;
 };
 
 const getOrCreateBin = (name: string): ProjectItem => {
@@ -46,7 +48,7 @@ const findImportedItemByName = (bin: ProjectItem, name: string): ProjectItem | n
   return null;
 };
 
-/** Import a .mogrt at the playhead on a free/top video track. */
+/** Import a .mogrt at the playhead on the lowest free video track (Beta parity). */
 export const addMogrt = (
   opts: AddMogrtOptions,
 ): { ok: true; trackIndex: number } | { ok: false; reason: string } => {
@@ -54,10 +56,20 @@ export const addMogrt = (
     if (!new File(opts.filePath).exists) return { ok: false, reason: "SOURCE_MISSING" };
     const seq = app.project.activeSequence;
     if (!seq) return { ok: false, reason: "NO_ACTIVE_SEQUENCE" };
+    const position = seq.getPlayerPosition();
     const trackIndex =
-      typeof opts.trackIndex === "number" ? opts.trackIndex : ensureTopVideoTrack();
+      typeof opts.trackIndex === "number"
+        ? opts.trackIndex
+        : findFreeVideoTrack(
+            seq,
+            position.seconds,
+            typeof opts.durationSeconds === "number" && opts.durationSeconds > 0
+              ? opts.durationSeconds
+              : 5,
+            1,
+          );
     const startTicks =
-      opts.startTicks != null ? opts.startTicks : seq.getPlayerPosition().ticks;
+      opts.startTicks != null ? opts.startTicks : position.ticks;
     const trackItem = seq.importMGT(opts.filePath, startTicks, trackIndex, 0);
     if (!trackItem) return { ok: false, reason: "IMPORT_FAILED" };
     if (opts.itemName) {
@@ -119,8 +131,9 @@ export const importFootage = (payload: {
     if (!imported) return { ok: false, reason: "IMPORT_FAILED" };
     const seq = app.project.activeSequence;
     if (payload.placeOnTimeline !== false && seq) {
-      const videoTrackIndex = ensureTopVideoTrack();
-      seq.videoTracks[videoTrackIndex].overwriteClip(imported, seq.getPlayerPosition().seconds);
+      const position = seq.getPlayerPosition().seconds;
+      const videoTrackIndex = findFreeVideoTrack(seq, position, 5, 1);
+      seq.videoTracks[videoTrackIndex].overwriteClip(imported, position);
     }
     return { ok: true };
   } catch (e: any) {
@@ -145,8 +158,9 @@ export const importAudio = (payload: {
     if (!imported) return { ok: false, reason: "IMPORT_FAILED" };
     const seq = app.project.activeSequence;
     if (payload.placeOnTimeline !== false && seq) {
-      const audioTrackIndex = Math.max(0, seq.audioTracks.numTracks - 1);
-      seq.audioTracks[audioTrackIndex].overwriteClip(imported, seq.getPlayerPosition().seconds);
+      const position = seq.getPlayerPosition().seconds;
+      const audioTrackIndex = findFreeAudioTrack(seq, position, 5);
+      seq.audioTracks[audioTrackIndex].overwriteClip(imported, position);
     }
     return { ok: true };
   } catch (e: any) {

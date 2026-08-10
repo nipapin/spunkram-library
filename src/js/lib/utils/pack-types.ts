@@ -30,6 +30,11 @@ export type PackLeafGroup = {
   is_footage?: boolean | string;
   is_presets?: boolean;
   disable_webm_preview?: boolean;
+  /**
+   * Per-group override of pack `inside_option_sets.source_type`
+   * (e.g. Titles/Elegant = MOGRT while pack default is FULL_PROJECT).
+   */
+  custom_source_type?: "FULL_PROJECT" | "MOGRT" | "PROJECT" | string;
   [key: string]: unknown;
 };
 

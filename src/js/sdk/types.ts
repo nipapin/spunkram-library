@@ -11,6 +11,8 @@ export type ApplyPackItemPayload = {
   itemName: string;
   binName: string;
   compName?: string;
+  /** Seconds — used by Premiere free-track placement (from pack `duration_ticks`). */
+  durationSeconds?: number;
 };
 
 export type ApplyPackItemResult =

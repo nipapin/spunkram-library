@@ -1,15 +1,12 @@
 import { useCallback } from "react";
-import { fs, os, path } from "../../lib/cep/node";
+import { fs, path } from "../../lib/cep/node";
 import { MotionFlow } from "@/sdk";
 import { downloadStockAsset } from "@/lib/api/stock-api";
+import { resolveFootageDownloadDir } from "@/lib/utils/stock-paths";
 import { useFiltersContext } from "../context/FiltersContext";
 import { useProgressContext } from "../context/ProgressContext";
 import { incrementUsage } from "../utils/trial-usage";
 import type { MediaItem } from "../types";
-
-function requestDownloadPath(): Promise<string> {
-  return Promise.resolve(os.tmpdir());
-}
 
 export function useImportMedia() {
   const { setProgress, setPending } = useProgressContext();
@@ -20,9 +17,12 @@ export function useImportMedia() {
       try {
         const provider =
           item.provider || (item.type === "video" ? "pexels" : "unsplash");
-        const downloadDir = await requestDownloadPath();
-        if (!downloadDir) return;
-        const filePath = path.join(downloadDir, item.name);
+        const downloadDir = await resolveFootageDownloadDir();
+        if (!downloadDir.ok) {
+          console.error("import error", downloadDir.message);
+          return;
+        }
+        const filePath = path.join(downloadDir.dir, item.name);
 
         setPending(true);
         setProgress(0);
@@ -44,7 +44,7 @@ export function useImportMedia() {
           kind: item.type === "video" ? "video" : "image",
           id: item.id,
           fileName: item.name,
-          destDir: downloadDir,
+          destDir: downloadDir.dir,
           onProgress: ({ bytesReceived, totalBytes }) => {
             if (totalBytes && totalBytes > 0) {
               setProgress(Math.round((bytesReceived / totalBytes) * 100));

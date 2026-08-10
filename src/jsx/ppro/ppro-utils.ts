@@ -859,6 +859,91 @@ export const ensureTopVideoTrack = (): number => {
   }
 };
 
+/** True when no clip on `track` overlaps [position, position+duration) (seconds). */
+export const isTrackFreeAtPosition = (
+  track: Track,
+  positionSeconds: number,
+  durationSeconds: number,
+): boolean => {
+  try {
+    if (typeof track.isLocked === "function" && track.isLocked()) return false;
+  } catch (e) {
+    // ignore lock probe failures
+  }
+  const end = positionSeconds + Math.max(0.05, durationSeconds);
+  for (let i = 0; i < track.clips.numItems; i++) {
+    const clip = track.clips[i];
+    if (clip.start.seconds < end && clip.end.seconds > positionSeconds) return false;
+  }
+  return true;
+};
+
+/**
+ * Lowest video track free for a contiguous `height` span at the playhead window.
+ * Port of Beta `setPlacesForTracks` / `findFreeTrackIndex` (transitions + mogrt).
+ * Adds tracks via QE only when nothing lower is free.
+ */
+export const findFreeVideoTrack = (
+  sequence: Sequence,
+  positionSeconds: number,
+  durationSeconds = 5,
+  height = 1,
+): number => {
+  const span = Math.max(1, Math.floor(height));
+  const n = sequence.videoTracks.numTracks;
+  for (let i = 0; i <= n - span; i++) {
+    let ok = true;
+    for (let j = 0; j < span; j++) {
+      if (
+        !isTrackFreeAtPosition(
+          sequence.videoTracks[i + j],
+          positionSeconds,
+          durationSeconds,
+        )
+      ) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return i;
+  }
+
+  const tracksToAdd = span;
+  try {
+    if (typeof qe === "undefined") app.enableQE();
+    if (!qe) return Math.max(0, n - 1);
+    const qeSeq = qe.project.getActiveSequence();
+    const before = Number(qeSeq.numVideoTracks);
+    qeSeq.addTracks(tracksToAdd, before, 0, 1, 0, 0, 1, 0);
+    return before;
+  } catch (e) {
+    return Math.max(0, n - 1);
+  }
+};
+
+/** Lowest free audio track at [position, position+duration); adds one via QE if needed. */
+export const findFreeAudioTrack = (
+  sequence: Sequence,
+  positionSeconds: number,
+  durationSeconds = 5,
+): number => {
+  for (let i = 0; i < sequence.audioTracks.numTracks; i++) {
+    if (isTrackFreeAtPosition(sequence.audioTracks[i], positionSeconds, durationSeconds)) {
+      return i;
+    }
+  }
+  try {
+    if (typeof qe === "undefined") app.enableQE();
+    if (!qe) return Math.max(0, sequence.audioTracks.numTracks - 1);
+    const qeSeq = qe.project.getActiveSequence();
+    const audioIdx = sequence.audioTracks.numTracks;
+    qeSeq.addTracks(0, 0, 1, 1, audioIdx);
+    return audioIdx;
+  } catch (e) {
+    return Math.max(0, sequence.audioTracks.numTracks - 1);
+  }
+};
+
 // Audio Conversions
 
 export const dbToDec = (x: number) => Math.pow(10, (x - 15) / 20);

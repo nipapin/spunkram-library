@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-10
+
+### Fixed
+
+- Honor per-group `custom_source_type` when resolving apply sources (MOGRT groups like Titles/Elegant no longer look for a missing `.prproj`)
+- Place Premiere MOGRT / footage / audio on the lowest free track at the playhead (Beta transition track search), instead of always creating a top track
+
+### Changed
+
+- Prompt for a packages install folder when none is set in Settings (before Market/local install)
+- File System settings: remove “use custom path” toggles; packages/assets paths are plain required fields (prompted on pack install / footage download). “Use project location” only overrides footage download and does not clear the assets path
+- Install shows an in-panel dialog to choose the packages folder (saved to Settings); packs no longer fall back to a silent `_ABS` path
+
 ## [0.6.2] - 2026-08-09
 
 ### Fixed

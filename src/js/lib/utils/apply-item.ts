@@ -29,6 +29,9 @@ export type ApplyItemOutcome =
   | { ok: true; warning?: string }
   | { ok: false; message: string };
 
+/** Premiere ticks → seconds (same constant as Beta `getSecondsByTicks`). */
+const TICKS_PER_SECOND = 254016000000;
+
 const REASON_MESSAGES: Record<string, string> = {
   SOURCE_MISSING: "Item file is missing from the pack on disk.",
   NO_ACTIVE_SEQUENCE: "Open a sequence in Premiere Pro first, then try again.",
@@ -40,6 +43,20 @@ const REASON_MESSAGES: Record<string, string> = {
 
 function friendlyReason(reason: string): string {
   return REASON_MESSAGES[reason] || reason;
+}
+
+function durationSecondsForItem(item: PackTreeItem): number | undefined {
+  const entry = item.group.preview?.[item.previewKey];
+  const args = (entry?.custom_args as Record<string, unknown>) || {};
+  const ticks = args.duration_ticks;
+  if (typeof ticks === "number" && ticks > 0) {
+    return ticks / TICKS_PER_SECOND;
+  }
+  if (typeof ticks === "string" && ticks.trim()) {
+    const n = Number(ticks);
+    if (Number.isFinite(n) && n > 0) return n / TICKS_PER_SECOND;
+  }
+  return undefined;
 }
 
 export function currentHostAppId(): HostAppId | null {
@@ -137,6 +154,7 @@ export async function applyPackItemToHost(
       filePath,
       itemName: item.name,
       binName: "Spunkram Assets",
+      durationSeconds: durationSecondsForItem(item),
     });
 
     if (!wrapped.ok) {

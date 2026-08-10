@@ -131,6 +131,9 @@ export const PPRO = {
   async getCurrentTime() {
     return wrap(() => evalTS("getCurrentTime"));
   },
+  async getProjectFolderPath() {
+    return wrap(() => evalTS("getProjectFolderPath"));
+  },
   async setCurrentTime(payload: { time: number }) {
     return wrap(() => evalTS("setCurrentTime", payload));
   },

@@ -18,6 +18,7 @@ import {
   type PrefSettings,
 } from "@/lib/api/preferences";
 import { selectFolder } from "@/lib/utils/bolt";
+import { resolvePackagesInstallRoot } from "@/lib/utils/pack-install";
 import { EXTENSION_VERSION } from "@/lib/config/masked";
 import {
   fetchSpunkramVersions,
@@ -225,9 +226,13 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
 
   function browsePackages() {
     selectFolder(
-      prefs.absCustomAbsolutePath || "",
+      prefs.absCustomAbsolutePath || resolvePackagesInstallRoot(null) || "",
       "Select packages folder",
-      (folder) => patch({ absCustomAbsolutePath: folder }),
+      (folder) =>
+        patch({
+          absCustomAbsolutePath: folder,
+          useCustomPathBySubscription: 1,
+        }),
     );
   }
 
@@ -238,7 +243,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
       (folder) =>
         patch({
           customStockLocation: folder,
-          useCurrentProjectLocation: 0,
+          useCustomPathForAssets: 1,
         }),
     );
   }
@@ -300,43 +305,40 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
           <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             File System
           </h3>
-          <ToggleRow
-            label="Use custom path for packages"
-            checked={asBool(prefs.useCustomPathBySubscription)}
-            onChange={(v) => patch({ useCustomPathBySubscription: v ? 1 : 0 })}
-          />
+
+          <div className="mb-1 text-xs text-foreground">Packages path</div>
+          <p className="mb-1 text-[10px] text-muted-foreground">
+            Packs install under AE/ or PR/ inside this folder. Asked on install if empty.
+          </p>
           <PathBrowse
             value={prefs.absCustomAbsolutePath || ""}
-            disabled={!asBool(prefs.useCustomPathBySubscription)}
             onBrowse={browsePackages}
           />
+          {(prefs.absCustomAbsolutePath || "").trim() ? (
+            <p className="mt-1.5 break-all text-[10px] text-muted-foreground">
+              Installs go to {resolvePackagesInstallRoot(null)}
+              {"\\"}
+              {"{AE|PR}"}
+            </p>
+          ) : null}
 
-          <div className="mt-2">
-            <ToggleRow
-              label="Use custom path for assets"
-              checked={asBool(prefs.useCustomPathForAssets)}
-              onChange={(v) =>
-                patch({
-                  useCustomPathForAssets: v ? 1 : 0,
-                  ...(v ? { useCurrentProjectLocation: 0 } : {}),
-                })
-              }
-            />
+          <div className="mt-3">
+            <div className="mb-1 text-xs text-foreground">Assets download path</div>
+            <p className="mb-1 text-[10px] text-muted-foreground">
+              Stock footage downloads land here. Asked on download if empty.
+            </p>
             <PathBrowse
               value={prefs.customStockLocation || ""}
-              disabled={!asBool(prefs.useCustomPathForAssets)}
               onBrowse={browseAssets}
             />
-            <ToggleRow
-              label="Use project location"
-              checked={asBool(prefs.useCurrentProjectLocation)}
-              onChange={(v) =>
-                patch({
-                  useCurrentProjectLocation: v ? 1 : 0,
-                  ...(v ? { useCustomPathForAssets: 0 } : {}),
-                })
-              }
-            />
+            <div className="mt-2">
+              <ToggleRow
+                label="Use project location"
+                hint="Footage only — downloads next to the open project; does not change the assets path above"
+                checked={asBool(prefs.useCurrentProjectLocation)}
+                onChange={(v) => patch({ useCurrentProjectLocation: v ? 1 : 0 })}
+              />
+            </div>
           </div>
         </section>
 

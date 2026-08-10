@@ -50,17 +50,19 @@ function defaultPackagesInstallRoot(): string {
 
 /**
  * Packages install root.
- * When Settings → "Use custom path for packages" is on and a folder is set,
- * installs land there; otherwise `<prefs dir>/_ABS`.
+ * Requires Settings → packages path (`absCustomAbsolutePath`).
  * Pass a pack host to install under `<root>/AE` or `<root>/PR`.
+ *
+ * When no path is configured, falls back to `<prefs dir>/_ABS` only for
+ * locating / uninstalling older silent installs — new installs must call
+ * {@link hasConfiguredPackagesInstallPath} / the UI path gate first.
  */
 export function resolvePackagesInstallRoot(host?: PackHostId | null): string {
   let root = defaultPackagesInstallRoot();
   try {
     const prefs = readPrefSettings();
-    const useCustom = Boolean(Number(prefs.useCustomPathBySubscription));
     const custom = (prefs.absCustomAbsolutePath || "").trim();
-    if (useCustom && custom) {
+    if (custom) {
       root = path.normalize(custom);
     }
   } catch {
@@ -72,6 +74,15 @@ export function resolvePackagesInstallRoot(host?: PackHostId | null): string {
   }
   if (cepFsAvailable() && !fs.existsSync(root)) fs.mkdirSync(root, { recursive: true });
   return root;
+}
+
+/** True when Settings has an explicit packages install folder. */
+export function hasConfiguredPackagesInstallPath(): boolean {
+  try {
+    return Boolean((readPrefSettings().absCustomAbsolutePath || "").trim());
+  } catch {
+    return false;
+  }
 }
 
 function findPackFileRecursive(dir: string, depth = 0): string | null {
@@ -139,6 +150,14 @@ export type InstallPackResult =
 export async function installPackFromFile(sourcePath: string): Promise<InstallPackResult> {
   if (!cepFsAvailable() || !fs.existsSync(sourcePath)) {
     return { ok: false, message: "File not found." };
+  }
+
+  if (!hasConfiguredPackagesInstallPath()) {
+    return {
+      ok: false,
+      message:
+        "Choose a packages folder in Settings (or via the Install dialog) before installing packs.",
+    };
   }
 
   let packFilePath = sourcePath;

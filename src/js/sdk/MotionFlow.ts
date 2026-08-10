@@ -167,6 +167,15 @@ export const MotionFlow = {
     return fail("No host");
   },
 
+  /** Parent folder of the saved host project, or null if unsaved. */
+  async getProjectFolderPath(): Promise<MfResult<string | null>> {
+    await ensureHost();
+    const host = detectHost();
+    if (host === "AE") return AE.getProjectFolderPath();
+    if (host === "PPRO") return PPRO.getProjectFolderPath();
+    return fail("No host");
+  },
+
   async importVoiceoverAudio(filePath: string, destination: string, duration: number) {
     await ensureHost();
     const host = detectHost();

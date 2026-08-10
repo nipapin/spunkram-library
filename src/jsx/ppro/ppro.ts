@@ -324,6 +324,19 @@ export const getCurrentTime = () => {
   };
 };
 
+/** Parent folder of the saved .prproj, or null if the project is unsaved. */
+export const getProjectFolderPath = (): string | null => {
+  try {
+    const raw = String(app.project.path || "");
+    if (!raw || /not yet saved/i.test(raw)) return null;
+    const file = new File(raw);
+    if (!file.exists) return null;
+    return file.parent ? file.parent.fsName : null;
+  } catch (e) {
+    return null;
+  }
+};
+
 // РєР»РёРє РїРѕ caption РІ РїР°РЅРµР»Рё вЂ” РїРµСЂРµСЃС‚Р°РІР»СЏРµРј РїР»РµР№С…РµРґ Р°РєС‚РёРІРЅРѕР№ СЃРµРєРІРµРЅС†РёРё РЅР° РЅР°С‡Р°Р»Рѕ СЃРµРіРјРµРЅС‚Р°
 export const setCurrentTime = ({ time }: { time: number }) => {
   const seq = app.project.activeSequence;

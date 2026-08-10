@@ -5,6 +5,8 @@ export type ApplyPackItemPayload = {
   binName: string;
   /** Name of the comp to look for inside an imported `.aep` (PROJECT only). */
   compName?: string;
+  /** Unused on AE — kept for evalTS signature parity with Premiere. */
+  durationSeconds?: number;
 };
 
 export type ApplyPackItemResult =
