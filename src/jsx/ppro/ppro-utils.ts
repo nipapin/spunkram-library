@@ -944,6 +944,98 @@ export const findFreeAudioTrack = (
   }
 };
 
+/**
+ * Source WxH from Premiere project-item XMP `Column.Intrinsic.VideoInfo`
+ * (e.g. "1920x1080 (1.0)"). Same source as Beta `getMOGRT_Sizes` / `fitClipScaleToSeq`.
+ */
+export const getClipOriginSize = (
+  projectItem: ProjectItem,
+): { width: number; height: number } | null => {
+  try {
+    const meta = getPrMetadata(projectItem, ["Column.Intrinsic.VideoInfo"]);
+    const info = meta["Column.Intrinsic.VideoInfo"];
+    if (!info) return null;
+    const parts = String(info).toLowerCase().split("x");
+    if (parts.length < 2) return null;
+    const width = parseInt(parts[0], 10);
+    const height = parseInt(parts[1], 10);
+    if (!width || !height || !isFinite(width) || !isFinite(height)) return null;
+    return { width, height };
+  } catch (e) {
+    return null;
+  }
+};
+
+/**
+ * Scale Motion → Scale so the clip covers the active sequence (Beta `fitClipScaleToSeq`).
+ * Used for pack MOGRTs / footage and stock timeline imports.
+ */
+export const fitClipScaleToSeq = (
+  clip: TrackItem,
+  sequence: Sequence,
+): boolean => {
+  try {
+    if (!clip || !sequence || !clip.projectItem) return false;
+    const origin = getClipOriginSize(clip.projectItem);
+    if (!origin) return false;
+
+    const seqW = sequence.frameSizeHorizontal;
+    const seqH = sequence.frameSizeVertical;
+    if (!seqW || !seqH) return false;
+
+    const divideW = origin.width / seqW;
+    const divideH = origin.height / seqH;
+    if (!divideW || !divideH || !isFinite(divideW) || !isFinite(divideH)) {
+      return false;
+    }
+
+    const sourceAspect = origin.width / origin.height;
+    const seqAspect = seqW / seqH;
+    const components = clip.components;
+    for (let a = 0; a < components.numItems; a++) {
+      const fx = components[a];
+      if (fx.displayName !== "Motion") continue;
+      for (let b = 0; b < fx.properties.numItems; b++) {
+        const prop = fx.properties[b];
+        if (prop.displayName !== "Scale") continue;
+        const current = Number(prop.getValue());
+        if (!isFinite(current)) return false;
+        const next =
+          seqAspect >= sourceAspect ? current / divideW : current / divideH;
+        prop.setValue(next, true);
+        return true;
+      }
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+};
+
+/** Find a clip on `track` that starts near `positionSeconds` (after overwriteClip / insert). */
+export const findClipNearPosition = (
+  track: Track,
+  positionSeconds: number,
+  nameHint?: string,
+): TrackItem | null => {
+  const epsilon = 0.05;
+  let byTime: TrackItem | null = null;
+  for (let i = 0; i < track.clips.numItems; i++) {
+    const clip = track.clips[i];
+    if (Math.abs(clip.start.seconds - positionSeconds) <= epsilon) {
+      if (nameHint && clip.name === nameHint) return clip;
+      if (!byTime) byTime = clip;
+    }
+  }
+  if (byTime) return byTime;
+  if (nameHint) {
+    for (let i = 0; i < track.clips.numItems; i++) {
+      if (track.clips[i].name === nameHint) return track.clips[i];
+    }
+  }
+  return null;
+};
+
 // Audio Conversions
 
 export const dbToDec = (x: number) => Math.pow(10, (x - 15) / 20);

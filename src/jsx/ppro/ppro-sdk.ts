@@ -1,7 +1,12 @@
 /**
  * Premiere Pro SDK host surface — addMogrt, undo groups, import helpers.
  */
-import { findFreeAudioTrack, findFreeVideoTrack } from "./ppro-utils";
+import {
+  findClipNearPosition,
+  findFreeAudioTrack,
+  findFreeVideoTrack,
+  fitClipScaleToSeq,
+} from "./ppro-utils";
 import {
   bindPack,
   setEngine,
@@ -79,6 +84,7 @@ export const addMogrt = (
         // cosmetic
       }
     }
+    fitClipScaleToSeq(trackItem, seq);
     return { ok: true, trackIndex };
   } catch (e: any) {
     return { ok: false, reason: e && e.message ? e.message : String(e) };
@@ -134,6 +140,12 @@ export const importFootage = (payload: {
       const position = seq.getPlayerPosition().seconds;
       const videoTrackIndex = findFreeVideoTrack(seq, position, 5, 1);
       seq.videoTracks[videoTrackIndex].overwriteClip(imported, position);
+      const placed = findClipNearPosition(
+        seq.videoTracks[videoTrackIndex],
+        position,
+        imported.name,
+      );
+      if (placed) fitClipScaleToSeq(placed, seq);
     }
     return { ok: true };
   } catch (e: any) {

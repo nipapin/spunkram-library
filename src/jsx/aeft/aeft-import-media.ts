@@ -1,4 +1,6 @@
-﻿const GAL_TOOLKIT_MAX_STOCK_ASSETS = "Spunkram Stock Assets";
+﻿import { fitLayerScaleToComp } from "./aeft-utils";
+
+const GAL_TOOLKIT_MAX_STOCK_ASSETS = "Spunkram Stock Assets";
 
 const getStockFolderByName = (parent: FolderItem, name: string): FolderItem => {
   for (let i = 1; i <= parent.numItems; i++) {
@@ -72,7 +74,10 @@ const importStockByDestination: Record<
       return;
     }
 
-    activeComp.layers.add(importedItem as AVItem);
+    const layer = activeComp.layers.add(importedItem as AVItem);
+    if (importedItem instanceof AVItem) {
+      fitLayerScaleToComp(activeComp, importedItem, layer);
+    }
   },
 };
 

@@ -1,3 +1,5 @@
+import { fitLayerScaleToComp } from "./aeft-utils";
+
 export type ApplyPackItemPayload = {
   ctype: "PROJECT" | "MOGRT" | "AUDIO" | "FOOTAGE";
   filePath: string;
@@ -50,7 +52,8 @@ const findCompRecursive = (folder: FolderItem, name?: string): CompItem | null =
 
 /**
  * Apply a resolved (already decrypted) pack item file to the AE project /
- * active composition.
+ * active composition. Footage / nested comps are scaled to cover the active
+ * composition (Beta `applyAutoSizeForFootage`).
  */
 export const applyPackItem = (payload: ApplyPackItemPayload): ApplyPackItemResult => {
   try {
@@ -74,7 +77,8 @@ export const applyPackItem = (payload: ApplyPackItemPayload): ApplyPackItemResul
 
       const activeItem = app.project.activeItem;
       if (activeItem instanceof CompItem && activeItem.id !== comp.id) {
-        activeItem.layers.add(comp);
+        const layer = activeItem.layers.add(comp);
+        fitLayerScaleToComp(activeItem, comp, layer);
       }
       return { applied: true, ctype };
     }
@@ -98,7 +102,10 @@ export const applyPackItem = (payload: ApplyPackItemPayload): ApplyPackItemResul
 
     const activeItem = app.project.activeItem;
     if (activeItem instanceof CompItem) {
-      activeItem.layers.add(imported as AVItem);
+      const layer = activeItem.layers.add(imported as AVItem);
+      if (ctype === "FOOTAGE" && imported instanceof AVItem) {
+        fitLayerScaleToComp(activeItem, imported, layer);
+      }
     }
 
     return { applied: true, ctype };

@@ -1,4 +1,9 @@
-import { findFreeAudioTrack, findFreeVideoTrack } from "./ppro-utils";
+import {
+  findClipNearPosition,
+  findFreeAudioTrack,
+  findFreeVideoTrack,
+  fitClipScaleToSeq,
+} from "./ppro-utils";
 
 export type ApplyPackItemPayload = {
   ctype: "PROJECT" | "MOGRT" | "AUDIO" | "FOOTAGE";
@@ -39,6 +44,7 @@ const findImportedItemByName = (bin: ProjectItem, name: string): ProjectItem | n
  * Apply a resolved pack item file to the current project / active sequence.
  * Video/audio placement uses the same free-track search as Beta transitions
  * (`setPlacesForTracks`) — lowest free track at the playhead, not a forced top track.
+ * MOGRT / FOOTAGE are scaled to cover the active sequence (Beta `fitClipScaleToSeq`).
  */
 export const applyPackItem = (payload: ApplyPackItemPayload): ApplyPackItemResult => {
   try {
@@ -64,6 +70,7 @@ export const applyPackItem = (payload: ApplyPackItemPayload): ApplyPackItemResul
       } catch (e) {
         // cosmetic only
       }
+      fitClipScaleToSeq(trackItem, seq);
       return { applied: true, ctype };
     }
 
@@ -90,6 +97,14 @@ export const applyPackItem = (payload: ApplyPackItemPayload): ApplyPackItemResul
       } else {
         const videoTrackIndex = findFreeVideoTrack(seq, position, durationSeconds, 1);
         seq.videoTracks[videoTrackIndex].overwriteClip(imported, position);
+        if (ctype === "FOOTAGE" || ctype === "PROJECT") {
+          const placed = findClipNearPosition(
+            seq.videoTracks[videoTrackIndex],
+            position,
+            imported.name,
+          );
+          if (placed) fitClipScaleToSeq(placed, seq);
+        }
       }
     } catch (e: any) {
       // Imported into the project either way — surface a softer failure.

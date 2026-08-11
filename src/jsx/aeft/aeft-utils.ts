@@ -106,3 +106,37 @@ export const getAeMetadata = (propName: string) => {
   const metadata = new XMPMeta(app.project.xmpPacket);
   return metadata.getProperty(uri, newPropName);
 };
+
+/**
+ * Scale a layer to cover the active composition (Beta `applyAutoSizeForFootage`).
+ * `source` must expose `.width` / `.height` (FootageItem, CompItem, or AVLayer).
+ */
+export const fitLayerScaleToComp = (
+  comp: CompItem,
+  source: { width: number; height: number },
+  layer: AVLayer,
+): boolean => {
+  try {
+    const originW = Number(source.width);
+    const originH = Number(source.height);
+    const compW = Number(comp.width);
+    const compH = Number(comp.height);
+    if (!originW || !originH || !compW || !compH) return false;
+
+    const divideW = originW / compW;
+    const divideH = originH / compH;
+    if (!divideW || !divideH || !isFinite(divideW) || !isFinite(divideH)) {
+      return false;
+    }
+
+    const sourceAspect = originW / originH;
+    const compAspect = compW / compH;
+    const scale =
+      compAspect >= sourceAspect ? 100 / divideW : 100 / divideH;
+    if (!isFinite(scale)) return false;
+    layer.transform.scale.setValue([scale, scale]);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};

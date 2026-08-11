@@ -1,4 +1,6 @@
-﻿const GAL_TOOLKIT_MAX_STOCK_ASSETS = "Spunkram Stock Assets";
+﻿import { findClipNearPosition, fitClipScaleToSeq } from "./ppro-utils";
+
+const GAL_TOOLKIT_MAX_STOCK_ASSETS = "Spunkram Stock Assets";
 
 const getStockFolderByName = (folder: ProjectItem, name: string): ProjectItem => {
   for (let i = 0; i < folder.children.numItems; i++) {
@@ -121,6 +123,12 @@ const importStockByDestination: Record<
       importedItem,
       playerPosition.seconds,
     );
+    const placed = findClipNearPosition(
+      activeSequence.videoTracks[videoTrack],
+      playerPosition.seconds,
+      importedItem.name,
+    );
+    if (placed) fitClipScaleToSeq(placed, activeSequence);
   },
 };
 
