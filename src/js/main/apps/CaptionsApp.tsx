@@ -33,6 +33,8 @@ import {
 import "./CaptionsApp.scss";
 import { useConfiguration } from "../../../context/ConfigurationWrapper";
 import * as panelStore from "../../lib/userdata-store";
+import { usePanelUI } from "../../lib/panel-ui-context";
+import { friendlyErrorMessage, isSoftHostError } from "../../utils/user-error";
 
 const STORAGE_KEY = "aitools-cep-transcription";
 const META_KEY = "aitools-cep-caption-meta";
@@ -132,13 +134,19 @@ export const CaptionsApp = ({
     updateCharacters,
     selectPreset,
   } = useConfiguration();
+  const { showStatus } = usePanelUI();
   const [data, setData] = useState<TranscribeResult | null>(null);
   const [customSegments, setCustomSegments] = useState<CaptionsChunk[] | null>(null);
   const [progress, setProgress] = useState<DescribeProgress | null>(null);
-  const [error, setError] = useState<string | null>(null);
   // разбивка, реально применённая к хосту в последний раз (создание/Update) —
   // пока текущие mode/lines/characters совпадают с ней, кнопка Update не нужна
   const [appliedConfig, setAppliedConfig] = useState<AppliedSegmentConfig | null>(null);
+
+  const showError = (err: unknown) => {
+    const msg = friendlyErrorMessage(err);
+    if (!msg || msg === "Cancelled") return;
+    showStatus(msg, "error", 7000);
+  };
   // true на время запроса к хосту по кнопке Update — держим её disabled, чтобы
   // не наспамить повторными вызовами до завершения предыдущего
   const [resegmenting, setResegmenting] = useState(false);
@@ -238,7 +246,7 @@ export const CaptionsApp = ({
     )
       .then(() => undefined)
       .catch((e: unknown) => {
-        setError(e instanceof Error ? e.message : String(e));
+        showError(e);
         reportSupportError("captions.resegment", e);
       });
   };
@@ -330,7 +338,6 @@ export const CaptionsApp = ({
   // Premiere: читаем mogrt'ы из nest (текст + тайминг). AE: session marker.
   const handleLoad = async () => {
     if (progress) return;
-    setError(null);
     try {
       if (!isAfterEffects()) {
         const loaded = (await sdkData(hostSdk().loadCaptionsFromTimeline())) as
@@ -343,7 +350,7 @@ export const CaptionsApp = ({
           | undefined;
         if (!loaded?.segments?.length || !loaded.sequenceId) {
           setCanLoad(false);
-          setError("Select a captions nest on the timeline (or open it), then click Load");
+          showError("Select a captions nest on the timeline (or open it), then click Load");
           return;
         }
         const segments: CaptionsChunk[] = loaded.segments.map((s) => ({
@@ -392,18 +399,18 @@ export const CaptionsApp = ({
         | undefined;
       if (!found?.hasCaptions || typeof found.compId !== "number") {
         setCanLoad(false);
-        setError("No captions found in the current composition");
+        showError("No captions found in the current composition");
         return;
       }
       let payload: SessionPayload;
       try {
         payload = JSON.parse(found.sessionData || "{}") as SessionPayload;
       } catch {
-        setError("Could not read caption settings from this composition");
+        showError("Could not read caption settings from this composition");
         return;
       }
       if (!payload?.data) {
-        setError("This composition has caption layers, but no saved settings to load");
+        showError("This composition has caption layers, but no saved settings to load");
         return;
       }
       if (payload.sourceCompId == null) {
@@ -414,7 +421,7 @@ export const CaptionsApp = ({
       }
       restoreSession(payload, { compId: found.compId });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      showError(e);
       reportSupportError("captions.load", e);
     }
   };
@@ -639,21 +646,19 @@ export const CaptionsApp = ({
   const handleDescribe = async () => {
     if (progress) return;
     if (generationsLeft <= 0) {
-      setError("No generations left. Upgrade your plan or buy extra credits.");
+      showError("No generations left. Upgrade your plan or buy extra credits.");
       return;
     }
-    setError(null);
     try {
       const controller = new AbortController();
       abortRef.current = controller;
       await runTranscription(controller.signal);
     } catch (e) {
       if (e instanceof Error && e.message === "Cancelled") {
-        // тихая отмена — без error-banner
+        // quiet cancel — no toast
       } else {
-        setError(e instanceof Error ? e.message : String(e));
-        const soft = !!(e && typeof e === "object" && (e as { soft?: boolean }).soft);
-        if (!soft) reportSupportError("captions.transcribe", e);
+        showError(e);
+        if (!isSoftHostError(e)) reportSupportError("captions.transcribe", e);
       }
     } finally {
       abortRef.current = null;
@@ -683,7 +688,7 @@ export const CaptionsApp = ({
         if (!r.ok) throw new Error(r.error);
       })
       .catch((e: unknown) => {
-      setError(e instanceof Error ? e.message : String(e));
+      showError(e);
       reportSupportError("captions.live_edit", e);
     });
   };
@@ -799,7 +804,7 @@ export const CaptionsApp = ({
         if (!r.ok) throw new Error(r.error);
       })
       .catch((e: unknown) => {
-      setError(e instanceof Error ? e.message : String(e));
+      showError(e);
     });
   };
 
@@ -959,11 +964,6 @@ export const CaptionsApp = ({
         title="Generating captions"
         steps={CAPTIONS_PROGRESS_STEPS}
       />
-      {error && (
-        <div className="error-banner">
-          <p className="error-banner__text">{error}</p>
-        </div>
-      )}
       <CaptionsTab
         captions={captions}
         meta={meta}

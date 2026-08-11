@@ -4,9 +4,11 @@ export {
   GENERATIONS_ENDPOINTS,
   PRESET_ENDPOINTS,
   SUPPORT_ENDPOINT,
+  TELEMETRY_SESSION_ENDPOINT,
   VOICEOVER_ENDPOINTS,
   apiUrl,
 } from "./config";
+export { reportClientSession } from "./telemetry";
 export {
   installGlobalHandlers,
   reportSupportError,

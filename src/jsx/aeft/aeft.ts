@@ -98,11 +98,10 @@ export const describe = (_audioPresetPath?: string) => {
   try {
     const comp = getActiveComp();
     if (!comp) {
-      alert("Open a composition first");
       return {
         ok: false as const,
         reason: "NO_ACTIVE_COMP" as const,
-        message: "Open a composition first",
+        message: "Open a composition in After Effects, then try again.",
       };
     }
 
@@ -132,11 +131,11 @@ export const describe = (_audioPresetPath?: string) => {
 
     const audioLayers = layersWithAudio(selectedLayers);
     if (!audioLayers.length) {
-      alert("Selected clip has no audio");
       return {
         ok: false as const,
         reason: "NO_AUDIO" as const,
-        message: "Selected clip has no audio",
+        message:
+          "Selected layer has no audio. Select layers with sound, or deselect everything to use the whole composition.",
       };
     }
 
@@ -198,8 +197,11 @@ export const describe = (_audioPresetPath?: string) => {
       type: "selected" as const,
     };
   } catch (e: any) {
-    const message = e && e.message ? String(e.message) : String(e);
-    alert(message);
+    let message = e && e.message ? String(e.message) : String(e);
+    if (/null is not an object/i.test(message)) {
+      message =
+        "Could not export audio from the selection. Deselect layers and try again, or select layers that include audio.";
+    }
     return {
       ok: false as const,
       reason: "DESCRIBE_FAILED" as const,

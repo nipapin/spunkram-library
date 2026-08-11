@@ -27,6 +27,8 @@ import {
 import { reportSupportError } from "@/api/support";
 import { WaveformPlayer } from "@/components/waveform-player";
 import * as panelStore from "@/lib/userdata-store";
+import { usePanelUI } from "@/lib/panel-ui-context";
+import { friendlyErrorMessage } from "@/utils/user-error";
 
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
@@ -454,9 +456,15 @@ export const VoiceoverApp = ({
     id: string;
     destination: "project" | "timeline";
   } | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<VoiceoverHistoryItem[]>(loadHistory);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const { showStatus } = usePanelUI();
+
+  const showError = (err: unknown) => {
+    const msg = friendlyErrorMessage(err);
+    if (!msg || msg === "Cancelled") return;
+    showStatus(msg, "error", 7000);
+  };
 
   useEffect(() => {
     persistHistory(history);
@@ -510,7 +518,6 @@ export const VoiceoverApp = ({
   async function handleGenerate() {
     if (!canGenerate || generationsLeft <= 0) return;
     setBusy(true);
-    setError(null);
     const script = text.trim();
     const res = await generateVoiceover({
       text: script,
@@ -524,7 +531,7 @@ export const VoiceoverApp = ({
     setBusy(false);
     if (!res.data) {
       const msg = res.error || "Generation failed";
-      setError(msg);
+      showError(msg);
       reportSupportError("voiceover.generate", msg);
       return;
     }
@@ -554,7 +561,7 @@ export const VoiceoverApp = ({
     );
     if (dl.path) updateLocalPath(item.id, dl.path);
     else if (dl.error) {
-      setError(dl.error);
+      showError(dl.error);
       reportSupportError("voiceover.download", dl.error);
     }
     window.dispatchEvent(new Event("aitools-credits-changed"));
@@ -565,8 +572,8 @@ export const VoiceoverApp = ({
     destination: "project" | "timeline",
   ) {
     setPlacing({ id: item.id, destination });
-    setError(null);
     try {
+      let downloadFailed = false;
       const resolvePath = async (forceRedownload: boolean): Promise<string | null> => {
         if (!forceRedownload && localFileExists(item.localPath)) return item.localPath!;
         if (!item.audioUrl) return null;
@@ -576,8 +583,9 @@ export const VoiceoverApp = ({
         );
         if (!dl.path) {
           const msg = dl.error || "Could not download audio";
-          setError(msg);
+          showError(msg);
           reportSupportError("voiceover.download", msg);
+          downloadFailed = true;
           return null;
         }
         updateLocalPath(item.id, dl.path);
@@ -586,7 +594,7 @@ export const VoiceoverApp = ({
 
       let filePath = await resolvePath(false);
       if (!filePath) {
-        setError((prev) => prev || "Audio file unavailable");
+        if (!downloadFailed) showError("Audio file unavailable");
         setPlacing(null);
         return;
       }
@@ -620,28 +628,27 @@ export const VoiceoverApp = ({
       }
 
       if (!wrapped.ok) {
-        setError(wrapped.error || "Could not import audio");
+        showError(wrapped.error || "Could not import audio");
         reportSupportError("voiceover.import", wrapped.error);
       } else if (!outcome?.ok) {
         const failReason = outcome?.reason;
         const msg =
           failReason === "NO_ACTIVE_SEQUENCE"
-            ? "Open a sequence first"
+            ? "Open a sequence in Premiere Pro, then try again."
             : failReason === "NO_ACTIVE_COMP"
-              ? "Open a composition first"
+              ? "Open a composition in After Effects, then try again."
               : failReason === "SOURCE_MISSING"
                 ? "Audio file missing on disk — try generating again"
                 : failReason && /could not open source file/i.test(failReason)
                   ? "After Effects could not open the audio file. Try generating again."
                   : failReason || "Could not import audio";
-        setError(msg);
+        showError(msg);
         if (failReason !== "NO_ACTIVE_SEQUENCE" && failReason !== "NO_ACTIVE_COMP") {
           reportSupportError("voiceover.import", msg, { reason: failReason || null });
         }
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Import failed";
-      setError(msg);
+      showError(err instanceof Error ? err.message : "Import failed");
       reportSupportError("voiceover.import", err);
     } finally {
       setPlacing(null);
@@ -799,12 +806,6 @@ export const VoiceoverApp = ({
           </p>
         ) : null}
       </div>
-
-      {error && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-[11px] text-destructive">
-          {error}
-        </div>
-      )}
 
       {history.length > 0 && (
         <div className="flex flex-col gap-2">

@@ -27,8 +27,10 @@ import {
   tagsToText,
   type Chapter,
 } from "../../utils/chapters";
+import { friendlyErrorMessage, isSoftHostError } from "../../utils/user-error";
 import { copyToClipboard } from "../../utils/clipboard";
 import * as panelStore from "../../lib/userdata-store";
+import { usePanelUI } from "../../lib/panel-ui-context";
 import "./ChaptersApp.scss";
 import { useConfiguration } from "../../../context/ConfigurationWrapper";
 
@@ -158,6 +160,7 @@ export const ChaptersApp = ({
   generationsLeft?: number;
 }) => {
   const { srcLang, translateTo } = useConfiguration();
+  const { showStatus } = usePanelUI();
   const [transcription, setTranscription] = useState<TranscribeResult | null>(null);
   const [result, setResult] = useState<ResultState>(emptyResult);
   const [history, setHistory] = useState<ChaptersHistoryItem[]>([]);
@@ -167,9 +170,14 @@ export const ChaptersApp = ({
   const [regeneratingDescription, setRegeneratingDescription] = useState(false);
   const [regeneratingTags, setRegeneratingTags] = useState(false);
   const [addingMarkers, setAddingMarkers] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // landing | results вЂ” СЏРІРЅС‹Р№ СЌРєСЂР°РЅ, С‡С‚РѕР±С‹ Back РЅРµ СЃР±СЂР°СЃС‹РІР°Р» РґР°РЅРЅС‹Рµ
+  // landing | results — явный экран, чтобы Back не сбрасывал данные
   const [screen, setScreen] = useState<"landing" | "results">("landing");
+
+  const showError = (err: unknown) => {
+    const msg = friendlyErrorMessage(err);
+    if (!msg || msg === "Cancelled") return;
+    showStatus(msg, "error", 7000);
+  };
 
   const transcriptionRef = useRef(transcription);
   transcriptionRef.current = transcription;
@@ -290,10 +298,19 @@ export const ChaptersApp = ({
       type?: "composition" | "selected";
     } | null;
     if (!describeRaw || !describeFail?.source || !describeFail.dest) {
-      throw new Error(
+      const soft =
+        describeFail?.reason === "NO_ACTIVE_SEQUENCE" ||
+        describeFail?.reason === "NO_ACTIVE_COMP" ||
+        describeFail?.reason === "NO_AUDIO";
+      const msg =
         (typeof describeFail?.message === "string" && describeFail.message) ||
-          "Could not export audio from the composition. Check the work area / selected layers and try again.",
-      );
+        "Could not export audio from the sequence. Open a sequence, or select clips that have audio, and try again.";
+      const err = new Error(msg);
+      (err as Error & { soft?: boolean; reason?: string }).soft = soft;
+      if (describeFail?.reason) {
+        (err as Error & { reason?: string }).reason = describeFail.reason;
+      }
+      throw err;
     }
     const res = {
       source: describeFail.source,
@@ -357,20 +374,19 @@ export const ChaptersApp = ({
   const handleGenerate = async () => {
     if (progress) return;
     if (generationsLeft <= 0) {
-      setError("No generations left. Upgrade your plan or buy extra credits.");
+      showError("No generations left. Upgrade your plan or buy extra credits.");
       return;
     }
-    setError(null);
     try {
       const controller = new AbortController();
       abortRef.current = controller;
       await runGeneration(controller.signal);
     } catch (e) {
       if (e instanceof Error && e.message === "Cancelled") {
-        // С‚РёС…Р°СЏ РѕС‚РјРµРЅР° вЂ” Р±РµР· error-banner
+        // quiet cancel — no toast
       } else {
-        setError(e instanceof Error ? e.message : String(e));
-        reportChapterApiError("chapters.generate", e);
+        showError(e);
+        if (!isSoftHostError(e)) reportChapterApiError("chapters.generate", e);
       }
     } finally {
       abortRef.current = null;
@@ -392,18 +408,17 @@ export const ChaptersApp = ({
     const source = transcriptionRef.current;
     if (!source || opts.busy) return;
     if (generationsLeft <= 0) {
-      setError("No generations left. Upgrade your plan or buy extra credits.");
+      showError("No generations left. Upgrade your plan or buy extra credits.");
       return;
     }
     opts.setBusy(true);
-    setError(null);
     try {
       const chunks: CaptionsChunk[] = source.chunk.chunks ?? [];
       const value = await opts.run(chunks);
       opts.apply(value);
       notifyCreditsChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      showError(e);
       reportChapterApiError(opts.action, e);
       if (e instanceof ChapterApiError && e.code === "GENERATION_LIMIT_REACHED") {
         notifyCreditsChanged();
@@ -508,7 +523,7 @@ export const ChaptersApp = ({
       const res = await sdkData(hostSdk().addMarkers({ markers }));
       return !!res;
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      showError(e);
       reportSupportError("chapters.add_markers", e);
       return false;
     } finally {
@@ -535,7 +550,6 @@ export const ChaptersApp = ({
     } catch {
       // ignore
     }
-    setError(null);
     setScreen("results");
   };
 
@@ -577,11 +591,6 @@ export const ChaptersApp = ({
         title="Generating chapters"
         steps={CHAPTERS_PROGRESS_STEPS}
       />
-      {error && (
-        <div className="error-banner">
-          <p className="error-banner__text">{error}</p>
-        </div>
-      )}
       <ChaptersTab
         screen={screen}
         progress={progress}

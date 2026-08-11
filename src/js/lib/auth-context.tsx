@@ -38,6 +38,7 @@ import {
 import { fetchCepMarket, type CepMarketPayload } from "@/api/cep-market";
 import { clearUserIdentity, setUserIdentity } from "@/api/user";
 import { reportSupportError } from "@/api/support";
+import { reportClientSession } from "@/api/telemetry";
 import { currentHostAppId } from "@/lib/utils/apply-item";
 import {
   generationLimitForTier,
@@ -289,6 +290,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           freePackSlots: data.entitlements?.free_pack_slots,
         }),
       );
+      void reportClientSession();
       return { ok: true as const };
     },
     [applySession, clearSessionLocal, refreshSavedAccounts],

@@ -12,6 +12,7 @@ CEP знает только `client: "spunkram-cep"` + Bearer и рисует UI
 - `src/js/lib/api/stock-api.ts` — footages: `/api/stock/unsplash`, `/pexels/videos`, `/download`
 - `src/js/lib/api/market-api.ts` — shared helpers only (no AtomX)
 - `src/js/api/credits.ts` — баланс генераций
+- `src/js/api/telemetry.ts` — host/OS session ping: `POST /api/cep/telemetry/session`
 - `src/js/api/config.ts` — пути эндпоинтов
 
 Base URL (Motionflow): **`https://motionflow.pro`**  
@@ -432,6 +433,48 @@ Captions / chapters / voiceover: тот же Bearer; лимит и Spunkram-sub 
 
 ---
 
+## 6.0 Client environment telemetry
+
+`POST /api/cep/telemetry/session` — после успешного `/me` (логин / гидрация сессии). Bearer **обязателен**.
+
+Нужен, чтобы видеть, с каких версий AE/PR и ОС реально заходят (решение по поддержке CC2023 и старше).
+
+**Request**
+
+```json
+{
+  "client": "spunkram-cep",
+  "extension_version": "0.7.7",
+  "host": { "appId": "AEFT", "appName": "After Effects", "appVersion": "24.5.0" },
+  "os": "Windows 11 …",
+  "locale": "en-US"
+}
+```
+
+**Response:** `202 { "ok": true, "inserted": true|false, "reason?": "deduped" }`  
+Server dedupe: тот же user+device+host+os+extension в пределах ~12 часов → `inserted: false`.
+
+Таблица: `cep_client_sessions` (миграция `db/migrations/2026_08_11_cep_client_sessions.sql`).  
+Клиент: `src/js/api/telemetry.ts` → вызывается из `auth-context` после успешного `refreshProfile`.
+
+Пример агрегации:
+
+```sql
+SELECT host_app_id, host_version, COUNT(DISTINCT user_id) AS users
+  FROM cep_client_sessions
+ WHERE reported_at >= NOW() - INTERVAL 90 DAY
+ GROUP BY host_app_id, host_version
+ ORDER BY users DESC;
+
+SELECT os, COUNT(DISTINCT user_id) AS users
+  FROM cep_client_sessions
+ WHERE reported_at >= NOW() - INTERVAL 90 DAY
+ GROUP BY os
+ ORDER BY users DESC;
+```
+
+---
+
 ## 6.1 Support / error reports → Telegram
 
 `POST /api/cep/support/report` — CEP Error Observer. Bearer **опционален** (если есть — в Telegram добавляются email / user id).
@@ -507,6 +550,7 @@ Vite-dev проксирует `/api/cep/*`, `/api/stock/*`, `/api/generations/*`
 - [ ] `POST /api/github/webhook` + `GITHUB_WEBHOOK_SECRET`
 - [ ] ffmpeg binaries on public CDN
 - [ ] `POST /api/cep/support/report` + `GROUP_CHAT_ID` / `TOPIC_ID`
+- [ ] `POST /api/cep/telemetry/session` + таблица `cep_client_sessions`
 
 ---
 

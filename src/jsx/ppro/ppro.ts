@@ -143,6 +143,7 @@ const resolveAudioTrackIndices = (items: TrackItem[]): { indices: number[]; reso
   let resolved = true;
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
+    if (!item) continue;
     if (item.mediaType === "Audio") {
       map[item.parentTrackIndex] = true;
       continue;
@@ -151,10 +152,14 @@ const resolveAudioTrackIndices = (items: TrackItem[]): { indices: number[]; reso
       resolved = false;
       continue;
     }
+    // Adobe: getLinkedItems() returns null when the clip has no linked items —
+    // reading .numItems on null → ExtendScript "null is not an object"
     const linked = item.getLinkedItems();
-    for (let j = 0; j < linked.numItems; j++) {
+    if (!linked) continue;
+    const n = linked.numItems;
+    for (let j = 0; j < n; j++) {
       const l = linked[j];
-      if (l.mediaType === "Audio") map[l.parentTrackIndex] = true;
+      if (l && l.mediaType === "Audio") map[l.parentTrackIndex] = true;
     }
   }
   const indices: number[] = [];
@@ -170,12 +175,14 @@ const soloAudioTracks = (seq: Sequence, keepIndices: number[]) => {
   const saved: { index: number; muted: boolean }[] = [];
   for (let i = 0; i < seq.audioTracks.numTracks; i++) {
     const track = seq.audioTracks[i];
+    if (!track) continue;
     saved.push({ index: i, muted: track.isMuted() });
     track.setMute(keep[i] ? 0 : 1);
   }
   return () => {
     for (let i = 0; i < saved.length; i++) {
-      seq.audioTracks[saved[i].index].setMute(saved[i].muted ? 1 : 0);
+      const track = seq.audioTracks[saved[i].index];
+      if (track) track.setMute(saved[i].muted ? 1 : 0);
     }
   };
 };
@@ -186,11 +193,10 @@ export const describe = (audioPresetPath?: string) => {
   try {
     const seq = app.project.activeSequence;
     if (!seq) {
-      alert("Open a sequence first");
       return {
         ok: false as const,
         reason: "NO_ACTIVE_SEQUENCE" as const,
-        message: "Open a sequence first",
+        message: "Open a sequence in Premiere Pro, then try again.",
       };
     }
 
@@ -203,23 +209,41 @@ export const describe = (audioPresetPath?: string) => {
 
     let start = Infinity;
     let end = -Infinity;
-    for (const item of selection) {
+    for (let i = 0; i < selection.length; i++) {
+      const item = selection[i];
+      if (!item || !item.start || !item.end) continue;
       if (item.start.seconds < start) start = item.start.seconds;
       if (item.end.seconds > end) end = item.end.seconds;
+    }
+    if (!(end > start) || !isFinite(start) || !isFinite(end)) {
+      return {
+        ok: false as const,
+        reason: "DESCRIBE_FAILED" as const,
+        message:
+          "Could not read the selection. Select clips on the timeline, or deselect everything and try again.",
+      };
     }
 
     const audio = resolveAudioTrackIndices(selection);
     if (!audio.indices.length && audio.resolved) {
-      alert("Selected clip has no audio");
       return {
         ok: false as const,
         reason: "NO_AUDIO" as const,
-        message: "Selected clip has no audio",
+        message:
+          "Selected clip has no audio. Select a clip with sound, or deselect everything to use the whole sequence.",
       };
     }
 
-    const savedIn = seq.getInPointAsTime().seconds;
-    const savedOut = seq.getOutPointAsTime().seconds;
+    let savedIn = 0;
+    let savedOut = 0;
+    try {
+      const inTime = seq.getInPointAsTime();
+      const outTime = seq.getOutPointAsTime();
+      if (inTime) savedIn = inTime.seconds;
+      if (outTime) savedOut = outTime.seconds;
+    } catch (e) {
+      // ignore — restore best-effort below
+    }
     seq.setInPoint(start);
     seq.setOutPoint(end);
     // РЅРµ СЃРјРѕРіР»Рё РѕРїСЂРµРґРµР»РёС‚СЊ Р»РёРЅРєРѕРІР°РЅРЅРѕРµ Р°СѓРґРёРѕ вЂ” СЂРµРЅРґРµСЂРёРј РґРёР°РїР°Р·РѕРЅ Р±РµР· solo
@@ -237,8 +261,12 @@ export const describe = (audioPresetPath?: string) => {
     // offset — selection start; transcription timestamps are relative to it
     return { source, dest, offset: start, type: "selected" as const };
   } catch (e: any) {
-    const message = e && e.message ? String(e.message) : String(e);
-    alert(message);
+    let message = e && e.message ? String(e.message) : String(e);
+    // ExtendScript TypeError wording — usually a missing DOM object during export
+    if (/null is not an object/i.test(message)) {
+      message =
+        "Could not export audio from the selection. Deselect clips and try again, or select clips that include audio.";
+    }
     return {
       ok: false as const,
       reason: "DESCRIBE_FAILED" as const,

@@ -40,6 +40,9 @@ export const UPDATE_VERSIONS_ENDPOINT = "/api/cep/update/versions" as const;
 /** POST — CEP error observer → Telegram support topic (optional Bearer). */
 export const SUPPORT_ENDPOINT = "/api/cep/support/report" as const;
 
+/** POST — host app version + OS after sign-in (Bearer required). */
+export const TELEMETRY_SESSION_ENDPOINT = "/api/cep/telemetry/session" as const;
+
 /**
  * Каталог MOGRT/AEP-стилей — код из предыдущей версии продукта (Captions CEP),
  * оставлен в репозитории, но в текущем flow не используется.

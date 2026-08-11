@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Loader2, Lock, ArrowUpRight, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Lock, ArrowUpRight, X, XCircle } from "lucide-react";
 import { PanelHeader } from "@/components/panel-header";
 import { PanelToolbar } from "@/components/panel-toolbar";
 import { PanelSidebar } from "@/components/panel-sidebar";
@@ -345,21 +345,30 @@ function StatusToast({ onOpenMarket }: { onOpenMarket?: () => void }) {
 
   return (
     <div
+      role={statusMessage.tone === "error" ? "alert" : "status"}
       className={cn(
-        "pointer-events-none absolute bottom-14 left-1/2 z-30 flex w-[min(100%-1.25rem,340px)] -translate-x-1/2 items-center gap-1.5 rounded-xl border px-2.5 py-2 text-[11px] font-medium shadow-lg backdrop-blur",
+        "pointer-events-auto absolute bottom-3 left-1/2 z-40 flex w-[min(100%-1.25rem,360px)] -translate-x-1/2 items-start gap-2 rounded-xl border px-3 py-2.5 text-[12px] font-medium leading-snug shadow-xl backdrop-blur-md",
         statusMessage.tone === "error"
-          ? "border-destructive/40 bg-destructive/15 text-destructive-foreground"
+          ? "border-rose-400/35 bg-[#1a1014]/95 text-rose-100"
           : statusMessage.tone === "success"
-            ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-100"
-            : "border-white/10 bg-card/90 text-foreground",
+            ? "border-emerald-500/30 bg-emerald-950/90 text-emerald-100"
+            : "border-white/10 bg-card/95 text-foreground",
       )}
     >
       {statusMessage.tone === "error" ? (
-        <XCircle className="size-3.5 shrink-0" />
+        <XCircle className="mt-0.5 size-4 shrink-0 text-rose-300" />
       ) : statusMessage.tone === "success" ? (
-        <CheckCircle2 className="size-3.5 shrink-0" />
+        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-300" />
       ) : null}
-      <span className="min-w-0 flex-1">{statusMessage.text}</span>
+      <span className="min-w-0 flex-1 pt-px">{statusMessage.text}</span>
+      <button
+        type="button"
+        aria-label="Dismiss"
+        className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-white/45 transition-colors hover:bg-white/10 hover:text-white"
+        onClick={clearStatus}
+      >
+        <X className="size-3.5" strokeWidth={2.5} />
+      </button>
     </div>
   );
 }
