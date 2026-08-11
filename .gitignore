@@ -7,6 +7,10 @@ dist
 yarn-error.log
 .media
 
+# Accidental local dumps (release used to git add -A these)
+/script.js
+/dist.bak*/
+
 # Accidental duplicate of src/bin (packaging copies from src/bin → extension bin/)
 /bin/
 
