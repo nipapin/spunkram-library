@@ -10,10 +10,12 @@ export type ControlValue = boolean | number | number[] | PointValue | LocalizedS
 export const ControlType = {
   Checkbox: 1,
   Slider: 2,
+  Angle: 3,
   Color: 4,
   Point: 5,
   Text: 6,
   Group: 10,
+  Menu: 13,
 } as const;
 
 export interface ClientControl {
@@ -27,6 +29,8 @@ export interface ClientControl {
   min?: number;
   max?: number;
   groupexpanded?: boolean;
+  /** Dropdown options (type 13) — порядок = 1-based value. */
+  menucontent?: LocalizedStr[];
   fonteditinfo?: unknown;
   alternateRectInfo?: unknown;
 }

@@ -187,9 +187,8 @@ const soloAudioTracks = (seq: Sequence, keepIndices: number[]) => {
   };
 };
 
-// РѕРґРёРЅ Describe: Р±РµР· РІС‹РґРµР»РµРЅРёСЏ вЂ” СЂРµРЅРґРµСЂРёРј РІСЃСЋ СЃРµРєРІРµРЅС†РёСЋ; СЃ РІС‹РґРµР»РµРЅРёРµРј вЂ”
-// РѕС‚ inPoint РїРµСЂРІРѕРіРѕ РєР»РёРїР° РґРѕ outPoint РїРѕСЃР»РµРґРЅРµРіРѕ, СЃРѕР»Рѕ С‚РѕР»СЊРєРѕ РЅР° РµРіРѕ Р·РІСѓРєРµ
-export const describe = (audioPresetPath?: string) => {
+/** Sequence In/Out range — for generation cost UI (no export). */
+export const getWorkRange = () => {
   try {
     const seq = app.project.activeSequence;
     if (!seq) {
@@ -199,73 +198,71 @@ export const describe = (audioPresetPath?: string) => {
         message: "Open a sequence in Premiere Pro, then try again.",
       };
     }
-
-    const selection = seq.getSelection();
-    if (!selection || selection.length === 0) {
-      const { source, dest } = exportSequenceAudio(seq, audioPresetPath, ENCODE_ENTIRE);
-      // offset вЂ” С‚РѕС‡РєР° СЃС‚Р°СЂС‚Р° СЂРµРЅРґРµСЂР° РІ С‚Р°Р№РјР»Р°Р№РЅРµ; С‚Р°Р№РјРєРѕРґС‹ С‚СЂР°РЅСЃРєСЂРёРїС†РёРё РѕС‚ РЅРµС‘
-      return { source, dest, offset: 0, type: "composition" as const };
-    }
-
-    let start = Infinity;
-    let end = -Infinity;
-    for (let i = 0; i < selection.length; i++) {
-      const item = selection[i];
-      if (!item || !item.start || !item.end) continue;
-      if (item.start.seconds < start) start = item.start.seconds;
-      if (item.end.seconds > end) end = item.end.seconds;
+    let start = 0;
+    let end = 0;
+    try {
+      const inTime = seq.getInPointAsTime();
+      const outTime = seq.getOutPointAsTime();
+      if (inTime) start = inTime.seconds;
+      if (outTime) end = outTime.seconds;
+    } catch (e) {
+      return {
+        ok: false as const,
+        reason: "NO_INOUT" as const,
+        message: "Could not read sequence In/Out points. Set In and Out, then try again.",
+      };
     }
     if (!(end > start) || !isFinite(start) || !isFinite(end)) {
       return {
         ok: false as const,
-        reason: "DESCRIBE_FAILED" as const,
-        message:
-          "Could not read the selection. Select clips on the timeline, or deselect everything and try again.",
+        reason: "NO_INOUT" as const,
+        message: "Set In and Out points on the sequence timeline, then try again.",
       };
     }
+    return {
+      ok: true as const,
+      start,
+      end,
+      durationSeconds: end - start,
+    };
+  } catch (e: any) {
+    return {
+      ok: false as const,
+      reason: "DESCRIBE_FAILED" as const,
+      message: e && e.message ? String(e.message) : "Could not read sequence In/Out",
+    };
+  }
+};
 
-    const audio = resolveAudioTrackIndices(selection);
-    if (!audio.indices.length && audio.resolved) {
+/** Export audio for sequence In→Out only (clip selection ignored). */
+export const describe = (audioPresetPath?: string) => {
+  try {
+    const range = getWorkRange();
+    if (!range.ok) return range;
+
+    const seq = app.project.activeSequence;
+    if (!seq) {
       return {
         ok: false as const,
-        reason: "NO_AUDIO" as const,
-        message:
-          "Selected clip has no audio. Select a clip with sound, or deselect everything to use the whole sequence.",
+        reason: "NO_ACTIVE_SEQUENCE" as const,
+        message: "Open a sequence in Premiere Pro, then try again.",
       };
     }
 
-    let savedIn = 0;
-    let savedOut = 0;
-    try {
-      const inTime = seq.getInPointAsTime();
-      const outTime = seq.getOutPointAsTime();
-      if (inTime) savedIn = inTime.seconds;
-      if (outTime) savedOut = outTime.seconds;
-    } catch (e) {
-      // ignore — restore best-effort below
-    }
-    seq.setInPoint(start);
-    seq.setOutPoint(end);
-    // РЅРµ СЃРјРѕРіР»Рё РѕРїСЂРµРґРµР»РёС‚СЊ Р»РёРЅРєРѕРІР°РЅРЅРѕРµ Р°СѓРґРёРѕ вЂ” СЂРµРЅРґРµСЂРёРј РґРёР°РїР°Р·РѕРЅ Р±РµР· solo
-    const restoreAudio = audio.indices.length
-      ? soloAudioTracks(seq, audio.indices)
-      : () => {};
-    let source: string, dest: string;
-    try {
-      ({ source, dest } = exportSequenceAudio(seq, audioPresetPath, ENCODE_IN_TO_OUT));
-    } finally {
-      seq.setInPoint(savedIn);
-      seq.setOutPoint(savedOut);
-      restoreAudio();
-    }
-    // offset — selection start; transcription timestamps are relative to it
-    return { source, dest, offset: start, type: "selected" as const };
+    const { source, dest } = exportSequenceAudio(seq, audioPresetPath, ENCODE_IN_TO_OUT);
+    // offset — In point; transcription timestamps are relative to it
+    return {
+      source,
+      dest,
+      offset: range.start,
+      durationSeconds: range.durationSeconds,
+      type: "composition" as const,
+    };
   } catch (e: any) {
     let message = e && e.message ? String(e.message) : String(e);
-    // ExtendScript TypeError wording — usually a missing DOM object during export
     if (/null is not an object/i.test(message)) {
       message =
-        "Could not export audio from the selection. Deselect clips and try again, or select clips that include audio.";
+        "Could not export audio from the In/Out range. Check In/Out points and try again.";
     }
     return {
       ok: false as const,

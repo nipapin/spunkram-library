@@ -159,6 +159,14 @@ export const MotionFlow = {
     return fail("No host");
   },
 
+  async getWorkRange() {
+    await ensureHost();
+    const host = detectHost();
+    if (host === "AE") return AE.getWorkRange();
+    if (host === "PPRO") return PPRO.getWorkRange();
+    return fail("No host");
+  },
+
   async importMedia(filePath: string, destination: string, duration: number) {
     await ensureHost();
     const host = detectHost();

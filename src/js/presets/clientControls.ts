@@ -75,13 +75,43 @@ const buildNode = (control: ClientControl, byId: Map<string, ClientControl>): Co
 
 /**
  * Дерево UI прямо из definition.clientControls.
- * System-группу пропускаем — Main text / timings нужны CEP, не пользователю.
+ * System-группу пропускаем — сырой транскрипт / Segment Type / Height пишет CEP.
+ * Pause Gap / Hold Duration показываем отдельно в конце Styles (см. getStylesTrailingControls).
  */
 export const buildUiTree = (definition: MogrtDefinition): ControlTreeNode[] => {
   const byId = indexControls(definition);
   return getRootGroups(definition)
     .filter((g) => uiName(g).toLowerCase() !== "system")
     .map((g) => buildNode(g, byId));
+};
+
+/** Имена System-слайдеров, которые редактируются на вкладке Styles (без группы). */
+export const STYLES_TRAILING_SYSTEM_NAMES = ["Pause Gap", "Hold Duration"] as const;
+
+const getSystemGroup = (definition: MogrtDefinition): ClientControl | null =>
+  getRootGroups(definition).find((g) => uiName(g).toLowerCase() === "system") ?? null;
+
+/**
+ * Pause Gap / Hold Duration из System — плоский хвост Styles UI.
+ * Порядок как в STYLES_TRAILING_SYSTEM_NAMES, не как в AE child list.
+ */
+export const getStylesTrailingControls = (definition: MogrtDefinition): ClientControl[] => {
+  const system = getSystemGroup(definition);
+  if (!system || !Array.isArray(system.value)) return [];
+  const byId = indexControls(definition);
+  const byName = new Map<string, ClientControl>();
+  for (const id of system.value) {
+    if (typeof id !== "string") continue;
+    const child = byId.get(id);
+    if (!child || isGroup(child)) continue;
+    byName.set(uiName(child), child);
+  }
+  const out: ClientControl[] = [];
+  for (const name of STYLES_TRAILING_SYSTEM_NAMES) {
+    const c = byName.get(name);
+    if (c) out.push(c);
+  }
+  return out;
 };
 
 /** Дефолтные значения по UUID (группы пропускаем). */
@@ -158,5 +188,17 @@ export const stylePropsFromValues = (
     if (uiName(roots[i]).toLowerCase() === "system") continue;
     walk(roots[i], []);
   }
+
+  // Pause Gap / Hold Duration — в System для mogrt, в Styles UI без группы.
+  // path с "System", чтобы AE Essential Properties находил группу.
+  for (const control of getStylesTrailingControls(definition)) {
+    const current = values[control.id];
+    out.push({
+      path: ["System", uiName(control)],
+      type: control.type,
+      value: current !== undefined ? current : cloneValue(control.value as ControlValue),
+    });
+  }
+
   return out;
 };

@@ -240,3 +240,26 @@
     padding: 4px 7px;
   }
 }
+
+/* Pause Gap / Hold Duration — хвост Styles вне групп definition */
+.preset-fields__trailing {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle, var(--border-input));
+}
+
+.preset-fields__select {
+  flex: 1;
+  min-width: 0;
+  max-width: 160px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-input);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 12px;
+}

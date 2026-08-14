@@ -6,6 +6,7 @@ import {
   PRESET_DEFINITION,
   buildUiTree,
   getControlValue,
+  getStylesTrailingControls,
   isColorArray,
   isPointValue,
   uiName,
@@ -31,6 +32,9 @@ interface PresetFieldsProps {
   onSaveAsNew?: () => void;
   onReset?: () => void;
 }
+
+const menuOptionLabel = (entry: { strDB: { localeString: string; str: string }[] }, locale = "en_US") =>
+  entry.strDB?.find((e) => e.localeString === locale)?.str ?? entry.strDB?.[0]?.str ?? "";
 
 const Collapse = ({
   title,
@@ -123,10 +127,36 @@ const ControlField = ({
     );
   }
 
-  if (control.type === ControlType.Slider) {
+  if (control.type === ControlType.Menu && control.menucontent?.length) {
+    const options = control.menucontent;
+    // AE / MOGRT dropdown: 1-based index into menucontent
+    const selected = typeof raw === "number" ? raw : Number(raw) || 1;
+    return (
+      <div className="preset-fields__param">
+        <span className="preset-fields__param-label">{label}</span>
+        <select
+          className="preset-fields__select"
+          value={selected}
+          onChange={(e) => onValue(control.id, Number(e.target.value))}
+        >
+          {options.map((opt, i) => {
+            const index = i + 1;
+            return (
+              <option key={index} value={index}>
+                {menuOptionLabel(opt)}
+              </option>
+            );
+          })}
+        </select>
+      </div>
+    );
+  }
+
+  if (control.type === ControlType.Slider || control.type === ControlType.Angle) {
     const num = typeof raw === "number" ? raw : Number(raw) || 0;
-    const min = typeof control.min === "number" ? control.min : 0;
-    const max = typeof control.max === "number" ? control.max : 100;
+    const hasRange = typeof control.min === "number" && typeof control.max === "number";
+    const min = hasRange ? (control.min as number) : control.type === ControlType.Angle ? -360 : 0;
+    const max = hasRange ? (control.max as number) : control.type === ControlType.Angle ? 360 : 100;
     const span = Math.max(0.0001, max - min);
     const step = span <= 10 ? 0.1 : span <= 100 ? 0.5 : 1;
 
@@ -148,7 +178,7 @@ const ControlField = ({
     );
   }
 
-  // Text (type 6) и прочее — в UI не показываем (System уже отфильтрован)
+  // Text (type 6) — скрыт (Captions_Raw_Data / Font пишет CEP или отдельный picker)
   return null;
 };
 
@@ -181,6 +211,7 @@ export const PresetFields = ({
   onReset,
 }: PresetFieldsProps) => {
   const tree = useMemo(() => buildUiTree(definition), [definition]);
+  const trailing = useMemo(() => getStylesTrailingControls(definition), [definition]);
 
   const setValue = (id: string, next: ControlValue) => {
     // один жест слайдера/scrub = один Ctrl+Z
@@ -222,7 +253,21 @@ export const PresetFields = ({
         )}
       </div>
 
-      <div className="preset-fields__params">{renderNodes(tree, 0, p.values, setValue)}</div>
+      <div className="preset-fields__params">
+        {renderNodes(tree, 0, p.values, setValue)}
+        {trailing.length > 0 && (
+          <div className="preset-fields__trailing">
+            {trailing.map((control) => (
+              <ControlField
+                key={control.id}
+                control={control}
+                values={p.values}
+                onValue={setValue}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

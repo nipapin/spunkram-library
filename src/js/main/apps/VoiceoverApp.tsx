@@ -29,6 +29,7 @@ import { WaveformPlayer } from "@/components/waveform-player";
 import * as panelStore from "@/lib/userdata-store";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { friendlyErrorMessage } from "@/utils/user-error";
+import { textGenerationsCost, withGenerationCostLabel } from "../../utils/generationCost";
 
 const ACCENT_PILL =
   "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
@@ -497,9 +498,10 @@ export const VoiceoverApp = ({
     };
   }, []);
 
+  const generationCost = textGenerationsCost(text.trim().length);
   const canGenerate =
-    text.trim().length > 0 && !!voiceId && !busy && generationsLeft > 0;
-  const outOfCredits = generationsLeft <= 0;
+    text.trim().length > 0 && !!voiceId && !busy && generationsLeft >= generationCost;
+  const outOfCredits = generationsLeft < generationCost;
   const selectedVoice = useMemo(
     () => voices.find((v) => v.id === voiceId),
     [voices, voiceId],
@@ -516,7 +518,7 @@ export const VoiceoverApp = ({
   }, []);
 
   async function handleGenerate() {
-    if (!canGenerate || generationsLeft <= 0) return;
+    if (!canGenerate || generationsLeft < generationCost) return;
     setBusy(true);
     const script = text.trim();
     const res = await generateVoiceover({
@@ -798,7 +800,7 @@ export const VoiceoverApp = ({
           )}
         >
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 fill-current" />}
-          {outOfCredits ? "No generations left" : "Generate voiceover"}
+          {outOfCredits ? "No generations left" : withGenerationCostLabel("Generate voiceover", generationCost)}
         </button>
         {outOfCredits ? (
           <p className="mt-2 text-center text-[10px] text-muted-foreground">

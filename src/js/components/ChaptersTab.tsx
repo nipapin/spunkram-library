@@ -21,6 +21,8 @@ interface ChaptersTabProps {
   screen: "landing" | "results";
   progress: DescribeProgress | null;
   onGenerate: () => void;
+  /** e.g. Generate Chapters ( 2 ) */
+  generateLabel?: string;
   onBack: () => void;
   /** false when user has no generations left — Regenerate buttons stay disabled. */
   canRegenerate?: boolean;
@@ -73,6 +75,7 @@ export const ChaptersTab = ({
   screen,
   progress,
   onGenerate,
+  generateLabel = "Generate Chapters",
   onBack,
   canRegenerate = true,
   history = [],
@@ -224,7 +227,7 @@ export const ChaptersTab = ({
             disabled={!!progress}
           >
             {progress ? <span className="spinner" /> : <Sparkles size={15} />}
-            {progress ? "Working…" : "Generate Chapters"}
+            {progress ? "Working…" : generateLabel}
           </button>
         </div>
       </div>

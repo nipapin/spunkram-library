@@ -146,6 +146,9 @@ export const AE = {
   async describe(audioPresetPath?: string) {
     return wrap(() => evalTS("describe", audioPresetPath));
   },
+  async getWorkRange() {
+    return wrap(() => evalTS("getWorkRange"));
+  },
   async addMarkers(data: { markers: unknown[] }) {
     return wrap(() => evalTS("addMarkers", data as any));
   },

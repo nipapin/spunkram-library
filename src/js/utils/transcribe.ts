@@ -22,6 +22,10 @@ export type TranscribeResult = {
     chunk: WhisperTranscription;  // по предложениям
     /** true — текст уже переведён; chunk.chunks не пересобираем из words */
     translated?: boolean;
+    /** Signed server receipt — pass to chapters "all" for free follow-up */
+    chaptersReceipt?: string;
+    cost?: number;
+    durationSeconds?: number;
 };
 
 export type GroupingMode = "sentence" | "words" | "custom";
@@ -61,6 +65,8 @@ export type TranscribeOptions = {
     language?: string;    // исходный язык аудио, ISO-код ("en"/"ru"/"es") или "auto"
     translateTo?: string; // целевой язык перевода текста, ISO-код или "off"
     signal?: AbortSignal; // отмена из панели (кнопка Cancel)
+    /** In/Out / Work Area duration — billing: ceil(minutes/10) */
+    durationSeconds?: number;
     /** id / email — проверка доступа на сервере при Transcribe */
     userId?: string;
     email?: string;
@@ -79,6 +85,9 @@ export const transcribe = async (audioPath: string, options: TranscribeOptions =
     );
     if (options.language && options.language !== "auto") form.append("language", options.language);
     if (options.translateTo && options.translateTo !== "off") form.append("translateTo", options.translateTo);
+    if (typeof options.durationSeconds === "number" && options.durationSeconds > 0) {
+        form.append("durationSeconds", String(options.durationSeconds));
+    }
     if (options.userId) form.append("userId", options.userId);
     if (options.email) form.append("email", options.email);
 

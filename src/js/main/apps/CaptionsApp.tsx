@@ -30,6 +30,8 @@ import {
   type GroupingMode,
   type TranscribeResult,
 } from "../../utils/transcribe";
+import { useWorkRangeCost } from "../../hooks/useWorkRangeCost";
+import { withGenerationCostLabel } from "../../utils/generationCost";
 import "./CaptionsApp.scss";
 import { useConfiguration } from "../../../context/ConfigurationWrapper";
 import * as panelStore from "../../lib/userdata-store";
@@ -135,6 +137,8 @@ export const CaptionsApp = ({
     selectPreset,
   } = useConfiguration();
   const { showStatus } = usePanelUI();
+  const workRange = useWorkRangeCost(true);
+  const generationCost = workRange.cost;
   const [data, setData] = useState<TranscribeResult | null>(null);
   const [customSegments, setCustomSegments] = useState<CaptionsChunk[] | null>(null);
   const [progress, setProgress] = useState<DescribeProgress | null>(null);
@@ -487,16 +491,19 @@ export const CaptionsApp = ({
       source?: string;
       dest?: string;
       offset?: number;
+      durationSeconds?: number;
       type?: "composition" | "selected";
     } | null;
     if (!describeRaw || !describeFail?.source || !describeFail.dest) {
       const soft =
         describeFail?.reason === "NO_ACTIVE_COMP" ||
         describeFail?.reason === "NO_ACTIVE_SEQUENCE" ||
-        describeFail?.reason === "NO_AUDIO";
+        describeFail?.reason === "NO_AUDIO" ||
+        describeFail?.reason === "NO_INOUT" ||
+        describeFail?.reason === "NO_WORK_AREA";
       const msg =
         (typeof describeFail?.message === "string" && describeFail.message) ||
-        "Could not export audio from the composition. Check the work area / selected layers and try again.";
+        "Could not export audio. Set In/Out (Premiere) or Work Area (After Effects) and try again.";
       const err = new Error(msg);
       (err as Error & { soft?: boolean }).soft = soft;
       throw err;
@@ -505,6 +512,7 @@ export const CaptionsApp = ({
       source: describeFail.source,
       dest: describeFail.dest,
       offset: describeFail.offset ?? 0,
+      durationSeconds: describeFail.durationSeconds ?? 0,
       type: (describeFail.type ?? "composition") as "composition" | "selected",
     };
 
@@ -529,6 +537,7 @@ export const CaptionsApp = ({
           language: srcLang,
           translateTo,
           signal,
+          durationSeconds: res.durationSeconds > 0 ? res.durationSeconds : undefined,
           userId: user.id || undefined,
           email: user.email,
           token: user.token,
@@ -645,7 +654,7 @@ export const CaptionsApp = ({
 
   const handleDescribe = async () => {
     if (progress) return;
-    if (generationsLeft <= 0) {
+    if (generationsLeft < generationCost) {
       showError("No generations left. Upgrade your plan or buy extra credits.");
       return;
     }
@@ -975,6 +984,7 @@ export const CaptionsApp = ({
         canLoad={canLoad}
         onLoad={handleLoad}
         onDescribe={handleDescribe}
+        transcribeLabel={withGenerationCostLabel("Transcribe", generationCost)}
         onBack={handleBack}
         onSaveCaption={handleSaveCaption}
         onSeek={handleSeek}

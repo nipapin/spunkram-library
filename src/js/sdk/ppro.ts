@@ -122,6 +122,9 @@ export const PPRO = {
   async describe(audioPresetPath?: string) {
     return wrap(() => evalTS("describe", audioPresetPath));
   },
+  async getWorkRange() {
+    return wrap(() => evalTS("getWorkRange"));
+  },
   async markSilences(data: { ranges: unknown[]; offset: number }) {
     return wrap(() => evalTS("markSilences", data as any));
   },

@@ -28,6 +28,8 @@ import {
   type Chapter,
 } from "../../utils/chapters";
 import { friendlyErrorMessage, isSoftHostError } from "../../utils/user-error";
+import { useWorkRangeCost } from "../../hooks/useWorkRangeCost";
+import { withGenerationCostLabel } from "../../utils/generationCost";
 import { copyToClipboard } from "../../utils/clipboard";
 import * as panelStore from "../../lib/userdata-store";
 import { usePanelUI } from "../../lib/panel-ui-context";
@@ -161,6 +163,8 @@ export const ChaptersApp = ({
 }) => {
   const { srcLang, translateTo } = useConfiguration();
   const { showStatus } = usePanelUI();
+  const workRange = useWorkRangeCost(true);
+  const generationCost = workRange.cost;
   const [transcription, setTranscription] = useState<TranscribeResult | null>(null);
   const [result, setResult] = useState<ResultState>(emptyResult);
   const [history, setHistory] = useState<ChaptersHistoryItem[]>([]);
@@ -295,16 +299,19 @@ export const ChaptersApp = ({
       source?: string;
       dest?: string;
       offset?: number;
+      durationSeconds?: number;
       type?: "composition" | "selected";
     } | null;
     if (!describeRaw || !describeFail?.source || !describeFail.dest) {
       const soft =
         describeFail?.reason === "NO_ACTIVE_SEQUENCE" ||
         describeFail?.reason === "NO_ACTIVE_COMP" ||
-        describeFail?.reason === "NO_AUDIO";
+        describeFail?.reason === "NO_AUDIO" ||
+        describeFail?.reason === "NO_INOUT" ||
+        describeFail?.reason === "NO_WORK_AREA";
       const msg =
         (typeof describeFail?.message === "string" && describeFail.message) ||
-        "Could not export audio from the sequence. Open a sequence, or select clips that have audio, and try again.";
+        "Could not export audio. Set In/Out or Work Area and try again.";
       const err = new Error(msg);
       (err as Error & { soft?: boolean; reason?: string }).soft = soft;
       if (describeFail?.reason) {
@@ -316,6 +323,7 @@ export const ChaptersApp = ({
       source: describeFail.source,
       dest: describeFail.dest,
       offset: describeFail.offset ?? 0,
+      durationSeconds: describeFail.durationSeconds ?? 0,
       type: (describeFail.type ?? "composition") as "composition" | "selected",
     };
 
@@ -331,6 +339,7 @@ export const ChaptersApp = ({
           language: srcLang,
           translateTo,
           signal,
+          durationSeconds: res.durationSeconds > 0 ? res.durationSeconds : undefined,
           userId: user.id || undefined,
           email: user.email,
           token: user.token,
@@ -348,7 +357,10 @@ export const ChaptersApp = ({
 
       setProgress({ stage: "summarizing" });
       const chunks: CaptionsChunk[] = normalized.chunk.chunks ?? [];
-      const { titles, sections, description, tags } = await generateAll(chunks, signal, outputLanguage);
+      const { titles, sections, description, tags } = await generateAll(chunks, signal, outputLanguage, {
+        chaptersReceipt: transcriptionResult.chaptersReceipt,
+        durationSeconds: res.durationSeconds > 0 ? res.durationSeconds : undefined,
+      });
       throwIfCancelled(signal);
 
       const nextResult: ResultState = {
@@ -373,7 +385,7 @@ export const ChaptersApp = ({
 
   const handleGenerate = async () => {
     if (progress) return;
-    if (generationsLeft <= 0) {
+    if (generationsLeft < generationCost) {
       showError("No generations left. Upgrade your plan or buy extra credits.");
       return;
     }
@@ -595,6 +607,7 @@ export const ChaptersApp = ({
         screen={screen}
         progress={progress}
         onGenerate={handleGenerate}
+        generateLabel={withGenerationCostLabel("Generate Chapters", generationCost)}
         onBack={handleBack}
         canRegenerate={generationsLeft > 0}
         history={historyPreview}

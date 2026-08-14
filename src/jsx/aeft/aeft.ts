@@ -90,11 +90,12 @@ const soloAudioLayers = (comp: CompItem, keep: AVLayer[]) => {
 /** Soft-fail shape — never return bare `null` (CEP JSON null → Error: null). */
 export type DescribeFailure = {
   ok: false;
-  reason: "NO_ACTIVE_COMP" | "NO_AUDIO" | "DESCRIBE_FAILED";
+  reason: "NO_ACTIVE_COMP" | "NO_AUDIO" | "NO_WORK_AREA" | "DESCRIBE_FAILED";
   message: string;
 };
 
-export const describe = (_audioPresetPath?: string) => {
+/** Work Area range of the active comp — for generation cost UI (no export). */
+export const getWorkRange = () => {
   try {
     const comp = getActiveComp();
     if (!comp) {
@@ -104,68 +105,57 @@ export const describe = (_audioPresetPath?: string) => {
         message: "Open a composition in After Effects, then try again.",
       };
     }
-
-    const selectedLayers = comp.selectedLayers;
-    if (selectedLayers.length === 0) {
-      const rqItem = app.project.renderQueue.items.add(comp);
-      rqItem.timeSpanStart = 0;
-      rqItem.timeSpanDuration = comp.duration;
-      const fileName = `ae_audio_export_${Date.now()}`;
-      const om = rqItem.outputModule(1);
-
-      // WAV settings
-      om.applyTemplate("Lossless");
-
-      const tempFile = new File(Folder.temp.fsName + `/${fileName}.avi`);
-      om.file = tempFile;
-      om.setSettings({
-        "Video Output": false,
-      });
-
-      app.project.renderQueue.render();
-      rqItem.remove();
-      comp.openInViewer();
-      // offset вЂ” С‚РѕС‡РєР° СЃС‚Р°СЂС‚Р° СЂРµРЅРґРµСЂР° РІ С‚Р°Р№РјР»Р°Р№РЅРµ; С‚Р°Р№РјРєРѕРґС‹ С‚СЂР°РЅСЃРєСЂРёРїС†РёРё РѕС‚ РЅРµС‘
-      return { source: tempFile.fsName, dest: Folder.temp.fsName + `/${fileName}.mp3`, offset: 0, type: "composition" as const };
-    }
-
-    const audioLayers = layersWithAudio(selectedLayers);
-    if (!audioLayers.length) {
+    const frame = 1 / Math.max(1, comp.frameRate);
+    const compDur = Math.max(frame, comp.duration);
+    let start = Number(comp.workAreaStart) || 0;
+    let duration = Number(comp.workAreaDuration) || 0;
+    start = Math.max(0, Math.min(start, Math.max(0, compDur - frame)));
+    duration = Math.max(frame, Math.min(duration, compDur - start));
+    if (!(duration > 0)) {
       return {
         ok: false as const,
-        reason: "NO_AUDIO" as const,
-        message:
-          "Selected layer has no audio. Select layers with sound, or deselect everything to use the whole composition.",
+        reason: "NO_WORK_AREA" as const,
+        message: "Set a Work Area on the composition timeline, then try again.",
+      };
+    }
+    return {
+      ok: true as const,
+      start,
+      end: start + duration,
+      durationSeconds: duration,
+    };
+  } catch (e: any) {
+    return {
+      ok: false as const,
+      reason: "DESCRIBE_FAILED" as const,
+      message: e && e.message ? String(e.message) : "Could not read Work Area",
+    };
+  }
+};
+
+/** Export audio for the composition Work Area only (selection ignored). */
+export const describe = (_audioPresetPath?: string) => {
+  try {
+    const range = getWorkRange();
+    if (!range.ok) return range;
+
+    const comp = getActiveComp();
+    if (!comp) {
+      return {
+        ok: false as const,
+        reason: "NO_ACTIVE_COMP" as const,
+        message: "Open a composition in After Effects, then try again.",
       };
     }
 
-    // Selection order ≠ timeline order; layer outPoints can exceed comp.duration.
-    // workAreaDuration must stay within [frame, duration - start] or AE throws.
-    let rangeStart = audioLayers[0].inPoint;
-    let rangeEnd = audioLayers[0].outPoint;
-    for (let i = 1; i < audioLayers.length; i++) {
-      if (audioLayers[i].inPoint < rangeStart) rangeStart = audioLayers[i].inPoint;
-      if (audioLayers[i].outPoint > rangeEnd) rangeEnd = audioLayers[i].outPoint;
-    }
-    const frame = 1 / Math.max(1, comp.frameRate);
-    const compDur = comp.duration;
-    rangeStart = Math.max(0, Math.min(rangeStart, Math.max(0, compDur - frame)));
-    rangeEnd = Math.max(rangeStart + frame, Math.min(rangeEnd, compDur));
-    const rangeDur = Math.max(frame, rangeEnd - rangeStart);
-
-    const saveWAS = comp.workAreaStart;
-    const saveWAD = comp.workAreaDuration;
-    comp.workAreaStart = rangeStart;
-    comp.workAreaDuration = rangeDur;
-    const restoreAudio = soloAudioLayers(comp, audioLayers);
-
+    const rangeStart = range.start;
+    const rangeDur = range.durationSeconds;
     const rqItem = app.project.renderQueue.items.add(comp);
     rqItem.timeSpanStart = rangeStart;
     rqItem.timeSpanDuration = rangeDur;
     const fileName = `ae_audio_export_${Date.now()}`;
     const om = rqItem.outputModule(1);
 
-    // WAV settings
     om.applyTemplate("Lossless");
 
     const tempFile = new File(Folder.temp.fsName + `/${fileName}.avi`);
@@ -178,29 +168,21 @@ export const describe = (_audioPresetPath?: string) => {
       app.project.renderQueue.render();
     } finally {
       rqItem.remove();
-      try {
-        const restoreStart = Math.max(0, Math.min(saveWAS, Math.max(0, compDur - frame)));
-        const restoreDur = Math.max(frame, Math.min(saveWAD, compDur - restoreStart));
-        comp.workAreaStart = restoreStart;
-        comp.workAreaDuration = restoreDur;
-      } catch (eRestore) {
-        // leave work area as-is if restore is invalid
-      }
-      restoreAudio();
     }
     comp.openInViewer();
-    // offset — start of rendered range; transcription timestamps are relative to it
+    // offset — Work Area start; transcription timestamps are relative to it
     return {
       source: tempFile.fsName,
       dest: Folder.temp.fsName + `/${fileName}.mp3`,
       offset: rangeStart,
-      type: "selected" as const,
+      durationSeconds: rangeDur,
+      type: "composition" as const,
     };
   } catch (e: any) {
     let message = e && e.message ? String(e.message) : String(e);
     if (/null is not an object/i.test(message)) {
       message =
-        "Could not export audio from the selection. Deselect layers and try again, or select layers that include audio.";
+        "Could not export audio from the Work Area. Check the Work Area and try again.";
     }
     return {
       ok: false as const,

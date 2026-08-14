@@ -21,6 +21,8 @@ interface CaptionsTabProps {
   canLoad: boolean;
   onLoad: () => void;
   onDescribe: () => void;
+  /** e.g. `Transcribe ( 2 )` from In/Out duration */
+  transcribeLabel?: string;
   onBack: () => void;
   onSaveCaption: (caption: Caption, index: number, text: string) => void;
   onSeek: (caption: Caption, index: number) => void;
@@ -52,6 +54,7 @@ export const CaptionsTab = ({
   canLoad,
   onLoad,
   onDescribe,
+  transcribeLabel = "Transcribe",
   onBack,
   onSaveCaption,
   onSeek,
@@ -123,7 +126,7 @@ export const CaptionsTab = ({
           <div className="captions-tab__landing-actions">
             <button className="btn btn--primary captions-tab__transcribe-btn" onClick={onDescribe} disabled={!!progress}>
               {progress ? <span className="spinner" /> : <AudioWaveform size={15} />}
-              {progress ? "Working…" : "Transcribe Audio"}
+              {progress ? "Working…" : transcribeLabel}
             </button>
             <button
               type="button"

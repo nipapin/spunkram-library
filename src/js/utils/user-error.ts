@@ -12,13 +12,19 @@ export function isSoftHostError(err: unknown): boolean {
   if (
     reason === "NO_ACTIVE_SEQUENCE" ||
     reason === "NO_ACTIVE_COMP" ||
-    reason === "NO_AUDIO"
+    reason === "NO_AUDIO" ||
+    reason === "NO_INOUT" ||
+    reason === "NO_WORK_AREA"
   ) {
     return true;
   }
   return (
     /open a sequence first/i.test(msg) ||
     /open a composition first/i.test(msg) ||
+    /set in and out/i.test(msg) ||
+    /set a work area/i.test(msg) ||
+    /in\/out/i.test(msg) ||
+    /work area/i.test(msg) ||
     /selected clip has no audio/i.test(msg) ||
     /no audio/i.test(msg) ||
     /could not read selection timing/i.test(msg)
@@ -67,10 +73,10 @@ export function friendlyErrorMessage(err: unknown): string {
   if (msg === "Cancelled") return msg;
 
   if (/null is not an object/i.test(msg)) {
-    return "Could not export audio from the selection. Deselect clips and try again, or select clips that include audio.";
+    return "Could not export audio from the In/Out range. Check In/Out or Work Area and try again.";
   }
   if (/selected clip has no audio/i.test(msg) || /selected layer has no audio/i.test(msg) || /reason:\s*NO_AUDIO/i.test(msg)) {
-    return "Selected clip has no audio. Select a clip with sound, or deselect everything to use the whole sequence.";
+    return "No audio found in the In/Out range. Check the timeline mix and try again.";
   }
   if (/open a sequence first/i.test(msg)) {
     return "Open a sequence in Premiere Pro, then try again.";
@@ -78,8 +84,11 @@ export function friendlyErrorMessage(err: unknown): string {
   if (/open a composition first/i.test(msg)) {
     return "Open a composition in After Effects, then try again.";
   }
-  if (/could not read selection timing/i.test(msg)) {
-    return "Could not read the selection. Select clips on the timeline, or deselect everything and try again.";
+  if (/could not read selection timing/i.test(msg) || /set in and out/i.test(msg) || /NO_INOUT/i.test(msg)) {
+    return "Set In and Out points on the sequence, then try again.";
+  }
+  if (/set a work area/i.test(msg) || /NO_WORK_AREA/i.test(msg)) {
+    return "Set a Work Area on the composition, then try again.";
   }
   if (/audio export preset|\.epr/i.test(msg)) {
     return "Audio export preset is missing. Reinstall the extension or set a preset in Settings.";

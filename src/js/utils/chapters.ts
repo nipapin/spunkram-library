@@ -63,6 +63,7 @@ const callGenerations = async (
   // ISO-код языка (см. TRANSLATE_TARGETS в ChaptersTab) — когда задан, ВСЕ
   // запрошенные поля (не только транскрипт) выводятся на этом языке
   language?: string,
+  meter?: { chaptersReceipt?: string; durationSeconds?: number },
 ): Promise<GenerationResponse> => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort("timeout"), REQUEST_TIMEOUT_MS);
@@ -85,6 +86,10 @@ const callGenerations = async (
         chunks,
         target,
         ...(language ? { language } : {}),
+        ...(meter?.chaptersReceipt ? { chaptersReceipt: meter.chaptersReceipt } : {}),
+        ...(typeof meter?.durationSeconds === "number" && meter.durationSeconds > 0
+          ? { durationSeconds: meter.durationSeconds }
+          : {}),
         email: user.email || undefined,
         userId: user.id || undefined,
       }),
@@ -125,8 +130,9 @@ export const generateAll = async (
   chunks: CaptionsChunk[],
   signal?: AbortSignal,
   language?: string,
+  meter?: { chaptersReceipt?: string; durationSeconds?: number },
 ): Promise<GenerateAllResult> => {
-  const data = await callGenerations(chunks, "all", signal, language);
+  const data = await callGenerations(chunks, "all", signal, language, meter);
   return {
     titles: Array.isArray(data.titles) ? data.titles : [],
     sections: Array.isArray(data.sections) ? data.sections : [],
