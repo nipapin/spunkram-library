@@ -45,21 +45,19 @@ import {
 /** @deprecated Bolt samples — not part of MotionFlow SDK surface */
 export { helloError, helloStr, helloNum, helloArrayStr, helloObj, helloVoid };
 import { dispatchTS, readJsonUtf8 } from "../utils/utils";
+import { CAPTION_SYSTEM } from "../../shared/caption-system";
 import {
-  applyMogrtSnapshot,
   applyMogrtStyleProps,
   collectCaptionClips,
   dumpMogrtParams,
-  ensureTopVideoTrack,
-  fillFirstMogrtText,
   fillMogrtSystemProps,
   fillMogrtText,
   findCaptionTrackIndex,
+  findFreeVideoTrack,
   getNextCaptionsName,
   isCaptionMogrtClip,
   readMogrtText,
   secondsToTime,
-  snapshotMogrtStyle,
   type MogrtMatchDebug,
 } from "./ppro-utils";
 
@@ -380,70 +378,95 @@ interface CaptionLayer {
   mogrtPath?: string;
   aepPath?: string;
   words?: { text: string; timestamp: [number, number] }[];
+  captionsRawData?: string;
+  segmentType?: number;
+  lineCount?: number;
+  charsPerLine?: number;
 }
 
-const timingsJson = (caption: CaptionLayer): string => {
+/** Scribe `words[]` (word + spacing) — System EP Captions_Raw_Data. */
+const captionsRawDataJson = (caption: CaptionLayer): string => {
+  if (caption.captionsRawData) return caption.captionsRawData;
   const words = caption.words && caption.words.length
     ? caption.words
     : [{ text: caption.text.replace(/\n/g, " "), timestamp: [0, Math.max(0.001, caption.timestamp[1] - caption.timestamp[0])] }];
-  return JSON.stringify(words);
+  const tokens: { text: string; start: number; end: number; type: string; speaker_id: null }[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    tokens.push({
+      text: w.text,
+      start: w.timestamp[0],
+      end: w.timestamp[1],
+      type: "word",
+      speaker_id: null,
+    });
+    if (i < words.length - 1) {
+      tokens.push({
+        text: " ",
+        start: w.timestamp[1],
+        end: words[i + 1].timestamp[0],
+        type: "spacing",
+        speaker_id: null,
+      });
+    }
+  }
+  return JSON.stringify(tokens);
 };
 
-// СЃРѕР·РґР°С‘Рј РїРѕ РѕРґРЅРѕРјСѓ СЌРєР·РµРјРїР»СЏСЂСѓ MOGRT РЅР° РєР°Р¶РґС‹Р№ caption,
-// System: Main text / Highlight text / timings.
-// Р—Р°С‚РµРј Nest: createSubsequence СЃР°Рј РїРѕ СЃРµР±Рµ РќР• РєР»Р°РґС‘С‚ nest РЅР° С‚Р°Р№РјР»Р°Р№РЅ
-// (СЃРј. Premiere Scripting Guide) вЂ” РЅСѓР¶РµРЅ overwriteClip РѕР±СЂР°С‚РЅРѕ РЅР° С‚СЂРµРє.
 export const createCaptions = (captions: CaptionLayer[]) => {
   const seq = app.project.activeSequence;
   if (!seq) {
     alert("Open a sequence first");
     return null;
   }
-  if (!captions.length) return { created: 0 };
-  const mogrtPath = captions[0].mogrtPath;
+  const caption = captions[0];
+  if (!caption) return { created: 0 };
+  const mogrtPath = caption.mogrtPath;
   if (!mogrtPath) {
     alert("Caption style project (.mogrt) is not available. Run Transcribe after selecting a style.");
     return null;
   }
 
-  const trackIndex = ensureTopVideoTrack();
+  const start = Number(caption.timestamp[0]) || 0;
+  let end = Number(caption.timestamp[1]);
+  if (isNaN(end) || end <= start) end = start + 0.05;
+  const duration = end - start;
+  const tracksBefore = seq.videoTracks.numTracks;
+  const trackIndex = findFreeVideoTrack(seq, start, duration, 1);
   const captionsName = getNextCaptionsName(seq, seq.name);
+  let trackWasEmpty = seq.videoTracks.numTracks > tracksBefore;
   try {
-    seq.videoTracks[trackIndex].name = captionsName;
+    trackWasEmpty = trackWasEmpty || seq.videoTracks[trackIndex].clips.numItems === 0;
   } catch (e) {
     // ignore
   }
+  if (trackWasEmpty) {
+    try {
+      seq.videoTracks[trackIndex].name = captionsName;
+    } catch (e) {
+      // ignore
+    }
+  }
 
   try {
-    let created = 0;
-    const createdClips: TrackItem[] = [];
-    for (let i = 0; i < captions.length; i++) {
-      const caption = captions[i];
-      const startTicks = secondsToTime(caption.timestamp[0]).ticks;
-      const trackItem = seq.importMGT(mogrtPath, startTicks, trackIndex, 0);
-      if (!trackItem) continue;
-      trackItem.end = secondsToTime(caption.timestamp[1]);
-      trackItem.name = caption.text.split("\n").join(" ");
-      fillMogrtSystemProps(trackItem, caption.text, timingsJson(caption));
-      createdClips.push(trackItem);
-      created++;
-    }
+    const startTicks = secondsToTime(start).ticks;
+    const trackItem = seq.importMGT(mogrtPath, startTicks, trackIndex, 0);
+    if (!trackItem) return { created: 0, trackIndex };
 
-    let sequenceId: string | undefined;
-    let nestedTrackIndex = trackIndex;
-
-    if (createdClips.length > 0) {
-      const nestResult = nestCaptionClips(seq, createdClips, trackIndex, captionsName);
-      if (nestResult) {
-        sequenceId = nestResult.sequenceId;
-        nestedTrackIndex = nestResult.trackIndex;
-      }
-    }
+    trackItem.end = secondsToTime(end);
+    trackItem.name = captionsName;
+    fillMogrtSystemProps(trackItem, {
+      captionsRawData: captionsRawDataJson(caption),
+      segmentType: caption.segmentType,
+      lineCount: caption.lineCount,
+      charsPerLine: caption.charsPerLine,
+      compositionHeight: seq.frameSizeVertical,
+    });
 
     return {
-      created,
-      trackIndex: nestedTrackIndex,
-      sequenceId,
+      created: 1,
+      trackIndex,
+      sequenceId: undefined as string | undefined,
       compId: undefined as number | undefined,
       sourceCompId: undefined as number | undefined,
     };
@@ -451,177 +474,6 @@ export const createCaptions = (captions: CaptionLayer[]) => {
     alert(e && e.message ? e.message : String(e));
     return null;
   }
-};
-
-/**
- * Nest caption clips into a subsequence and place it on the timeline.
- * Premiere createSubsequence() only builds a new sequence from In/Out вЂ” it does
- * not replace the selection. Official pattern: set In/Out -> createSubsequence ->
- * overwriteClip(projectItem) on the captions track.
- */
-const nestCaptionClips = (
-  seq: Sequence,
-  clips: TrackItem[],
-  trackIndex: number,
-  captionsName: string,
-): { sequenceId?: string; trackIndex: number } | null => {
-  let startSec = clips[0].start.seconds;
-  let endSec = clips[0].end.seconds;
-  for (let i = 1; i < clips.length; i++) {
-    const s = clips[i].start.seconds;
-    const e = clips[i].end.seconds;
-    if (s < startSec) startSec = s;
-    if (e > endSec) endSec = e;
-  }
-  if (!(endSec > startSec)) endSec = startSec + 0.05;
-
-  let oldIn = 0;
-  let oldOut = 0;
-  try {
-    oldIn = seq.getInPointAsTime().seconds;
-    oldOut = seq.getOutPointAsTime().seconds;
-  } catch (e) {
-    // ignore
-  }
-
-  // Targeting: only the captions video track (and no audio), so the nest
-  // does not swallow the footage underneath.
-  const videoTargeted: boolean[] = [];
-  const audioTargeted: boolean[] = [];
-  try {
-    for (let i = 0; i < seq.videoTracks.numTracks; i++) {
-      let was = false;
-      try {
-        was = !!seq.videoTracks[i].isTargeted();
-      } catch (e) {
-        // ignore
-      }
-      videoTargeted.push(was);
-      try {
-        seq.videoTracks[i].setTargeted(i === trackIndex, false);
-      } catch (e) {
-        // ignore
-      }
-    }
-    for (let i = 0; i < seq.audioTracks.numTracks; i++) {
-      let was = false;
-      try {
-        was = !!seq.audioTracks[i].isTargeted();
-      } catch (e) {
-        // ignore
-      }
-      audioTargeted.push(was);
-      try {
-        seq.audioTracks[i].setTargeted(false, false);
-      } catch (e) {
-        // ignore
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
-
-  try {
-    seq.setInPoint(startSec);
-    seq.setOutPoint(endSec);
-  } catch (e) {
-    // ignore
-  }
-
-  let nested: Sequence | null = null;
-  try {
-    // false = respect track targeting (captions track only)
-    nested = seq.createSubsequence(false);
-  } catch (e) {
-    try {
-      nested = seq.createSubsequence(true);
-    } catch (e2) {
-      nested = null;
-    }
-  }
-
-  let sequenceId: string | undefined;
-  let nestedTrackIndex = trackIndex;
-
-  if (nested) {
-    try {
-      nested.name = captionsName;
-    } catch (e) {
-      // ignore
-    }
-    try {
-      sequenceId = String(nested.projectItem.nodeId);
-    } catch (e) {
-      // ignore
-    }
-    nestedTrackIndex = Math.max(0, nested.videoTracks.numTracks - 1);
-    try {
-      nested.videoTracks[nestedTrackIndex].name = captionsName;
-    } catch (e) {
-      // ignore
-    }
-
-    // Put nest on the main timeline (this is the actual "Nest" step)
-    try {
-      seq.videoTracks[trackIndex].overwriteClip(nested.projectItem, startSec);
-    } catch (e) {
-      // subsequence exists in Project, but timeline replace failed
-    }
-
-    // Remove leftover individual caption mogrts on this track (keep the nest)
-    try {
-      const track = seq.videoTracks[trackIndex];
-      for (let i = track.clips.numItems - 1; i >= 0; i--) {
-        const clip = track.clips[i];
-        let isNest = false;
-        try {
-          const pi = clip.projectItem;
-          isNest = !!(pi && pi.isSequence && pi.isSequence());
-        } catch (e) {
-          // ignore
-        }
-        if (isNest) continue;
-        try {
-          if (isCaptionMogrtClip(clip)) {
-            clip.remove(false, false);
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-
-  try {
-    seq.setInPoint(oldIn);
-    seq.setOutPoint(oldOut);
-  } catch (e) {
-    // ignore
-  }
-
-  try {
-    for (let i = 0; i < videoTargeted.length; i++) {
-      try {
-        seq.videoTracks[i].setTargeted(videoTargeted[i], false);
-      } catch (e) {
-        // ignore
-      }
-    }
-    for (let i = 0; i < audioTargeted.length; i++) {
-      try {
-        seq.audioTracks[i].setTargeted(audioTargeted[i], false);
-      } catch (e) {
-        // ignore
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
-
-  if (!nested) return null;
-  return { sequenceId, trackIndex: nestedTrackIndex };
 };
 
 interface UpdateCaptionText {
@@ -632,6 +484,7 @@ interface UpdateCaptionText {
   /** Premiere nested captions sequence nodeId (from createCaptions). */
   sequenceId?: string;
   text: string;
+  captionsRawData?: string;
 }
 
 const SESSION_MARKER_NAME = "__mf_caption_session__";
@@ -702,20 +555,16 @@ const writeSessionMarker = (seq: Sequence, json: string): boolean => {
   }
 };
 
-export const updateCaptionText = ({ trackIndex, clipIndex, sequenceId, text }: UpdateCaptionText) => {
+export const updateCaptionText = ({ trackIndex, sequenceId, captionsRawData }: UpdateCaptionText) => {
   const seq = resolveCaptionSequence(sequenceId);
-  if (!seq || trackIndex == null || clipIndex == null) return null;
+  if (!seq || trackIndex == null) return null;
   try {
     const track = seq.videoTracks[trackIndex];
     if (!track) return null;
-    const trackItem = track.clips[clipIndex];
+    const clips = collectCaptionClips(track);
+    const trackItem = clips[0];
     if (!trackItem) return null;
-    trackItem.name = text.split("\n").join(" ");
-    if (!fillMogrtText(trackItem, "Main text", text)) {
-      fillFirstMogrtText(trackItem, text);
-    } else {
-      fillMogrtText(trackItem, "Highlight text", text);
-    }
+    if (captionsRawData) fillMogrtText(trackItem, CAPTION_SYSTEM.rawData, captionsRawData);
     return { updated: true };
   } catch (e: any) {
     return null;
@@ -740,45 +589,29 @@ export const resegmentCaptions = (payload: {
     const seq = resolveCaptionSequence(payload && payload.sequenceId);
     const captions = payload && payload.captions;
     if (!seq || !captions || !captions.length) return null;
-    const mogrtPath = captions[0].mogrtPath;
-    if (!mogrtPath || !new File(mogrtPath).exists) {
-      alert("Caption style project (.mogrt) is not available. Select a style and try again.");
-      return null;
-    }
 
+    const caption = captions[0];
     const trackIndex = findCaptionTrackIndex(seq, payload.trackIndex);
     if (trackIndex < 0) return null;
     const track = seq.videoTracks[trackIndex];
     const clips = collectCaptionClips(track);
+    if (!clips.length) return null;
 
-    // СЂРµС„РµСЂРµРЅСЃ СЃС‚РёР»РµР№ вЂ” РїРµСЂРІС‹Р№ РєР»РёРї; СЃРЅР°РїС€РѕС‚ РІ РїР°РјСЏС‚СЊ РґРѕ СѓРґР°Р»РµРЅРёСЏ
-    const snapshot = snapshotMogrtStyle(clips[0]);
-
-    for (let i = clips.length - 1; i >= 0; i--) {
+    fillMogrtSystemProps(clips[0], {
+      captionsRawData: captionsRawDataJson(caption),
+      segmentType: caption.segmentType,
+      lineCount: caption.lineCount,
+      charsPerLine: caption.charsPerLine,
+      compositionHeight: seq.frameSizeVertical,
+    });
+    for (let i = 1; i < clips.length; i++) {
       try {
         clips[i].remove(false, false);
       } catch (e) {
-        // РєР»РёРї РјРѕРі Р±С‹С‚СЊ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ вЂ” РѕСЃС‚Р°РІР»СЏРµРј, РЅРѕРІС‹Рµ Р»СЏРіСѓС‚ РїРѕРІРµСЂС…
+        // ignore leftover clips
       }
     }
-
-    let created = 0;
-    for (let i = 0; i < captions.length; i++) {
-      const caption = captions[i];
-      let start = Number(caption.timestamp[0]);
-      let end = Number(caption.timestamp[1]);
-      if (isNaN(start) || start < 0) start = 0;
-      if (isNaN(end) || end <= start) end = start + 0.05;
-      const startTicks = secondsToTime(start).ticks;
-      const trackItem = seq.importMGT(mogrtPath, startTicks, trackIndex, 0);
-      if (!trackItem) continue;
-      trackItem.end = secondsToTime(end);
-      trackItem.name = caption.text.split("\n").join(" ");
-      fillMogrtSystemProps(trackItem, caption.text, timingsJson(caption));
-      applyMogrtSnapshot(trackItem, snapshot);
-      created++;
-    }
-    return { updated: true, created };
+    return { updated: true, created: 1 };
   } catch (e: any) {
     alert(e && e.message ? e.message : String(e));
     return null;
@@ -834,9 +667,16 @@ export const findAppliedCaptions = (): {
   try {
     const target = resolveLoadTargetSequence();
     if (!target) return null;
+    let sessionData = "";
+    try {
+      const marker = findSessionMarker(target.seq);
+      if (marker) sessionData = String(marker.comments || "");
+    } catch (e) {
+      sessionData = "";
+    }
     return {
       sequenceId: target.sequenceId,
-      sessionData: "",
+      sessionData,
       hasCaptions: true,
     };
   } catch (e) {
@@ -971,9 +811,9 @@ export const applyStyleProject = (payload: ApplyStyleProjectPayload) => {
 };
 
 /**
- * РџСЂРёРјРµРЅРµРЅРёРµ style values РєРѕ РІСЃРµРј caption-РєР»РёРїР°Рј Р°РєС‚РёРІРЅРѕР№ СЃРµРєРІРµРЅС†РёРё.
- * РќР°С€Рё РєР»РёРїС‹ РІС‹С‡Р»РµРЅСЏРµРј РїРѕ System-СЃРІРѕР№СЃС‚РІСѓ "timings" РІ MGT-РєРѕРјРїРѕРЅРµРЅС‚Рµ вЂ”
- * РїРѕСЃС‚РѕСЂРѕРЅРЅРёРµ mogrt РІ РїСЂРѕРµРєС‚Рµ РЅРµ С‚СЂРѕРіР°РµРј. compId вЂ” AE-РїРѕР»Рµ, Р·РґРµСЃСЊ РЅРµ РЅСѓР¶РЅРѕ.
+ * Apply style values to caption clips in the active sequence.
+ * Caption mogrts are identified by System "Captions_Raw_Data".
+ * compId is AE-only and ignored here.
  */
 export const applyCaptionStyleValues = (payload: {
   compId?: number;

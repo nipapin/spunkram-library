@@ -8,6 +8,11 @@ import type {
   PointValue,
 } from "./types";
 import { ControlType } from "./types";
+import {
+  CAPTION_SYSTEM,
+  CEP_WRITTEN_SYSTEM_NAMES,
+  STYLES_TRAILING_SYSTEM_NAMES,
+} from "../../shared/caption-system";
 
 export const uiName = (control: ClientControl, locale = "en_US"): string => {
   const db = control.uiName?.strDB;
@@ -52,7 +57,7 @@ const referencedIds = (controls: ClientControl[]): Set<string> => {
   return refs;
 };
 
-/** Корневые группы (не вложены в другие) — Text, Background, Highlight, Global, System. */
+/** Корневые группы (не вложены в другие) — Global, Typography, Segment Static/Animated, Follow, Background, System. */
 export const getRootGroups = (definition: MogrtDefinition): ClientControl[] => {
   const controls = definition.clientControls ?? [];
   const refs = referencedIds(controls);
@@ -81,15 +86,14 @@ const buildNode = (control: ClientControl, byId: Map<string, ClientControl>): Co
 export const buildUiTree = (definition: MogrtDefinition): ControlTreeNode[] => {
   const byId = indexControls(definition);
   return getRootGroups(definition)
-    .filter((g) => uiName(g).toLowerCase() !== "system")
+    .filter((g) => uiName(g) !== CAPTION_SYSTEM.group)
     .map((g) => buildNode(g, byId));
 };
 
-/** Имена System-слайдеров, которые редактируются на вкладке Styles (без группы). */
-export const STYLES_TRAILING_SYSTEM_NAMES = ["Pause Gap", "Hold Duration"] as const;
+export { STYLES_TRAILING_SYSTEM_NAMES };
 
 const getSystemGroup = (definition: MogrtDefinition): ClientControl | null =>
-  getRootGroups(definition).find((g) => uiName(g).toLowerCase() === "system") ?? null;
+  getRootGroups(definition).find((g) => uiName(g) === CAPTION_SYSTEM.group) ?? null;
 
 /**
  * Pause Gap / Hold Duration из System — плоский хвост Styles UI.
@@ -114,11 +118,24 @@ export const getStylesTrailingControls = (definition: MogrtDefinition): ClientCo
   return out;
 };
 
-/** Дефолтные значения по UUID (группы пропускаем). */
+/** Дефолтные значения по UUID (группы и CEP-written System props пропускаем). */
 export const defaultsFromDefinition = (definition: MogrtDefinition): ControlValues => {
+  const skipIds = new Set<string>();
+  const system = getSystemGroup(definition);
+  if (system && Array.isArray(system.value)) {
+    const byId = indexControls(definition);
+    for (const id of system.value) {
+      if (typeof id !== "string") continue;
+      const child = byId.get(id);
+      if (!child || isGroup(child)) continue;
+      if ((CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(uiName(child))) {
+        skipIds.add(child.id);
+      }
+    }
+  }
   const values: ControlValues = {};
   for (const c of definition.clientControls ?? []) {
-    if (isGroup(c)) continue;
+    if (isGroup(c) || skipIds.has(c.id)) continue;
     values[c.id] = cloneValue(c.value as ControlValue);
   }
   return values;
@@ -130,7 +147,7 @@ export const getControlValue = (values: ControlValues, control: ClientControl): 
   return cloneValue(control.value as ControlValue);
 };
 
-/** Найти контрол по цепочке uiName, напр. ["Text","Base","Fill"]. */
+/** Найти контрол по цепочке uiName, напр. ["Segment Static","Fill"]. */
 export const findControlByNames = (
   definition: MogrtDefinition,
   names: string[],
@@ -175,6 +192,8 @@ export const stylePropsFromValues = (
       }
       return;
     }
+    // type 6 (Caption Font / Captions_Raw_Data) — не Styles; CEP пишет сырой транскрипт отдельно
+    if (control.type === ControlType.Text) return;
     const current = values[control.id];
     out.push({
       path: nextPath,
@@ -185,7 +204,7 @@ export const stylePropsFromValues = (
 
   const roots = getRootGroups(definition);
   for (let i = 0; i < roots.length; i++) {
-    if (uiName(roots[i]).toLowerCase() === "system") continue;
+    if (uiName(roots[i]) === CAPTION_SYSTEM.group) continue;
     walk(roots[i], []);
   }
 
@@ -194,7 +213,7 @@ export const stylePropsFromValues = (
   for (const control of getStylesTrailingControls(definition)) {
     const current = values[control.id];
     out.push({
-      path: ["System", uiName(control)],
+      path: [CAPTION_SYSTEM.group, uiName(control)],
       type: control.type,
       value: current !== undefined ? current : cloneValue(control.value as ControlValue),
     });

@@ -356,7 +356,7 @@ export const ChaptersApp = ({
       persistTranscription(normalized);
 
       setProgress({ stage: "summarizing" });
-      const chunks: CaptionsChunk[] = normalized.chunk.chunks ?? [];
+      const chunks: CaptionsChunk[] = normalized.chunk?.chunks ?? [];
       const { titles, sections, description, tags } = await generateAll(chunks, signal, outputLanguage, {
         chaptersReceipt: transcriptionResult.chaptersReceipt,
         durationSeconds: res.durationSeconds > 0 ? res.durationSeconds : undefined,

@@ -137,6 +137,9 @@ export default defineConfig({
   root,
   clearScreen: false,
   server: {
+    // IPv4 loopback — CEP opens http://localhost:4000, and with VPN we prefer
+    // 127.0.0.1 over ::1. Default Vite bind is [::1] only → ERR_CONNECTION_REFUSED.
+    host: "127.0.0.1",
     port: cepConfig.port,
     // Motion Flow API → https://motionflow.pro (see `apiTarget`). Panel Vite is
     // on :4000 — proxy avoids CORS in dev. Paths must end with `/` so Vite

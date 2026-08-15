@@ -17,6 +17,27 @@ export type WhisperTranscription = {
     speakers?: unknown[];
 };
 
+/** Токен ElevenLabs Scribe v2 — как в POST /api/generations/captions. */
+export type ScribeWord = {
+    text: string;
+    start?: number | null;
+    end?: number | null;
+    type?: string;
+    speaker_id?: string | null;
+};
+
+export type ScribeResponse = {
+    text?: string;
+    words?: ScribeWord[];
+    translated?: boolean;
+    language_code?: string;
+    language_probability?: number;
+    duration_seconds?: number | null;
+    durationSeconds?: number;
+    chaptersReceipt?: string;
+    cost?: number;
+};
+
 export type TranscribeResult = {
     words: WhisperTranscription;  // пословно
     chunk: WhisperTranscription;  // по предложениям
@@ -26,6 +47,8 @@ export type TranscribeResult = {
     chaptersReceipt?: string;
     cost?: number;
     durationSeconds?: number;
+    /** Ответ Scribe as-is — пишем в System EP Captions_Raw_Data */
+    raw?: ScribeResponse;
 };
 
 export type GroupingMode = "sentence" | "words" | "custom";
@@ -127,7 +150,7 @@ export const transcribe = async (audioPath: string, options: TranscribeOptions =
         throw new CaptionApiError("Unauthorized", 401, "UNAUTHORIZED");
     }
 
-    let data: { error?: string; code?: string } & Partial<TranscribeResult>;
+    let data: { error?: string; code?: string };
     try {
         data = await response.json();
     } catch {
@@ -148,7 +171,7 @@ export const transcribe = async (audioPath: string, options: TranscribeOptions =
         throw new Error(data.error ?? `HTTP ${response.status}`);
     }
 
-    return data as TranscribeResult;
+    return parseCaptionsApiResponse(data);
 };
 
 // конец предложения: .!?… с возможными закрывающими кавычками/скобками
@@ -174,6 +197,39 @@ export const sentencesFromWords = (words: CaptionsChunk[]): CaptionsChunk[] => {
     }
     flush(); // хвост без финальной пунктуации
     return out;
+};
+
+/** BE отдаёт Scribe `words[]`, не Whisper `{ words.chunks, chunk.chunks }`. */
+export const isScribePayload = (data: unknown): data is ScribeResponse =>
+    !!data && typeof data === "object" && Array.isArray((data as ScribeResponse).words);
+
+export const scribeToTranscription = (raw: ScribeResponse): TranscribeResult => {
+    const wordChunks: CaptionsChunk[] = [];
+    for (const w of raw.words ?? []) {
+        if (w.type && w.type !== "word") continue;
+        const text = typeof w.text === "string" ? w.text.trim() : "";
+        if (!text) continue;
+        if (typeof w.start !== "number" || typeof w.end !== "number") continue;
+        wordChunks.push({ text, timestamp: [w.start, w.end] });
+    }
+    const sentences = sentencesFromWords(wordChunks);
+    const fullText = raw.text ?? wordChunks.map((w) => w.text).join(" ");
+    return {
+        words: { chunks: wordChunks, text: fullText },
+        chunk: { chunks: sentences.length ? sentences : wordChunks, text: fullText },
+        translated: !!raw.translated,
+        chaptersReceipt: raw.chaptersReceipt,
+        cost: raw.cost,
+        durationSeconds: raw.durationSeconds ?? raw.duration_seconds ?? undefined,
+        raw,
+    };
+};
+
+export const parseCaptionsApiResponse = (data: unknown): TranscribeResult => {
+    if (isScribePayload(data)) return scribeToTranscription(data);
+    const t = data as TranscribeResult;
+    if (t?.words?.chunks || t?.chunk?.chunks) return t;
+    return { words: { chunks: [] }, chunk: { chunks: [] } };
 };
 
 const MIN_WORD_SPAN = 0.02;
@@ -221,6 +277,7 @@ export const wordsFromChunks = (chunks: CaptionsChunk[]): CaptionsChunk[] => {
 // При translated=true chunk уже переведён 1:1 — не пересобираем (иначе без .!?
 // всё сливается в один гигантский сегмент и Premiere падает на setValue).
 export const normalize = (t: TranscribeResult): TranscribeResult => {
+    if (isScribePayload(t)) t = scribeToTranscription(t);
     const words = t.words?.chunks ?? [];
     const sentenceChunks = t.chunk?.chunks ?? [];
 
@@ -263,9 +320,25 @@ export const clampTranscriptionToSpeechStart = (
             return { ...c, timestamp: [start, end] as [number, number] };
         });
     };
+    const bumpRawWords = (raw?: ScribeResponse): ScribeResponse | undefined => {
+        if (!raw?.words?.length) return raw;
+        let bumped = false;
+        const words = raw.words.map((w) => {
+            if (bumped || w.type === "spacing") return w;
+            if (typeof w.start !== "number") return w;
+            bumped = true;
+            const start = Math.max(w.start, speechStart);
+            const end = typeof w.end === "number" ? Math.max(w.end, start + 0.05) : w.end;
+            if (start === w.start && end === w.end) return w;
+            return { ...w, start, end };
+        });
+        return { ...raw, words };
+    };
     return {
-        words: { ...t.words, chunks: bump(t.words.chunks) },
-        chunk: { ...t.chunk, chunks: bump(t.chunk.chunks) },
+        ...t,
+        words: { ...t.words, chunks: bump(t.words?.chunks) },
+        chunk: { ...t.chunk, chunks: bump(t.chunk?.chunks) },
+        raw: bumpRawWords(t.raw),
     };
 };
 
@@ -524,8 +597,8 @@ export const grouping = (
     config: GroupingConfig,
     options: GroupingOptions = {},
 ): Caption[] => {
-    const sentenceChunks = transcription.chunk.chunks ?? [];
-    const wordChunks = transcription.words.chunks ?? [];
+    const sentenceChunks = transcription.chunk?.chunks ?? [];
+    const wordChunks = transcription.words?.chunks ?? [];
 
     // sentence: один caption = один chunk предложения (как от API).
     // привязываем слова к предложению (две точки по времени) для ПКМ split/merge.

@@ -1,3 +1,5 @@
+import { CAPTION_SYSTEM, CEP_WRITTEN_SYSTEM_NAMES } from "../../shared/caption-system";
+
 // ProjectItem Helpers
 
 export const forEachChild = (
@@ -497,35 +499,70 @@ export const fillFirstMogrtText = (clip: TrackItem, text: string): boolean => {
   return false;
 };
 
-/** System: Main text, Highlight text, timings — имена как в Essential Properties UI. */
-export const fillMogrtSystemProps = (
-  clip: TrackItem,
-  text: string,
-  timingsJson: string,
-): boolean => {
-  const main = fillMogrtText(clip, "Main text", text);
-  fillMogrtText(clip, "Highlight text", text);
-  fillMogrtText(clip, "timings", timingsJson);
-  // fallback, если шаблон старый без System-имён
-  if (!main) return fillFirstMogrtText(clip, text);
-  return true;
+/** System: Captions_Raw_Data, Segment Type, Line Count, Chars Per Line, Composition Height. */
+export const fillMogrtNumber = (clip: TrackItem, propName: string, n: number): boolean => {
+  let mgt: ReturnType<TrackItem["getMGTComponent"]> | null = null;
+  try {
+    mgt = clip.getMGTComponent();
+  } catch (e) {
+    return false;
+  }
+  if (!mgt) return false;
+  let prop: ComponentParam | null = null;
+  try {
+    prop = mgt.properties.getParamForDisplayName(propName);
+  } catch (e) {
+    return false;
+  }
+  if (!prop) return false;
+  try {
+    prop.setValue(n as unknown as object, true);
+    return true;
+  } catch (e) {
+    try {
+      prop.setValue(String(n), true);
+      return true;
+    } catch (e2) {
+      return false;
+    }
+  }
 };
 
-/**
- * Наш caption-клип: MGT-компонент с System-свойством "timings" — оно есть
- * только в наших шаблонах, поэтому посторонние mogrt в проекте не затрагиваются.
- */
+export const fillMogrtSystemProps = (
+  clip: TrackItem,
+  opts: {
+    captionsRawData: string;
+    segmentType?: number;
+    lineCount?: number;
+    charsPerLine?: number;
+    compositionHeight?: number;
+  },
+): boolean => {
+  const rawOk = fillMogrtText(clip, CAPTION_SYSTEM.rawData, opts.captionsRawData);
+  // Segment Type is a Menu: definition 1-based → Premiere 0-based
+  if (opts.segmentType != null) {
+    fillMogrtNumber(clip, CAPTION_SYSTEM.segmentType, Math.max(0, opts.segmentType - 1));
+  }
+  if (opts.lineCount != null) fillMogrtNumber(clip, CAPTION_SYSTEM.lineCount, opts.lineCount);
+  if (opts.charsPerLine != null) fillMogrtNumber(clip, CAPTION_SYSTEM.charsPerLine, opts.charsPerLine);
+  if (opts.compositionHeight != null && opts.compositionHeight > 0) {
+    fillMogrtNumber(clip, CAPTION_SYSTEM.compositionHeight, opts.compositionHeight);
+  }
+  return rawOk;
+};
+
+/** Наш caption-клип: MGT с System-свойством Captions_Raw_Data. */
 export const isCaptionMogrtClip = (clip: TrackItem): boolean => {
   try {
     const mgt = clip.getMGTComponent();
     if (!mgt) return false;
-    return !!mgt.properties.getParamForDisplayName("timings");
+    return !!mgt.properties.getParamForDisplayName(CAPTION_SYSTEM.rawData);
   } catch (e) {
     return false;
   }
 };
 
-/** Читает текст из System "Main text" или первого textEditValue-параметра. */
+/** Читает текст из System Captions_Raw_Data (Scribe words[]) или clip.name. */
 export const readMogrtText = (clip: TrackItem): string => {
   try {
     const mgt = clip.getMGTComponent();
@@ -548,8 +585,22 @@ export const readMogrtText = (clip: TrackItem): string => {
         return null;
       }
     };
-    const main = tryProp("Main text");
-    if (main != null && String(main).length) return String(main);
+    const main = tryProp(CAPTION_SYSTEM.rawData);
+    if (main != null && String(main).length) {
+      try {
+        const parsed = JSON.parse(String(main)) as { text?: string; type?: string }[];
+        if (Array.isArray(parsed)) {
+          const words = parsed
+            .filter((t) => !t.type || t.type === "word")
+            .map((t) => String(t.text || "").trim())
+            .filter(Boolean);
+          if (words.length) return words.join(" ");
+        }
+      } catch (e) {
+        // not JSON — use as plain text
+      }
+      return String(main);
+    }
     const props = mgt.properties;
     for (let i = 0; i < props.numItems; i++) {
       try {
@@ -589,6 +640,7 @@ const isGroupParamValue = (raw: unknown): boolean =>
 // типы контролов из definition (совпадают с Essential Properties AE)
 const CONTROL_TYPE_COLOR = 4;
 const CONTROL_TYPE_POINT = 5;
+const CONTROL_TYPE_MENU = 13;
 
 // форма значения зависит от типа контрола: цвет — упакованное число, точка —
 // нормализованная строка "x,y", текст — JSON с textEditValue, остальное —
@@ -623,6 +675,21 @@ const setMogrtParamValue = (param: ComponentParam, value: unknown, type?: number
         return "point-str";
       } catch (e2: any) {
         return "point-err:" + String(e2 && e2.message ? e2.message : e2);
+      }
+    }
+  }
+  // AE / definition menucontent is 1-based; Premiere mogrt dropdown is 0-based
+  if (type === CONTROL_TYPE_MENU && typeof value === "number" && isFinite(value)) {
+    const idx = Math.max(0, Math.floor(value) - 1);
+    try {
+      param.setValue(idx as unknown as object, true);
+      return "menu-0";
+    } catch (e) {
+      try {
+        param.setValue(String(idx), true);
+        return "menu-0-str";
+      } catch (e2: any) {
+        return "menu-err:" + String(e2 && e2.message ? e2.message : e2);
       }
     }
   }
@@ -749,7 +816,7 @@ export const collectCaptionClips = (track: Track): TrackItem[] => {
 };
 
 // трек с нашими caption-клипами: сначала подсказанный индекс (hostRef панели),
-// иначе сканируем сверху вниз — captions кладутся на верхний трек
+// иначе сканируем сверху вниз (на случай нескольких caption-треков)
 export const findCaptionTrackIndex = (seq: Sequence, hint?: number): number => {
   if (
     typeof hint === "number" &&
@@ -773,11 +840,10 @@ export const findCaptionTrackIndex = (seq: Sequence, hint?: number): number => {
  */
 export type MogrtParamSnapshot = ({ name: string; color?: number[]; value?: unknown } | null)[];
 
-const MOGRT_SYSTEM_PROP_NAMES: { [name: string]: boolean } = {
-  "Main text": true,
-  "Highlight text": true,
-  timings: true,
-};
+const MOGRT_SYSTEM_PROP_NAMES: { [name: string]: boolean } = {};
+for (let i = 0; i < CEP_WRITTEN_SYSTEM_NAMES.length; i++) {
+  MOGRT_SYSTEM_PROP_NAMES[CEP_WRITTEN_SYSTEM_NAMES[i]] = true;
+}
 
 export const snapshotMogrtStyle = (clip: TrackItem): MogrtParamSnapshot => {
   const out: MogrtParamSnapshot = [];

@@ -1,18 +1,123 @@
 import { fs, os, path } from "../lib/cep/node";
-import type { Caption } from "../utils/transcribe";
+import type { Caption, GroupingMode, ScribeWord } from "../utils/transcribe";
+import { SEGMENT_TYPE_INDEX } from "../../shared/caption-system";
 
-/** Слово с таймингом относительно начала сегмента (для Essential Property `timings`). */
+/** Слово с таймингом относительно начала сегмента. */
 export type CaptionWordTiming = {
   text: string;
   timestamp: [number, number];
+};
+
+/** Segment Type в mogrt: 1 Words, 2 Sentences, 3 Custom (1-based, как menucontent). */
+export const segmentTypeIndex = (mode: GroupingMode): number => {
+  if (mode === "words") return SEGMENT_TYPE_INDEX.words;
+  if (mode === "sentence") return SEGMENT_TYPE_INDEX.sentence;
+  return SEGMENT_TYPE_INDEX.custom;
 };
 
 export type HostCaptionPayload = {
   text: string;
   timestamp: [number, number];
   words: CaptionWordTiming[];
+  /** JSON-массив Scribe-токенов для System EP `Captions_Raw_Data`. */
+  captionsRawData: string;
+  segmentType: number;
+  lineCount: number;
+  charsPerLine: number;
   mogrtPath?: string;
   aepPath?: string;
+};
+
+const cloneScribeWord = (w: ScribeWord): ScribeWord => ({
+  text: w.text,
+  start: w.start,
+  end: w.end,
+  type: w.type,
+  speaker_id: w.speaker_id ?? null,
+});
+
+/** Полный Scribe `words[]` — таймкоды относительно In / Work Area (как в MP3). */
+export const toFullCaptionsRawData = (rawWords?: ScribeWord[]): string => {
+  if (!rawWords?.length) return "[]";
+  return JSON.stringify(rawWords.map(cloneScribeWord));
+};
+
+/**
+ * Токены Scribe v2 для одного caption — тот же schema, что в ответе AI.
+ * Таймкоды относительно In / Work Area (без offset таймлайна): слой/клип
+ * начинается в In, внутри шаблона time 0 = старт MP3.
+ */
+export const toCaptionsRawData = (
+  caption: Caption,
+  _offset = 0,
+  rawWords?: ScribeWord[],
+): string => {
+  const captionWords = caption.words ?? [];
+  const tokens: ScribeWord[] = [];
+
+  if (rawWords?.length && captionWords.length) {
+    const first = captionWords[0].timestamp[0];
+    const last = captionWords[captionWords.length - 1].timestamp[1];
+    for (const token of rawWords) {
+      const t0 = token.start;
+      if (typeof t0 !== "number") continue;
+      if (token.type === "spacing") {
+        if (t0 >= first - 0.001 && t0 < last + 0.001) tokens.push(cloneScribeWord(token));
+        continue;
+      }
+      if (token.type && token.type !== "word") continue;
+      const t1 = typeof token.end === "number" ? token.end : t0;
+      if (t1 > first - 0.001 && t0 < last + 0.001) tokens.push(cloneScribeWord(token));
+    }
+  }
+
+  if (!tokens.length) {
+    for (let i = 0; i < captionWords.length; i++) {
+      const w = captionWords[i];
+      tokens.push({
+        text: w.text,
+        start: w.timestamp[0],
+        end: w.timestamp[1],
+        type: "word",
+        speaker_id: null,
+      });
+      if (i < captionWords.length - 1) {
+        tokens.push({
+          text: " ",
+          start: w.timestamp[1],
+          end: captionWords[i + 1].timestamp[0],
+          type: "spacing",
+          speaker_id: null,
+        });
+      }
+    }
+  }
+
+  return JSON.stringify(tokens);
+};
+
+/** Патч текстов word-токенов в полном Scribe dump после live-edit карточки. */
+export const patchCaptionsRawData = (
+  rawWords: ScribeWord[] | undefined,
+  caption: Caption,
+  newText: string,
+): string => {
+  if (!rawWords?.length) return toCaptionsRawData({ ...caption, text: newText });
+  const words = rawWords.map(cloneScribeWord);
+  const captionWords = caption.words ?? [];
+  const newTokens = newText.trim().split(/\s+/).filter(Boolean);
+  const first = captionWords[0]?.timestamp[0];
+  const last = captionWords[captionWords.length - 1]?.timestamp[1];
+  let wi = 0;
+  for (const token of words) {
+    if (token.type && token.type !== "word") continue;
+    if (typeof token.start !== "number") continue;
+    if (first != null && last != null && (token.start < first - 0.02 || token.start > last + 0.02)) {
+      continue;
+    }
+    if (wi < newTokens.length) token.text = newTokens[wi++];
+  }
+  return JSON.stringify(words);
 };
 
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
@@ -57,33 +162,60 @@ export const buildRelativeWordTimings = (caption: Caption): CaptionWordTiming[] 
 /** Минимальная длительность клипа — иначе Premiere/AE падают на end <= start. */
 const MIN_CAPTION_DUR = 0.05;
 
-/** Payload для evalTS("createCaptions" | resegment). */
+/** Один клип/слой на весь In/Out (Work Area): mogrt сам режет по Segment Type. */
 export const toHostCaptionPayload = (
   captions: Caption[],
-  opts: { offset?: number; mogrtPath?: string; aepPath?: string } = {},
+  opts: {
+    offset?: number;
+    durationSeconds?: number;
+    mogrtPath?: string;
+    aepPath?: string;
+    rawWords?: ScribeWord[];
+    mode?: GroupingMode;
+    lines?: number;
+    characters?: number;
+  } = {},
 ): HostCaptionPayload[] => {
   const offset = opts.offset ?? 0;
-  return captions.map((c) => {
-    const start = (Number(c.timestamp[0]) || 0) + offset;
-    let end = (Number(c.timestamp[1]) || 0) + offset;
-    if (!(end > start)) end = start + MIN_CAPTION_DUR;
-    const normalized: Caption = {
-      ...c,
-      timestamp: [start - offset, end - offset] as [number, number],
-    };
-    return {
-      text: c.text,
+  const lastEnd = captions.length ? Number(captions[captions.length - 1].timestamp[1]) || 0 : 0;
+  const duration =
+    opts.durationSeconds && opts.durationSeconds > 0
+      ? opts.durationSeconds
+      : Math.max(MIN_CAPTION_DUR, lastEnd);
+  const start = offset;
+  let end = offset + duration;
+  if (!(end > start)) end = start + MIN_CAPTION_DUR;
+
+  const text =
+    captions
+      .map((c) => String(c.text || "").trim())
+      .filter(Boolean)
+      .join(" ") || "Captions";
+  const fallbackWords = captions.flatMap((c) => c.words ?? []);
+  const captionsRawData = opts.rawWords?.length
+    ? toFullCaptionsRawData(opts.rawWords)
+    : toCaptionsRawData({
+        text,
+        timestamp: [0, duration],
+        lines: [text],
+        words: fallbackWords,
+        edit: { target: "words", indices: fallbackWords.map((_, i) => i) },
+      });
+
+  return [
+    {
+      text,
       timestamp: [start, end] as [number, number],
-      words: buildRelativeWordTimings(normalized),
+      words: [],
+      captionsRawData,
+      segmentType: segmentTypeIndex(opts.mode ?? "custom"),
+      lineCount: Math.max(1, opts.lines ?? 2),
+      charsPerLine: Math.max(1, opts.characters ?? 20),
       mogrtPath: opts.mogrtPath,
       aepPath: opts.aepPath,
-    };
-  });
+    },
+  ];
 };
-
-/** JSON-строка для Essential Property `timings`. */
-export const stringifyTimings = (words: CaptionWordTiming[]): string =>
-  JSON.stringify(words);
 
 /**
  * Пишет payload во временный JSON (только ASCII + \\uXXXX) и передаёт путь в JSX.

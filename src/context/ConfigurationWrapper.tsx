@@ -313,8 +313,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
           // ignore
         }
         const hostApi = MotionFlow.host === "AE" ? MotionFlow.AE : MotionFlow.PPRO;
-        // AE needs captions-precomp compId (parent timeline is usually active).
-        // Premiere uses sequenceId / active sequence.
+        // AE: caption lives on the timeline comp (same as hostRef.compId).
+        // Premiere uses active sequence / trackIndex.
         hostApi
           .applyCaptionStyleValues({ props, sequenceId, compId })
           .catch((err) => {

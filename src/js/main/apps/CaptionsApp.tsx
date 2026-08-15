@@ -14,7 +14,7 @@ import { getBundledAudioPresetPath } from "../../utils/audioPreset";
 import { getUserIdentity } from "../../api";
 import { reportSupportError } from "../../api/support";
 import { authErrorMessage, getLocalStyleAssetPaths } from "../../styles";
-import { toHostCaptionPayload } from "../../utils/captionHostPayload";
+import { patchCaptionsRawData, toHostCaptionPayload } from "../../utils/captionHostPayload";
 import {
   captionsToChunks,
   clampTranscriptionToSpeechStart,
@@ -43,17 +43,17 @@ const META_KEY = "aitools-cep-caption-meta";
 const CUSTOM_SEGMENTS_KEY = "aitools-cep-caption-custom-segments";
 const APPLIED_CONFIG_KEY = "aitools-cep-caption-applied-config";
 
-// куда пушить live-правки текста уже созданных captions: трек+клип в Premiere
-// (опционально sequenceId nested-секвенции), comp в AE
+// куда пушить live-правки: трек с одним caption-mogrt в Premiere, слой на таймлайне в AE
 type HostRef =
   | { trackIndex: number; sequenceId?: string }
   | { compId: number };
 type Meta = {
   type: DescribeType;
   offset: number;
+  /** In/Out (PPro) / Work Area (AE) — длина единственного caption-клипа. */
+  durationSeconds?: number;
   hostRef?: HostRef;
   // AE: id композиции, в которой нажали Transcribe — sync scroll только в ней
-  // (или внутри captions-precomp из hostRef)
   sourceCompId?: number;
 };
 
@@ -68,8 +68,9 @@ type SessionPayload = {
   type: DescribeType;
   sourceCompId?: number;
   selectedPresetId?: string;
-  /** Premiere: track index внутри nested captions sequence */
+  /** Premiere: track index with the caption mogrt */
   trackIndex?: number;
+  durationSeconds?: number;
 };
 
 // ближайший к моменту t caption: попадание в диапазон — dist 0, иначе расстояние
@@ -215,9 +216,7 @@ export const CaptionsApp = ({
     return captionsToChunks(captionsRef.current);
   };
 
-  // пушим текущую разбивку в AE captions-precomp (кнопка Update / правки границ).
-  // Возвращает Promise, чтобы вызывающий (Update) мог дождаться реального
-  // завершения запроса к хосту, прежде чем гасить disabled/индикатор
+  // пушим Segment Type / Line Count / Captions_Raw_Data в единственный слой/клип
   const pushHostResegment = (opts?: {
     data?: TranscribeResult;
     customSegments?: CaptionsChunk[] | null;
@@ -235,8 +234,13 @@ export const CaptionsApp = ({
     const offset = metaRef.current.offset;
     const payload = toHostCaptionPayload(resegmented, {
       offset,
+      durationSeconds: metaRef.current.durationSeconds,
       mogrtPath,
       aepPath,
+      rawWords: source.raw?.words,
+      mode: modeRef.current,
+      lines: linesRef.current,
+      characters: charactersRef.current,
     });
     // единый payload под оба хоста: AE ищет comp по compId, Premiere — трек
     // по trackIndex (у чужого хоста лишнее поле просто игнорируется)
@@ -310,6 +314,7 @@ export const CaptionsApp = ({
     const nextMeta: Meta = {
       type: payload.type ?? "composition",
       offset: payload.offset ?? 0,
+      durationSeconds: payload.durationSeconds,
       hostRef,
       sourceCompId: payload.sourceCompId,
     };
@@ -339,11 +344,31 @@ export const CaptionsApp = ({
     }
   };
 
-  // Premiere: читаем mogrt'ы из nest (текст + тайминг). AE: session marker.
+  // Premiere: session marker на активной seq, иначе клип с таймлайна. AE: session marker.
   const handleLoad = async () => {
     if (progress) return;
     try {
       if (!isAfterEffects()) {
+        const found = (await sdkData(hostSdk().findAppliedCaptions())) as
+          | {
+              sequenceId?: string;
+              sessionData?: string;
+              hasCaptions?: boolean;
+            }
+          | null
+          | undefined;
+        if (found?.sessionData) {
+          let payload: SessionPayload | null = null;
+          try {
+            payload = JSON.parse(found.sessionData) as SessionPayload;
+          } catch {
+            payload = null;
+          }
+          if (payload?.data && found.sequenceId) {
+            restoreSession(payload, { sequenceId: found.sequenceId });
+            return;
+          }
+        }
         const loaded = (await sdkData(hostSdk().loadCaptionsFromTimeline())) as
           | {
               sequenceId?: string;
@@ -354,7 +379,7 @@ export const CaptionsApp = ({
           | undefined;
         if (!loaded?.segments?.length || !loaded.sequenceId) {
           setCanLoad(false);
-          showError("Select a captions nest on the timeline (or open it), then click Load");
+          showError("Select a captions clip on the timeline, then click Load");
           return;
         }
         const segments: CaptionsChunk[] = loaded.segments.map((s) => ({
@@ -551,7 +576,11 @@ export const CaptionsApp = ({
 
       // запоминаем источник и сдвиг (selected → inPoint первого клипа/слоя); старая
       // hostRef сознательно не переносится — новая транскрипция ещё не выведена в хост
-      const nextMeta: Meta = { type: res.type, offset: res.offset ?? 0 };
+      const nextMeta: Meta = {
+        type: res.type,
+        offset: res.offset ?? 0,
+        durationSeconds: res.durationSeconds > 0 ? res.durationSeconds : undefined,
+      };
 
       // чиним разорванные ИИ предложения + подрезаем ведущую тишину
       const normalized = clampTranscriptionToSpeechStart(normalize(transcription), speechStart);
@@ -565,8 +594,13 @@ export const CaptionsApp = ({
       const newCaptions = grouping(normalized, { mode, lines, characters });
       const payload = toHostCaptionPayload(newCaptions, {
         offset: nextMeta.offset,
+        durationSeconds: nextMeta.durationSeconds,
         mogrtPath: activeMogrtPath,
         aepPath: activeAepPath,
+        rawWords: normalized.raw?.words,
+        mode,
+        lines,
+        characters,
       });
       await reloadJSX();
       const createRes = await sdkData(hostSdk().createCaptions(payload));
@@ -626,6 +660,7 @@ export const CaptionsApp = ({
           sourceCompId: finalMeta.sourceCompId,
           selectedPresetId: selectedPresetId || undefined,
           trackIndex: "trackIndex" in hostRef ? hostRef.trackIndex : undefined,
+          durationSeconds: finalMeta.durationSeconds,
         };
         const saveArgs =
           "compId" in hostRef
@@ -679,19 +714,23 @@ export const CaptionsApp = ({
   // Payload — единая форма с опциональными полями под оба хоста: evalTS() типизирует
   // updateCaptionText по пересечению сигнатур ppro.ts/aeft.ts, так что аргумент должен
   // структурно подходить под обе сразу, а не под одну из двух через ветвление
-  const pushLiveEdit = (index: number, text: string) => {
+  const pushLiveEdit = (_index: number, text: string, caption?: Caption) => {
     const hostRef = metaRef.current.hostRef;
     if (!hostRef) return;
     const isPremiere = csi.hostEnvironment?.appId === "PPRO";
+    const captionsRawData = caption
+      ? patchCaptionsRawData(dataRef.current?.raw?.words, { ...caption, text }, text)
+      : undefined;
     hostSdk()
       .updateCaptionText({
       trackIndex: isPremiere ? (hostRef as { trackIndex: number }).trackIndex : undefined,
-      clipIndex: isPremiere ? index : undefined,
+      clipIndex: isPremiere ? 0 : undefined,
       sequenceId:
         isPremiere && "sequenceId" in hostRef ? hostRef.sequenceId : undefined,
       compId: !isPremiere ? (hostRef as { compId: number }).compId : undefined,
-      captionIndex: !isPremiere ? index : undefined,
+      captionIndex: !isPremiere ? 0 : undefined,
       text,
+      captionsRawData,
     })
       .then((r) => {
         if (!r.ok) throw new Error(r.error);
@@ -711,7 +750,7 @@ export const CaptionsApp = ({
       const idx = caption.edit.index;
       const chunks = (source.chunk.chunks ?? []).map((c, i) => (i === idx ? { ...c, text: text.trim() } : c));
       persist({ ...source, chunk: { ...source.chunk, chunks } });
-      pushLiveEdit(index, text.trim());
+      pushLiveEdit(index, text.trim(), { ...caption, text: text.trim() });
       return;
     }
 
@@ -734,7 +773,7 @@ export const CaptionsApp = ({
 
     const segs = segsBefore.map((c, i) => (i === index ? { ...c, text: text.trim() } : c));
     persistCustomSegments(segs);
-    pushLiveEdit(index, text.trim());
+    pushLiveEdit(index, text.trim(), { ...caption, text: text.trim() });
   }, []);
 
   // split: режем предложение по слову (слово начинает новое предложение)
@@ -895,7 +934,7 @@ export const CaptionsApp = ({
     if (!hostRef || !source) return;
     const canSave =
       ("compId" in hostRef && isAfterEffects()) ||
-      ("sequenceId" in hostRef && !!hostRef.sequenceId && !isAfterEffects());
+      ("trackIndex" in hostRef && !isAfterEffects());
     if (!canSave) return;
     if (skipSessionSaveRef.current) {
       skipSessionSaveRef.current = false;
@@ -913,6 +952,7 @@ export const CaptionsApp = ({
         sourceCompId: metaRef.current.sourceCompId,
         selectedPresetId: selectedPresetId || undefined,
         trackIndex: "trackIndex" in hostRef ? hostRef.trackIndex : undefined,
+        durationSeconds: metaRef.current.durationSeconds,
       };
       const saveArgs =
         "compId" in hostRef

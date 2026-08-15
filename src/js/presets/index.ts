@@ -46,8 +46,8 @@ export const createDefaultValues = (
 export const colorControlIds = (definition: MogrtDefinition = PRESET_DEFINITION) => {
   const idByPath = (names: string[]) => findControlByNames(definition, names)?.id ?? "";
   return {
-    fill: idByPath(["Text", "Base", "Fill"]),
-    highlight: idByPath(["Highlight", "Fill"]),
+    fill: idByPath(["Segment Static", "Fill"]),
+    highlight: idByPath(["Segment Animated", "Fill"]),
     background: idByPath(["Background", "Fill"]),
   };
 };

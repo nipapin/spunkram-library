@@ -55,6 +55,7 @@ export const helloWorld = () => {
 };
 
 import { captionsBinName } from "../../shared/shared";
+import { CAPTION_SYSTEM } from "../../shared/caption-system";
 import { readJsonUtf8 } from "../utils/utils";
 import { getActiveComp, getNextCaptionsName } from "./aeft-utils";
 
@@ -262,6 +263,10 @@ interface CaptionLayer {
   mogrtPath?: string;
   aepPath?: string;
   words?: { text: string; timestamp: [number, number] }[];
+  captionsRawData?: string;
+  segmentType?: number;
+  lineCount?: number;
+  charsPerLine?: number;
 }
 
 // СЃРєСЂС‹С‚С‹Р№ СЃР»РѕР№-РјР°СЂРєРµСЂ: РІ Source Text Р»РµР¶РёС‚ JSON СЃРµСЃСЃРёРё РґР»СЏ РѕР±СЂР°С‚РЅРѕР№ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё
@@ -291,7 +296,9 @@ const writeLayerSourceText = (layer: Layer, text: string) => {
   sourceText.setValue(new TextDocument(text));
 };
 
-const timingsJson = (caption: CaptionLayer): string => {
+/** Scribe `words[]` (word + spacing) — System EP Captions_Raw_Data. */
+const captionsRawDataJson = (caption: CaptionLayer): string => {
+  if (caption.captionsRawData) return caption.captionsRawData;
   const words =
     caption.words && caption.words.length
       ? caption.words
@@ -301,10 +308,29 @@ const timingsJson = (caption: CaptionLayer): string => {
             timestamp: [0, Math.max(0.001, caption.timestamp[1] - caption.timestamp[0])] as [number, number],
           },
         ];
-  return JSON.stringify(words);
+  const tokens: { text: string; start: number; end: number; type: string; speaker_id: null }[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    tokens.push({
+      text: w.text,
+      start: w.timestamp[0],
+      end: w.timestamp[1],
+      type: "word",
+      speaker_id: null,
+    });
+    if (i < words.length - 1) {
+      tokens.push({
+        text: " ",
+        start: w.timestamp[1],
+        end: words[i + 1].timestamp[0],
+        type: "spacing",
+        speaker_id: null,
+      });
+    }
+  }
+  return JSON.stringify(tokens);
 };
 
-/** Р РµРєСѓСЂСЃРёРІРЅС‹Р№ РїРѕРёСЃРє РЅРµ РёСЃРїРѕР»СЊР·СѓРµРј вЂ” Сѓ С€Р°Р±Р»РѕРЅР° С„РёРєСЃРёСЂРѕРІР°РЅРЅС‹Рµ РїСѓС‚Рё System/*. */
 const getSystemGroup = (layer: Layer): PropertyGroup | null => {
   try {
     const ep = layer.property("Essential Properties");
@@ -326,7 +352,7 @@ const getSystemGroup = (layer: Layer): PropertyGroup | null => {
   return null;
 };
 
-const setSystemProp = (layer: Layer, name: string, value: string): boolean => {
+const setSystemProp = (layer: Layer, name: string, value: string | number): boolean => {
   const system = getSystemGroup(layer);
   if (!system) return false;
   try {
@@ -350,13 +376,16 @@ const setSystemProp = (layer: Layer, name: string, value: string): boolean => {
 };
 
 /**
- * System EP (С‚РѕС‡РЅС‹Рµ РёРјРµРЅР° РёР· UI С€Р°Р±Р»РѕРЅР°):
- * Essential Properties в†’ System в†’ Main text | Highlight text | timings
+ * System EP шаблона: Captions_Raw_Data, Segment Type, Line Count,
+ * Chars Per Line, Composition Height. Pause Gap / Hold Duration не трогаем —
+ * их правит пользователь в Styles.
  */
-const fillSystemEssentialProps = (layer: Layer, text: string, timings: string) => {
-  setSystemProp(layer, "Main text", text);
-  setSystemProp(layer, "Highlight text", text);
-  setSystemProp(layer, "timings", timings);
+const fillSystemEssentialProps = (layer: Layer, caption: CaptionLayer, compositionHeight: number) => {
+  setSystemProp(layer, CAPTION_SYSTEM.rawData, captionsRawDataJson(caption));
+  if (caption.segmentType != null) setSystemProp(layer, CAPTION_SYSTEM.segmentType, caption.segmentType);
+  if (caption.lineCount != null) setSystemProp(layer, CAPTION_SYSTEM.lineCount, caption.lineCount);
+  if (caption.charsPerLine != null) setSystemProp(layer, CAPTION_SYSTEM.charsPerLine, caption.charsPerLine);
+  if (compositionHeight > 0) setSystemProp(layer, CAPTION_SYSTEM.compositionHeight, compositionHeight);
 };
 
 const collectComps = (item: Item, out: CompItem[]) => {
@@ -456,9 +485,36 @@ const ensureTemplateComp = (aepPath: string): CompItem | null => {
   return template;
 };
 
+const findCaptionLayers = (comp: CompItem): Layer[] => {
+  const out: Layer[] = [];
+  for (let i = 1; i <= comp.numLayers; i++) {
+    const comment = String(comp.layers[i].comment || "");
+    if (comment.indexOf("mf-caption:") === 0) out.push(comp.layers[i]);
+  }
+  return out;
+};
+
+const ensureSessionMarker = (comp: CompItem) => {
+  if (findMarkerLayer(comp)) return;
+  const marker = comp.layers.addText("{}");
+  marker.name = MARKER_NAME;
+  marker.comment = MARKER_TAG;
+  marker.enabled = false;
+  marker.shy = true;
+  marker.inPoint = 0;
+  marker.outPoint = Math.min(0.01, comp.duration || 0.01);
+};
+
+const removeCaptionLayers = (comp: CompItem) => {
+  for (let i = comp.numLayers; i >= 1; i--) {
+    const comment = String(comp.layers[i].comment || "");
+    if (comment.indexOf("mf-caption:") === 0) comp.layers[i].remove();
+  }
+};
+
 /**
- * РЎС‚Р°РІРёС‚ С€Р°Р±Р»РѕРЅ СЃ startTime = РЅР°С‡Р°Р»Рѕ СЃРµРіРјРµРЅС‚Р°.
- * РўРѕР»СЊРєРѕ inPoint РїСЂРё startTime=0 СЃРґРІРёРіР°РµС‚ time РІРЅСѓС‚СЂРё nested comp Рё Р»РѕРјР°РµС‚ timings/Р°РЅРёРјР°С†РёРё.
+ * Template on the parent timeline: startTime = In so template time 0 = In / MP3.
+ * Do not set only inPoint with startTime=0 — that trims the source and breaks animations.
  */
 const placeCaptionLayer = (
   comp: CompItem,
@@ -471,21 +527,16 @@ const placeCaptionLayer = (
   let end = +caption.timestamp[1];
   if (isNaN(start) || start < 0) start = 0;
   if (isNaN(end) || end <= start) end = start + Math.max(comp.frameDuration * 2, 0.05);
-  layer.name = caption.text.split("\n").join(" ");
+  layer.name = getNextCaptionsName(app.project, comp.name);
   layer.comment = "mf-caption:" + index;
   layer.startTime = start;
   layer.inPoint = start;
   layer.outPoint = end;
-  fillSystemEssentialProps(layer, caption.text, timingsJson(caption));
+  fillSystemEssentialProps(layer, caption, comp.height);
+  return layer;
 };
 
-const addCaptionTemplateLayers = (comp: CompItem, template: CompItem, captions: CaptionLayer[]) => {
-  for (let i = 0; i < captions.length; i++) {
-    placeCaptionLayer(comp, template, captions[i], i);
-  }
-};
-
-/** Captions-precomp + РёРЅСЃС‚Р°РЅСЃС‹ РєРѕРјРїРѕР·РёС†РёРё РёР· project.aep (System EP). */
+/** One caption layer on the active composition (no precomp). */
 export const createCaptions = (captions: CaptionLayer[]) => {
   try {
     const comp = getActiveComp();
@@ -493,7 +544,8 @@ export const createCaptions = (captions: CaptionLayer[]) => {
       alert("Open a composition first");
       return null;
     }
-    const aepPath = captions[0] && captions[0].aepPath;
+    const caption = captions[0];
+    const aepPath = caption && caption.aepPath;
     if (!aepPath) {
       alert("Caption style project (.aep) is not available. Run Transcribe after selecting a style.");
       return null;
@@ -506,34 +558,15 @@ export const createCaptions = (captions: CaptionLayer[]) => {
       return null;
     }
 
-    const duration = captions.length
-      ? Math.max(+captions[captions.length - 1].timestamp[1], comp.frameDuration)
-      : comp.duration;
-    const precompName = getNextCaptionsName(app.project, comp.name);
-    const newComp = app.project.items.addComp(
-      precompName,
-      comp.width,
-      comp.height,
-      comp.pixelAspect,
-      duration,
-      comp.frameRate,
-    );
-    comp.layers.add(newComp);
-    addCaptionTemplateLayers(newComp, template, captions);
-
-    const marker = newComp.layers.addText("{}");
-    marker.name = MARKER_NAME;
-    marker.comment = MARKER_TAG;
-    marker.enabled = false;
-    marker.shy = true;
-    marker.inPoint = 0;
-    marker.outPoint = Math.min(0.01, newComp.duration || 0.01);
+    removeCaptionLayers(comp);
+    placeCaptionLayer(comp, template, caption, 0);
+    ensureSessionMarker(comp);
 
     comp.openInViewer();
     app.endUndoGroup();
     return {
-      created: captions.length,
-      compId: newComp.id,
+      created: 1,
+      compId: comp.id,
       sourceCompId: comp.id,
       trackIndex: undefined as number | undefined,
       sequenceId: undefined as string | undefined,
@@ -570,25 +603,31 @@ export const resegmentCaptions = ({ compId, captions }: ResegmentCaptions) => {
   try {
     const item = app.project.itemByID(compId);
     if (!item || !(item instanceof CompItem)) return null;
-    const aepPath = captions[0] && captions[0].aepPath;
-    if (!aepPath || !captions.length) return null;
+    const caption = captions[0];
+    if (!caption) return null;
 
     app.beginUndoGroup("Resegment Captions");
-    const template = ensureTemplateComp(aepPath);
-    if (!template) {
-      app.endUndoGroup();
-      return null;
+    const layers = findCaptionLayers(item);
+    if (layers.length) {
+      fillSystemEssentialProps(layers[0], caption, item.height);
+      layers[0].comment = "mf-caption:0";
+      for (let i = 1; i < layers.length; i++) layers[i].remove();
+    } else {
+      const aepPath = caption.aepPath;
+      if (!aepPath) {
+        app.endUndoGroup();
+        return null;
+      }
+      const template = ensureTemplateComp(aepPath);
+      if (!template) {
+        app.endUndoGroup();
+        return null;
+      }
+      placeCaptionLayer(item, template, caption, 0);
     }
-
-    for (let i = item.numLayers; i >= 1; i--) {
-      if (item.layers[i].comment === MARKER_TAG) continue;
-      item.layers[i].remove();
-    }
-    addCaptionTemplateLayers(item, template, captions);
-    item.duration = Math.max(+captions[captions.length - 1].timestamp[1], item.frameDuration);
-
+    ensureSessionMarker(item);
     app.endUndoGroup();
-    return { updated: true, created: captions.length };
+    return { updated: true, created: 1 };
   } catch (e: any) {
     app.endUndoGroup();
     return null;
@@ -740,23 +779,30 @@ interface UpdateCaptionText {
   /** Premiere nested-sequence nodeId вЂ” ignored in AE. */
   sequenceId?: string;
   text: string;
+  captionsRawData?: string;
 }
 
-export const updateCaptionText = ({ compId, captionIndex, text }: UpdateCaptionText) => {
-  if (compId == null || captionIndex == null) return null;
+export const updateCaptionText = ({ compId, captionIndex, captionsRawData }: UpdateCaptionText) => {
+  if (compId == null) return null;
   try {
     const item = app.project.itemByID(compId);
     if (!item || !(item instanceof CompItem)) return null;
-    const token = "mf-caption:" + captionIndex;
+    const token = "mf-caption:" + (captionIndex == null ? 0 : captionIndex);
+    let target: Layer | null = null;
     for (let i = 1; i <= item.numLayers; i++) {
       const layer = item.layers[i];
-      if (layer.comment !== token) continue;
-      layer.name = text.split("\n").join(" ");
-      setSystemProp(layer, "Main text", text);
-      setSystemProp(layer, "Highlight text", text);
-      return { updated: true };
+      if (layer.comment === token) {
+        target = layer;
+        break;
+      }
     }
-    return null;
+    if (!target) {
+      const layers = findCaptionLayers(item);
+      if (layers.length) target = layers[0];
+    }
+    if (!target) return null;
+    if (captionsRawData) setSystemProp(target, CAPTION_SYSTEM.rawData, captionsRawData);
+    return { updated: true };
   } catch (e: any) {
     return null;
   }

@@ -8,7 +8,6 @@ import {
 } from "./api";
 import { fs, path } from "../lib/cep/node";
 import {
-  listLocalPackageIds,
   loadLocalPackage,
   loadLocalState,
   saveLocalPackage,
@@ -66,8 +65,8 @@ export const isPresetValuesDirty = (p: StylePreset): boolean => {
 };
 
 export const colorIdsFromDefinition = (definition: MogrtDefinition) => ({
-  fill: findControlByNames(definition, ["Text", "Base", "Fill"])?.id ?? "",
-  highlight: findControlByNames(definition, ["Highlight", "Fill"])?.id ?? "",
+  fill: findControlByNames(definition, ["Segment Static", "Fill"])?.id ?? "",
+  highlight: findControlByNames(definition, ["Segment Animated", "Fill"])?.id ?? "",
   background: findControlByNames(definition, ["Background", "Fill"])?.id ?? "",
 });
 
@@ -425,10 +424,9 @@ const mapPool = async <T, R>(
 
 /**
  * При загрузке расширения / Refresh:
- * 1) локальный стейт + скачанные пакеты
- * 2) GET /api/captions
- * 3) для скачанных — сравнить local vs R2 и обновить при расхождении
- * 4) список пресетов для UI
+ * 1) GET /api/captions — сетка только из каталога
+ * 2) локальные пакеты — кэш mogrt/aep для стилей, которые ещё есть на сервере
+ * 3) user presets (Save as New) — отдельная секция Custom
  */
 export const syncCaptionStyles = async (options?: {
   checkRemoteUpdates?: boolean;
@@ -436,9 +434,7 @@ export const syncCaptionStyles = async (options?: {
   const checkRemote = options?.checkRemoteUpdates !== false;
   const localState = loadLocalState();
   const definitions: Record<string, MogrtDefinition> = {};
-  const localIds = listLocalPackageIds();
 
-  // локальные пакеты индексируются по sanitized dir name — матчим через load по catalog id ниже
   const localById = new Map<string, ReturnType<typeof loadLocalPackage>>();
 
   let catalog: CaptionCatalogEntry[] = [];
@@ -458,18 +454,6 @@ export const syncCaptionStyles = async (options?: {
     if (pkg) {
       localById.set(item.id, pkg);
       definitions[item.id] = pkg.definition;
-    }
-  }
-
-  // офлайн-пакеты без записи в каталоге — по dir name (sanitized id)
-  for (const dirName of localIds) {
-    // dirName может быть Base__Base Caption_01 — пробуем найти через reverse не надёжно;
-    // если уже в localById — ок; иначе грузим если id === dirName (legacy)
-    if ([...localById.keys()].some((id) => id.replace(/[<>:"|?*\\/]/g, "__") === dirName)) continue;
-    const pkg = loadLocalPackage(dirName);
-    if (pkg) {
-      localById.set(pkg.manifest.id, pkg);
-      definitions[pkg.manifest.id] = pkg.definition;
     }
   }
 
@@ -498,10 +482,8 @@ export const syncCaptionStyles = async (options?: {
   }
 
   const presets: StylePreset[] = [];
-  const seenStyleIds = new Set<string>();
 
   for (const item of catalog) {
-    seenStyleIds.add(item.id);
     const local = localById.get(item.id) ?? null;
     const favorite = !!localState.favorites[item.id];
     const base = catalogToPreset(item, favorite, !!local);
@@ -538,29 +520,6 @@ export const syncCaptionStyles = async (options?: {
     } else {
       presets.push(base);
     }
-  }
-
-  for (const [id, local] of localById) {
-    if (!local || seenStyleIds.has(id)) continue;
-    const favorite = !!localState.favorites[id];
-    presets.push(
-      hydrateFromPackage(
-        {
-          id,
-          name: local.manifest.name,
-          favorite,
-          styleId: id,
-          styleVersion: local.manifest.version,
-          source: "downloaded",
-          values: {},
-          origin: makeOrigin(local.manifest.name, {}),
-        },
-        local.definition,
-        local.manifest.version,
-        favorite,
-      ),
-    );
-    definitions[id] = local.definition;
   }
 
   for (const user of localState.userPresets) {
