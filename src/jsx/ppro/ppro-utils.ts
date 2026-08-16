@@ -1,4 +1,12 @@
-import { CAPTION_SYSTEM, CEP_WRITTEN_SYSTEM_NAMES } from "../../shared/caption-system";
+import {
+  CAPTION_BATCH_COUNT,
+  CAPTION_SYSTEM,
+  CEP_WRITTEN_SYSTEM_NAMES,
+  captionBatchLayerName,
+  packedCaptionsDisplayText,
+  resolveCaptionChunks,
+  unpackCaptions,
+} from "../../shared/caption-system";
 
 // ProjectItem Helpers
 
@@ -428,6 +436,69 @@ const jsonStringifyAscii = (value: unknown): string => {
   });
 };
 
+/**
+ * One write, same path as Captions_Raw_Data.
+ * updateUI=false until the last chunk — each true rebuilds mogrt expressions
+ * (Captions_Raw_Data JSON.stringify of the full transcript).
+ */
+const applyMogrtTextValue = (
+  prop: ComponentParam,
+  text: string,
+  updateUI: boolean,
+): string | null => {
+  text = text == null ? "" : String(text);
+  try {
+    const value = JSON.parse(String(prop.getValue())) as any;
+    if (value && typeof value === "object" && "textEditValue" in value) {
+      value.textEditValue = text;
+      if (value.fontTextRunLength && typeof value.fontTextRunLength.length === "number") {
+        value.fontTextRunLength[0] = text.length;
+      }
+      prop.setValue(jsonStringifyAscii(value), updateUI);
+      return "textDoc";
+    }
+  } catch (e) {
+    // not a TextDocument JSON
+  }
+  try {
+    prop.setValue(text, updateUI);
+    return "plain";
+  } catch (e2) {
+    try {
+      prop.setValue(jsonStringifyAscii(text), updateUI);
+      return "ascii";
+    } catch (e3) {
+      return null;
+    }
+  }
+};
+
+const normalizeParamName = (s: string): string => {
+  return String(s).toLowerCase().replace(/^\s+|\s+$/g, "");
+};
+
+const getMogrtParamByName = (
+  mgt: NonNullable<ReturnType<TrackItem["getMGTComponent"]>>,
+  name: string,
+): ComponentParam | null => {
+  try {
+    const prop = mgt.properties.getParamForDisplayName(name);
+    if (prop) return prop;
+  } catch (e) {
+    // fall through to scan
+  }
+  const want = normalizeParamName(name);
+  try {
+    const props = mgt.properties;
+    for (let i = 0; i < props.numItems; i++) {
+      if (normalizeParamName(String(props[i].displayName)) === want) return props[i];
+    }
+  } catch (e2) {
+    // ignore
+  }
+  return null;
+};
+
 export const fillMogrtText = (
   clip: TrackItem,
   propName: string,
@@ -440,36 +511,9 @@ export const fillMogrtText = (
     return false;
   }
   if (!mgt) return false;
-  let prop: ComponentParam | null = null;
-  try {
-    prop = mgt.properties.getParamForDisplayName(propName);
-  } catch (e) {
-    return false;
-  }
+  const prop = getMogrtParamByName(mgt, propName);
   if (!prop) return false;
-  try {
-    const valueStr = prop.getValue();
-    let value = JSON.parse(valueStr) as any;
-    if (value && typeof value === "object" && "textEditValue" in value) {
-      value.textEditValue = text;
-      // ASCII escapes — Premiere setValue падает на сырой кириллице в JSON
-      prop.setValue(jsonStringifyAscii(value), true);
-      return true;
-    }
-  } catch (e) {
-    // не JSON / не textEditValue — пробуем как строку
-  }
-  try {
-    prop.setValue(text, true);
-    return true;
-  } catch (e2) {
-    try {
-      prop.setValue(jsonStringifyAscii(text), true);
-      return true;
-    } catch (e3) {
-      return false;
-    }
-  }
+  return !!applyMogrtTextValue(prop, text, true);
 };
 
 // подставляет текст в первый параметр MOGRT, чьё значение — JSON с полем
@@ -499,7 +543,100 @@ export const fillFirstMogrtText = (clip: TrackItem, text: string): boolean => {
   return false;
 };
 
-/** System: Captions_Raw_Data, Segment Type, Line Count, Chars Per Line, Composition Height. */
+/** Packed captions → System captions_batch_01..15. Never writes Captions_Raw_Data. */
+export const fillMogrtCaptionChunks = (
+  clip: TrackItem,
+  data?: string | string[] | null,
+  rawJson?: string | null,
+): boolean => {
+  const chunks = typeof data !== "string" && data && typeof data.length === "number"
+    ? resolveCaptionChunks(data as string[], rawJson)
+    : resolveCaptionChunks(null, data == null ? rawJson : String(data));
+  let mgt: ReturnType<TrackItem["getMGTComponent"]> | null = null;
+  try {
+    mgt = clip.getMGTComponent();
+  } catch (e) {
+    return false;
+  }
+  if (!mgt) return false;
+
+  let ok = 0;
+  const debug: { name: string; found: boolean; branch: string | null; len: number }[] = [];
+  for (let i = 1; i <= CAPTION_BATCH_COUNT; i++) {
+    const name = captionBatchLayerName(i);
+    const prop = getMogrtParamByName(mgt, name);
+    const updateUI = i === CAPTION_BATCH_COUNT;
+    const branch = prop ? applyMogrtTextValue(prop, chunks[i - 1], updateUI) : null;
+    if (branch) ok++;
+    debug.push({
+      name: name,
+      found: !!prop,
+      branch: branch,
+      len: chunks[i - 1] ? chunks[i - 1].length : 0,
+    });
+  }
+  writeChunkDebug({
+    ok: ok,
+    packedLen: chunks.join("").length,
+    fields: debug,
+    names: ok === 0 ? dumpMogrtDisplayNames(mgt) : [],
+  });
+  return ok > 0;
+};
+
+const dumpMogrtDisplayNames = (
+  mgt: NonNullable<ReturnType<TrackItem["getMGTComponent"]>>,
+): string[] => {
+  const names: string[] = [];
+  try {
+    const props = mgt.properties;
+    for (let i = 0; i < props.numItems; i++) {
+      names.push(String(props[i].displayName));
+    }
+  } catch (e) {
+    // ignore
+  }
+  return names;
+};
+
+const writeChunkDebug = (data: {
+  ok: number;
+  packedLen: number;
+  fields: { name: string; found: boolean; branch: string | null; len: number }[];
+  names: string[];
+}) => {
+  try {
+    const dir = new Folder(Folder.temp.fsName + "/captions_cep");
+    if (!dir.exists) dir.create();
+    const lines: string[] = [];
+    lines.push("ok=" + data.ok + " packedLen=" + data.packedLen);
+    for (let i = 0; i < data.fields.length; i++) {
+      const f = data.fields[i];
+      lines.push(
+        f.name +
+          " found=" +
+          f.found +
+          " branch=" +
+          (f.branch || "null") +
+          " len=" +
+          f.len,
+      );
+    }
+    lines.push("--- displayNames ---");
+    for (let n = 0; n < data.names.length; n++) {
+      lines.push(String(n) + ": " + data.names[n]);
+    }
+    const f = new File(dir.fsName + "/chunk_write_debug.txt");
+    f.encoding = "UTF-8";
+    f.open("w");
+    f.write(lines.join("\n"));
+    f.close();
+  } catch (e) {
+    // диагностика не должна ломать запись
+  }
+};
+
+/** System: captions_batch_*, Segment Type, Line Count, Chars Per Line, Composition Height. */
 export const fillMogrtNumber = (clip: TrackItem, propName: string, n: number): boolean => {
   let mgt: ReturnType<TrackItem["getMGTComponent"]> | null = null;
   try {
@@ -531,14 +668,15 @@ export const fillMogrtNumber = (clip: TrackItem, propName: string, n: number): b
 export const fillMogrtSystemProps = (
   clip: TrackItem,
   opts: {
-    captionsRawData: string;
+    captionChunks?: string[];
+    captionsRawData?: string;
     segmentType?: number;
     lineCount?: number;
     charsPerLine?: number;
     compositionHeight?: number;
   },
 ): boolean => {
-  const rawOk = fillMogrtText(clip, CAPTION_SYSTEM.rawData, opts.captionsRawData);
+  const rawOk = fillMogrtCaptionChunks(clip, opts.captionChunks, opts.captionsRawData);
   // Segment Type is a Menu: definition 1-based → Premiere 0-based
   if (opts.segmentType != null) {
     fillMogrtNumber(clip, CAPTION_SYSTEM.segmentType, Math.max(0, opts.segmentType - 1));
@@ -551,40 +689,105 @@ export const fillMogrtSystemProps = (
   return rawOk;
 };
 
-/** Наш caption-клип: MGT с System-свойством Captions_Raw_Data. */
+/** Наш caption-клип: MGT с System captions_batch_01 (или legacy Captions_Raw_Data). */
 export const isCaptionMogrtClip = (clip: TrackItem): boolean => {
   try {
     const mgt = clip.getMGTComponent();
     if (!mgt) return false;
-    return !!mgt.properties.getParamForDisplayName(CAPTION_SYSTEM.rawData);
+    if (getMogrtParamByName(mgt, captionBatchLayerName(1))) return true;
+    return !!getMogrtParamByName(mgt, CAPTION_SYSTEM.rawData);
   } catch (e) {
     return false;
   }
 };
 
-/** Читает текст из System Captions_Raw_Data (Scribe words[]) или clip.name. */
+const readMogrtTextProp = (
+  mgt: NonNullable<ReturnType<TrackItem["getMGTComponent"]>>,
+  name: string,
+): string | null => {
+  try {
+    const prop = getMogrtParamByName(mgt, name);
+    if (!prop) return null;
+    const raw = String(prop.getValue());
+    try {
+      const value = JSON.parse(raw) as any;
+      if (value && typeof value === "object" && "textEditValue" in value) {
+        return String(value.textEditValue || "");
+      }
+    } catch (e) {
+      // plain string
+    }
+    return raw;
+  } catch (e) {
+    return null;
+  }
+};
+
+/** Packed captions_batch_01..15 concatenated (not display text). */
+export const readMogrtPackedCaptions = (clip: TrackItem): string => {
+  try {
+    const mgt = clip.getMGTComponent();
+    if (!mgt) return "";
+    let packed = "";
+    let sawBatch = false;
+    for (let i = 1; i <= CAPTION_BATCH_COUNT; i++) {
+      const chunk = readMogrtTextProp(mgt, captionBatchLayerName(i));
+      if (chunk != null) sawBatch = true;
+      packed += chunk == null ? "" : chunk;
+    }
+    if (sawBatch) return packed;
+    return readMogrtTextProp(mgt, CAPTION_SYSTEM.rawData) || "";
+  } catch (e) {
+    return "";
+  }
+};
+
+export const readMogrtNumber = (clip: TrackItem, propName: string): number | null => {
+  try {
+    const mgt = clip.getMGTComponent();
+    if (!mgt) return null;
+    const prop = getMogrtParamByName(mgt, propName);
+    if (!prop) return null;
+    const n = Number(prop.getValue());
+    return isNaN(n) ? null : n;
+  } catch (e) {
+    return null;
+  }
+};
+
+/** Word tokens from packed System captions_batch_* (spacing dropped). */
+export const readMogrtCaptionSegments = (
+  clip: TrackItem,
+): { text: string; timestamp: [number, number] }[] => {
+  const tokens = unpackCaptions(readMogrtPackedCaptions(clip));
+  const out: { text: string; timestamp: [number, number] }[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    const text = String(t.text == null ? "" : t.text).replace(/^\s+|\s+$/g, "");
+    if (!text) continue;
+    let start = Number(t.start);
+    let end = Number(t.end);
+    if (isNaN(start) || start < 0) start = 0;
+    if (isNaN(end) || end <= start) end = start + 0.05;
+    out.push({ text, timestamp: [start, end] });
+  }
+  return out;
+};
+
+/** Читает текст из System captions_batch_* (packed) / legacy Captions_Raw_Data или clip.name. */
 export const readMogrtText = (clip: TrackItem): string => {
   try {
     const mgt = clip.getMGTComponent();
     if (!mgt) return String(clip.name || "");
-    const tryProp = (name: string): string | null => {
-      try {
-        const prop = mgt.properties.getParamForDisplayName(name);
-        if (!prop) return null;
-        const raw = String(prop.getValue());
-        try {
-          const value = JSON.parse(raw) as any;
-          if (value && typeof value === "object" && "textEditValue" in value) {
-            return String(value.textEditValue || "");
-          }
-        } catch (e) {
-          // plain string
-        }
-        return raw;
-      } catch (e) {
-        return null;
-      }
-    };
+    const tryProp = (name: string): string | null => readMogrtTextProp(mgt, name);
+    let packed = "";
+    let sawBatch = false;
+    for (let i = 1; i <= CAPTION_BATCH_COUNT; i++) {
+      const chunk = tryProp(captionBatchLayerName(i));
+      if (chunk != null) sawBatch = true;
+      packed += chunk == null ? "" : chunk;
+    }
+    if (sawBatch) return packedCaptionsDisplayText(packed);
     const main = tryProp(CAPTION_SYSTEM.rawData);
     if (main != null && String(main).length) {
       try {
@@ -645,7 +848,12 @@ const CONTROL_TYPE_MENU = 13;
 // форма значения зависит от типа контрола: цвет — упакованное число, точка —
 // нормализованная строка "x,y", текст — JSON с textEditValue, остальное —
 // raw/JSON. Возвращает имя сработавшей ветки (для диагностики) или null.
-const setMogrtParamValue = (param: ComponentParam, value: unknown, type?: number): string | null => {
+const setMogrtParamValue = (
+  param: ComponentParam,
+  value: unknown,
+  type?: number,
+  updateUI = true,
+): string | null => {
   if (type === CONTROL_TYPE_COLOR && value && (value as number[]).length >= 3) {
     // цвета — только через setColorValue: setValue на color-параметрах
     // молча пишет чёрный (известная особенность Premiere API)
@@ -656,7 +864,7 @@ const setMogrtParamValue = (param: ComponentParam, value: unknown, type?: number
         colorChannelTo255(rgba[0]),
         colorChannelTo255(rgba[1]),
         colorChannelTo255(rgba[2]),
-        true,
+        updateUI,
       );
       return "setColorValue";
     } catch (e: any) {
@@ -667,11 +875,11 @@ const setMogrtParamValue = (param: ComponentParam, value: unknown, type?: number
     const nx = value.x / MOGRT_COMP_WIDTH;
     const ny = value.y / MOGRT_COMP_HEIGHT;
     try {
-      param.setValue([nx, ny] as unknown as object, true);
+      param.setValue([nx, ny] as unknown as object, updateUI);
       return "point-arr";
     } catch (e) {
       try {
-        param.setValue(String(nx) + "," + String(ny), true);
+        param.setValue(String(nx) + "," + String(ny), updateUI);
         return "point-str";
       } catch (e2: any) {
         return "point-err:" + String(e2 && e2.message ? e2.message : e2);
@@ -682,11 +890,11 @@ const setMogrtParamValue = (param: ComponentParam, value: unknown, type?: number
   if (type === CONTROL_TYPE_MENU && typeof value === "number" && isFinite(value)) {
     const idx = Math.max(0, Math.floor(value) - 1);
     try {
-      param.setValue(idx as unknown as object, true);
+      param.setValue(idx as unknown as object, updateUI);
       return "menu-0";
     } catch (e) {
       try {
-        param.setValue(String(idx), true);
+        param.setValue(String(idx), updateUI);
         return "menu-0-str";
       } catch (e2: any) {
         return "menu-err:" + String(e2 && e2.message ? e2.message : e2);
@@ -700,7 +908,10 @@ const setMogrtParamValue = (param: ComponentParam, value: unknown, type?: number
         const cur = JSON.parse(curRaw) as any;
         if (cur && typeof cur === "object" && "textEditValue" in cur && typeof value === "string") {
           cur.textEditValue = value;
-          param.setValue(JSON.stringify(cur), true);
+          if (cur.fontTextRunLength && typeof cur.fontTextRunLength.length === "number") {
+            cur.fontTextRunLength[0] = value.length;
+          }
+          param.setValue(jsonStringifyAscii(cur), updateUI);
           return "textEditValue";
         }
       } catch (e) {
@@ -711,11 +922,11 @@ const setMogrtParamValue = (param: ComponentParam, value: unknown, type?: number
     // getValue недоступен — пробуем вслепую
   }
   try {
-    param.setValue(value as object, true);
+    param.setValue(value as object, updateUI);
     return "raw";
   } catch (e) {
     try {
-      param.setValue(JSON.stringify(value as unknown as object), true);
+      param.setValue(JSON.stringify(value as unknown as object), updateUI);
       return "json";
     } catch (e2) {
       return null;
@@ -797,7 +1008,8 @@ export const applyMogrtStyleProps = (
     let branch: string | null = null;
     if (paramIndex >= 0) {
       used[paramIndex] = true;
-      branch = setMogrtParamValue(params[paramIndex], prop.value, prop.type);
+      const updateUI = p === props.length - 1;
+      branch = setMogrtParamValue(params[paramIndex], prop.value, prop.type, updateUI);
       if (branch && branch.indexOf("-err:") === -1) applied++;
     }
     if (debug) debug.push({ prop: name, path: prop.path, param: paramIndex, branch });

@@ -8,11 +8,7 @@ import type {
   PointValue,
 } from "./types";
 import { ControlType } from "./types";
-import {
-  CAPTION_SYSTEM,
-  CEP_WRITTEN_SYSTEM_NAMES,
-  STYLES_TRAILING_SYSTEM_NAMES,
-} from "../../shared/caption-system";
+import { CEP_WRITTEN_SYSTEM_NAMES } from "../../shared/caption-system";
 
 export const uiName = (control: ClientControl, locale = "en_US"): string => {
   const db = control.uiName?.strDB;
@@ -21,6 +17,10 @@ export const uiName = (control: ClientControl, locale = "en_US"): string => {
 };
 
 export const isGroup = (c: ClientControl) => c.type === ControlType.Group;
+
+/** Группа с `hidden` в uiName — не показываем её и всех детей. */
+export const isHiddenUiGroup = (control: ClientControl): boolean =>
+  isGroup(control) && uiName(control).toLowerCase().includes("hidden");
 
 export const isPointValue = (v: unknown): v is PointValue =>
   !!v && typeof v === "object" && !Array.isArray(v) && "x" in v && "y" in v;
@@ -57,7 +57,7 @@ const referencedIds = (controls: ClientControl[]): Set<string> => {
   return refs;
 };
 
-/** Корневые группы (не вложены в другие) — Global, Typography, Segment Static/Animated, Follow, Background, System. */
+/** Корневые группы (не вложены в другие). */
 export const getRootGroups = (definition: MogrtDefinition): ClientControl[] => {
   const controls = definition.clientControls ?? [];
   const refs = referencedIds(controls);
@@ -73,69 +73,49 @@ const buildNode = (control: ClientControl, byId: Map<string, ClientControl>): Co
   for (const id of [...control.value].reverse()) {
     if (typeof id !== "string") continue;
     const child = byId.get(id);
-    if (child) children.push(buildNode(child, byId));
+    if (!child || isHiddenUiGroup(child)) continue;
+    children.push(buildNode(child, byId));
   }
   return { kind: "group", control, children };
 };
 
 /**
  * Дерево UI прямо из definition.clientControls.
- * System-группу пропускаем — сырой транскрипт / Segment Type / Height пишет CEP.
- * Pause Gap / Hold Duration показываем отдельно в конце Styles (см. getStylesTrailingControls).
+ * Группы с `hidden` в названии (и все их дети) не показываем.
  */
 export const buildUiTree = (definition: MogrtDefinition): ControlTreeNode[] => {
   const byId = indexControls(definition);
   return getRootGroups(definition)
-    .filter((g) => uiName(g) !== CAPTION_SYSTEM.group)
+    .filter((g) => !isHiddenUiGroup(g))
     .map((g) => buildNode(g, byId));
 };
 
-export { STYLES_TRAILING_SYSTEM_NAMES };
-
-const getSystemGroup = (definition: MogrtDefinition): ClientControl | null =>
-  getRootGroups(definition).find((g) => uiName(g) === CAPTION_SYSTEM.group) ?? null;
-
-/**
- * Pause Gap / Hold Duration из System — плоский хвост Styles UI.
- * Порядок как в STYLES_TRAILING_SYSTEM_NAMES, не как в AE child list.
- */
-export const getStylesTrailingControls = (definition: MogrtDefinition): ClientControl[] => {
-  const system = getSystemGroup(definition);
-  if (!system || !Array.isArray(system.value)) return [];
+/** id контролов внутри hidden-групп — не Styles UI и не preset.values. */
+const hiddenControlIds = (definition: MogrtDefinition): Set<string> => {
   const byId = indexControls(definition);
-  const byName = new Map<string, ClientControl>();
-  for (const id of system.value) {
-    if (typeof id !== "string") continue;
-    const child = byId.get(id);
-    if (!child || isGroup(child)) continue;
-    byName.set(uiName(child), child);
-  }
-  const out: ClientControl[] = [];
-  for (const name of STYLES_TRAILING_SYSTEM_NAMES) {
-    const c = byName.get(name);
-    if (c) out.push(c);
-  }
-  return out;
-};
-
-/** Дефолтные значения по UUID (группы и CEP-written System props пропускаем). */
-export const defaultsFromDefinition = (definition: MogrtDefinition): ControlValues => {
-  const skipIds = new Set<string>();
-  const system = getSystemGroup(definition);
-  if (system && Array.isArray(system.value)) {
-    const byId = indexControls(definition);
-    for (const id of system.value) {
+  const skip = new Set<string>();
+  const mark = (control: ClientControl) => {
+    skip.add(control.id);
+    if (!isGroup(control) || !Array.isArray(control.value)) return;
+    for (const id of control.value) {
       if (typeof id !== "string") continue;
       const child = byId.get(id);
-      if (!child || isGroup(child)) continue;
-      if ((CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(uiName(child))) {
-        skipIds.add(child.id);
-      }
+      if (child) mark(child);
     }
+  };
+  for (const c of definition.clientControls ?? []) {
+    if (isHiddenUiGroup(c)) mark(c);
   }
+  return skip;
+};
+
+/** Дефолтные значения по UUID (группы, hidden и CEP-written System props пропускаем). */
+export const defaultsFromDefinition = (definition: MogrtDefinition): ControlValues => {
+  const skipIds = hiddenControlIds(definition);
   const values: ControlValues = {};
   for (const c of definition.clientControls ?? []) {
     if (isGroup(c) || skipIds.has(c.id)) continue;
+    if ((CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(uiName(c))) continue;
     values[c.id] = cloneValue(c.value as ControlValue);
   }
   return values;
@@ -180,6 +160,7 @@ export const stylePropsFromValues = (
   const out: StylePropPayload[] = [];
 
   const walk = (control: ClientControl, path: string[]) => {
+    if (isHiddenUiGroup(control)) return;
     const name = uiName(control);
     const nextPath = path.concat([name]);
     if (isGroup(control)) {
@@ -192,8 +173,9 @@ export const stylePropsFromValues = (
       }
       return;
     }
-    // type 6 (Caption Font / Captions_Raw_Data) — не Styles; CEP пишет сырой транскрипт отдельно
+    // type 6 (Caption Font / captions_batch_*) — не Styles; CEP пишет packed captions отдельно
     if (control.type === ControlType.Text) return;
+    if ((CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(name)) return;
     const current = values[control.id];
     out.push({
       path: nextPath,
@@ -204,19 +186,7 @@ export const stylePropsFromValues = (
 
   const roots = getRootGroups(definition);
   for (let i = 0; i < roots.length; i++) {
-    if (uiName(roots[i]) === CAPTION_SYSTEM.group) continue;
     walk(roots[i], []);
-  }
-
-  // Pause Gap / Hold Duration — в System для mogrt, в Styles UI без группы.
-  // path с "System", чтобы AE Essential Properties находил группу.
-  for (const control of getStylesTrailingControls(definition)) {
-    const current = values[control.id];
-    out.push({
-      path: [CAPTION_SYSTEM.group, uiName(control)],
-      type: control.type,
-      value: current !== undefined ? current : cloneValue(control.value as ControlValue),
-    });
   }
 
   return out;

@@ -50,13 +50,14 @@ import {
   applyMogrtStyleProps,
   collectCaptionClips,
   dumpMogrtParams,
+  fillMogrtCaptionChunks,
   fillMogrtSystemProps,
-  fillMogrtText,
   findCaptionTrackIndex,
   findFreeVideoTrack,
   getNextCaptionsName,
   isCaptionMogrtClip,
-  readMogrtText,
+  readMogrtCaptionSegments,
+  readMogrtNumber,
   secondsToTime,
   type MogrtMatchDebug,
 } from "./ppro-utils";
@@ -279,10 +280,16 @@ export interface SilenceRangeInput {
 // вырезает её сама: официальный API Premiere не даёт безопасно razor+ripple
 // через несколько треков разом (только недокументированный QE DOM), поэтому
 // пользователь сам подтверждает и вырезает каждый отрезок штатным Ripple Delete.
-export const createCaptionsFromFile = (_jsonPath: string) => ({
-  created: 0,
-  reason: "PPRO_USE_createCaptions",
-});
+export const createCaptionsFromFile = (jsonPath: string) => {
+  try {
+    const captions = readJsonUtf8(jsonPath) as CaptionLayer[];
+    if (!captions || !(captions as any).length) return { created: 0 };
+    return createCaptions(captions);
+  } catch (e: any) {
+    alert(e && e.message ? e.message : String(e));
+    return null;
+  }
+};
 export const markSilences = (data: { ranges: SilenceRangeInput[]; offset: number }) => {
   const seq = app.project.activeSequence;
   if (!seq) {
@@ -378,13 +385,14 @@ interface CaptionLayer {
   mogrtPath?: string;
   aepPath?: string;
   words?: { text: string; timestamp: [number, number] }[];
+  captionChunks?: string[];
   captionsRawData?: string;
   segmentType?: number;
   lineCount?: number;
   charsPerLine?: number;
 }
 
-/** Scribe `words[]` (word + spacing) — System EP Captions_Raw_Data. */
+/** Scribe `words[]` (word + spacing) — packed into System captions_batch_01..15. */
 const captionsRawDataJson = (caption: CaptionLayer): string => {
   if (caption.captionsRawData) return caption.captionsRawData;
   const words = caption.words && caption.words.length
@@ -456,6 +464,7 @@ export const createCaptions = (captions: CaptionLayer[]) => {
     trackItem.end = secondsToTime(end);
     trackItem.name = captionsName;
     fillMogrtSystemProps(trackItem, {
+      captionChunks: caption.captionChunks,
       captionsRawData: captionsRawDataJson(caption),
       segmentType: caption.segmentType,
       lineCount: caption.lineCount,
@@ -485,6 +494,7 @@ interface UpdateCaptionText {
   sequenceId?: string;
   text: string;
   captionsRawData?: string;
+  captionChunks?: string[];
 }
 
 const SESSION_MARKER_NAME = "__mf_caption_session__";
@@ -555,7 +565,12 @@ const writeSessionMarker = (seq: Sequence, json: string): boolean => {
   }
 };
 
-export const updateCaptionText = ({ trackIndex, sequenceId, captionsRawData }: UpdateCaptionText) => {
+export const updateCaptionText = ({
+  trackIndex,
+  sequenceId,
+  captionsRawData,
+  captionChunks,
+}: UpdateCaptionText) => {
   const seq = resolveCaptionSequence(sequenceId);
   if (!seq || trackIndex == null) return null;
   try {
@@ -564,8 +579,19 @@ export const updateCaptionText = ({ trackIndex, sequenceId, captionsRawData }: U
     const clips = collectCaptionClips(track);
     const trackItem = clips[0];
     if (!trackItem) return null;
-    if (captionsRawData) fillMogrtText(trackItem, CAPTION_SYSTEM.rawData, captionsRawData);
+    if ((captionChunks && captionChunks.length) || captionsRawData) {
+      fillMogrtCaptionChunks(trackItem, captionChunks, captionsRawData);
+    }
     return { updated: true };
+  } catch (e: any) {
+    return null;
+  }
+};
+
+export const updateCaptionTextFromFile = (jsonPath: string) => {
+  try {
+    const payload = readJsonUtf8(jsonPath) as UpdateCaptionText;
+    return updateCaptionText(payload);
   } catch (e: any) {
     return null;
   }
@@ -598,6 +624,7 @@ export const resegmentCaptions = (payload: {
     if (!clips.length) return null;
 
     fillMogrtSystemProps(clips[0], {
+      captionChunks: caption.captionChunks,
       captionsRawData: captionsRawDataJson(caption),
       segmentType: caption.segmentType,
       lineCount: caption.lineCount,
@@ -690,57 +717,89 @@ type TimelineCaptionSegment = {
 };
 
 /**
- * Load: Р·Р°Р№С‚Рё РІ РІС‹Р±СЂР°РЅРЅС‹Р№ nest (РёР»Рё Р°РєС‚РёРІРЅСѓСЋ captions-seq), СЃРѕР±СЂР°С‚СЊ РІСЃРµ caption
- * mogrt'С‹ РїРѕ РІСЂРµРјРµРЅРё вЂ” С‚РµРєСЃС‚ + start/end. Р­С‚Рѕ РёСЃС‚РѕС‡РЅРёРє РїСЂР°РІРґС‹ РґР»СЏ РїР°РЅРµР»Рё,
- * РЅРµ localStorage Рё РЅРµ session marker.
+ * Load: ровно один выделенный MGT. Иначе null (тихая ошибка в панели).
+ * Packed captions_batch_* + Segment Type / Line Count / Chars Per Line с клипа.
  */
 export const loadCaptionsFromTimeline = (): {
   compId?: number;
   sequenceId?: string;
   trackIndex?: number;
   segments: TimelineCaptionSegment[];
+  segmentType?: number;
+  lineCount?: number;
+  charsPerLine?: number;
 } | null => {
   try {
-    const target = resolveLoadTargetSequence();
-    if (!target) return null;
-    const trackIndex = findCaptionTrackIndex(target.seq);
-    if (trackIndex < 0) return null;
-    const clips = collectCaptionClips(target.seq.videoTracks[trackIndex]);
-    // sort by start time (ExtendScript вЂ” Р±РµР· Array.sort comparator РЅР°РґС‘Р¶РЅРµРµ bubble)
-    for (let i = 0; i < clips.length; i++) {
-      for (let j = i + 1; j < clips.length; j++) {
-        if (clips[j].start.seconds < clips[i].start.seconds) {
-          const tmp = clips[i];
-          clips[i] = clips[j];
-          clips[j] = tmp;
-        }
-      }
+    const active = app.project.activeSequence;
+    if (!active) return null;
+    let selection: TrackItem[] | null = null;
+    try {
+      selection = active.getSelection();
+    } catch (e) {
+      return null;
     }
-    const segments: TimelineCaptionSegment[] = [];
-    for (let i = 0; i < clips.length; i++) {
-      const clip = clips[i];
-      let start = Number(clip.start.seconds);
-      let end = Number(clip.end.seconds);
-      if (isNaN(start) || start < 0) start = 0;
-      if (isNaN(end) || end <= start) end = start + 0.05;
-      const text = readMogrtText(clip).split("\n").join(" ").replace(/^\s+|\s+$/g, "");
-      segments.push({
-        text: text || String(clip.name || "Caption"),
-        timestamp: [start, end],
-      });
+    if (!selection || selection.length !== 1) return null;
+    const clip = selection[0];
+    let isMgt = false;
+    try {
+      isMgt = !!clip.isMGT();
+    } catch (e) {
+      return null;
     }
+    if (!isMgt) return null;
+
+    const segments = readMogrtCaptionSegments(clip);
     if (!segments.length) return null;
+
+    let sequenceId = "";
+    try {
+      sequenceId = String(active.projectItem.nodeId);
+    } catch (e) {
+      sequenceId = "";
+    }
+    if (!sequenceId) return null;
+
+    const pproSegment = readMogrtNumber(clip, CAPTION_SYSTEM.segmentType);
+    const lineCount = readMogrtNumber(clip, CAPTION_SYSTEM.lineCount);
+    const charsPerLine = readMogrtNumber(clip, CAPTION_SYSTEM.charsPerLine);
+
     return {
-      sequenceId: target.sequenceId,
-      trackIndex,
+      sequenceId,
+      trackIndex: findClipTrackIndex(active, clip),
       segments,
+      segmentType: pproSegment == null ? undefined : Math.floor(pproSegment) + 1,
+      lineCount: lineCount == null ? undefined : lineCount,
+      charsPerLine: charsPerLine == null ? undefined : charsPerLine,
     };
   } catch (e) {
     return null;
   }
 };
 
-/** Р’С‹Р±СЂР°РЅРЅС‹Р№ nest РЅР° Р°РєС‚РёРІРЅРѕРј С‚Р°Р№РјР»Р°Р№РЅРµ, РёРЅР°С‡Рµ Р°РєС‚РёРІРЅР°СЏ seq РµСЃР»Рё РІ РЅРµР№ РµСЃС‚СЊ captions. */
+const findClipTrackIndex = (seq: Sequence, clip: TrackItem): number => {
+  let startTicks = "";
+  let clipName = "";
+  try {
+    startTicks = String(clip.start.ticks);
+    clipName = String(clip.name || "");
+  } catch (e) {
+    return 0;
+  }
+  for (let t = 0; t < seq.videoTracks.numTracks; t++) {
+    const clips = seq.videoTracks[t].clips;
+    for (let c = 0; c < clips.numItems; c++) {
+      try {
+        if (String(clips[c].start.ticks) === startTicks && String(clips[c].name || "") === clipName) {
+          return t;
+        }
+      } catch (e) {
+        // skip
+      }
+    }
+  }
+  return 0;
+};
+
 const resolveLoadTargetSequence = (): { seq: Sequence; sequenceId: string } | null => {
   const active = app.project.activeSequence;
   if (!active) return null;
@@ -812,7 +871,7 @@ export const applyStyleProject = (payload: ApplyStyleProjectPayload) => {
 
 /**
  * Apply style values to caption clips in the active sequence.
- * Caption mogrts are identified by System "Captions_Raw_Data".
+ * Caption mogrts are identified by System captions_batch_01 (legacy: Captions_Raw_Data).
  * compId is AE-only and ignored here.
  */
 export const applyCaptionStyleValues = (payload: {

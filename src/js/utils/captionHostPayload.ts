@@ -1,6 +1,8 @@
 import { fs, os, path } from "../lib/cep/node";
 import type { Caption, GroupingMode, ScribeWord } from "../utils/transcribe";
-import { SEGMENT_TYPE_INDEX } from "../../shared/caption-system";
+import { captionsRawJsonToChunks, SEGMENT_TYPE_INDEX } from "../../shared/caption-system";
+
+export { captionsRawJsonToChunks } from "../../shared/caption-system";
 
 /** Слово с таймингом относительно начала сегмента. */
 export type CaptionWordTiming = {
@@ -15,12 +17,20 @@ export const segmentTypeIndex = (mode: GroupingMode): number => {
   return SEGMENT_TYPE_INDEX.custom;
 };
 
+export const groupingModeFromSegmentType = (index: number): GroupingMode => {
+  if (index === SEGMENT_TYPE_INDEX.words) return "words";
+  if (index === SEGMENT_TYPE_INDEX.sentence) return "sentence";
+  return "custom";
+};
+
 export type HostCaptionPayload = {
   text: string;
   timestamp: [number, number];
   words: CaptionWordTiming[];
-  /** JSON-массив Scribe-токенов для System EP `Captions_Raw_Data`. */
-  captionsRawData: string;
+  /** Packed captions_batch_01..15 — CEP режет здесь, хост только setValue. */
+  captionChunks: string[];
+  /** JSON Scribe-токенов; хост пакует сам, если captionChunks нет. */
+  captionsRawData?: string;
   segmentType: number;
   lineCount: number;
   charsPerLine: number;
@@ -207,6 +217,7 @@ export const toHostCaptionPayload = (
       text,
       timestamp: [start, end] as [number, number],
       words: [],
+      captionChunks: captionsRawJsonToChunks(captionsRawData),
       captionsRawData,
       segmentType: segmentTypeIndex(opts.mode ?? "custom"),
       lineCount: Math.max(1, opts.lines ?? 2),

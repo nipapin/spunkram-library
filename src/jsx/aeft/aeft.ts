@@ -55,7 +55,13 @@ export const helloWorld = () => {
 };
 
 import { captionsBinName } from "../../shared/shared";
-import { CAPTION_SYSTEM } from "../../shared/caption-system";
+import {
+  CAPTION_BATCH_COUNT,
+  CAPTION_SYSTEM,
+  captionBatchLayerName,
+  resolveCaptionChunks,
+  unpackCaptions,
+} from "../../shared/caption-system";
 import { readJsonUtf8 } from "../utils/utils";
 import { getActiveComp, getNextCaptionsName } from "./aeft-utils";
 
@@ -263,6 +269,7 @@ interface CaptionLayer {
   mogrtPath?: string;
   aepPath?: string;
   words?: { text: string; timestamp: [number, number] }[];
+  captionChunks?: string[];
   captionsRawData?: string;
   segmentType?: number;
   lineCount?: number;
@@ -296,7 +303,7 @@ const writeLayerSourceText = (layer: Layer, text: string) => {
   sourceText.setValue(new TextDocument(text));
 };
 
-/** Scribe `words[]` (word + spacing) — System EP Captions_Raw_Data. */
+/** Scribe `words[]` (word + spacing) — packed into System captions_batch_01..15. */
 const captionsRawDataJson = (caption: CaptionLayer): string => {
   if (caption.captionsRawData) return caption.captionsRawData;
   const words =
@@ -332,11 +339,14 @@ const captionsRawDataJson = (caption: CaptionLayer): string => {
 };
 
 const getSystemGroup = (layer: Layer): PropertyGroup | null => {
+  const names = [CAPTION_SYSTEM.group, "System"];
   try {
     const ep = layer.property("Essential Properties");
     if (ep) {
-      const system = ep.property("System");
-      if (system) return system as PropertyGroup;
+      for (let i = 0; i < names.length; i++) {
+        const system = ep.property(names[i]);
+        if (system) return system as PropertyGroup;
+      }
     }
   } catch (e) {
     // ignore
@@ -344,8 +354,10 @@ const getSystemGroup = (layer: Layer): PropertyGroup | null => {
   try {
     const ep = (layer as any).essentialProperty as PropertyGroup | undefined;
     if (!ep) return null;
-    const system = ep.property("System");
-    if (system) return system as PropertyGroup;
+    for (let i = 0; i < names.length; i++) {
+      const system = ep.property(names[i]);
+      if (system) return system as PropertyGroup;
+    }
   } catch (e2) {
     // ignore
   }
@@ -375,13 +387,62 @@ const setSystemProp = (layer: Layer, name: string, value: string | number): bool
   }
 };
 
+const setSystemTextProp = (layer: Layer, name: string, text: string): boolean => {
+  const system = getSystemGroup(layer);
+  if (!system) return false;
+  let prop: Property | null = null;
+  try {
+    prop = system.property(name) as Property;
+  } catch (e) {
+    // ignore
+  }
+  if (!prop) {
+    try {
+      for (let i = 1; i <= system.numProperties; i++) {
+        const p = system.property(i);
+        if (p && String(p.name) === name) {
+          prop = p as Property;
+          break;
+        }
+      }
+    } catch (e2) {
+      // ignore
+    }
+  }
+  if (!prop) return false;
+  const value = text == null ? "" : String(text);
+  try {
+    prop.setValue(new TextDocument(value));
+    return true;
+  } catch (e) {
+    try {
+      prop.setValue(value);
+      return true;
+    } catch (e2) {
+      try {
+        prop.setValueAtTime(0, value);
+        return true;
+      } catch (e3) {
+        return false;
+      }
+    }
+  }
+};
+
+const fillCaptionChunks = (layer: Layer, chunks?: string[] | null, rawJson?: string) => {
+  const resolved = resolveCaptionChunks(chunks, rawJson);
+  for (let i = 1; i <= CAPTION_BATCH_COUNT; i++) {
+    setSystemTextProp(layer, captionBatchLayerName(i), resolved[i - 1]);
+  }
+};
+
 /**
- * System EP шаблона: Captions_Raw_Data, Segment Type, Line Count,
- * Chars Per Line, Composition Height. Pause Gap / Hold Duration не трогаем —
- * их правит пользователь в Styles.
+ * System EP шаблона: captions_batch_01..15, Segment Type, Line Count,
+ * Chars Per Line, Composition Height. Captions_Raw_Data / Captions_Data
+ * считает expression. Остальные System-пропы (в т.ч. hidden-группы) не трогаем.
  */
 const fillSystemEssentialProps = (layer: Layer, caption: CaptionLayer, compositionHeight: number) => {
-  setSystemProp(layer, CAPTION_SYSTEM.rawData, captionsRawDataJson(caption));
+  fillCaptionChunks(layer, caption.captionChunks, captionsRawDataJson(caption));
   if (caption.segmentType != null) setSystemProp(layer, CAPTION_SYSTEM.segmentType, caption.segmentType);
   if (caption.lineCount != null) setSystemProp(layer, CAPTION_SYSTEM.lineCount, caption.lineCount);
   if (caption.charsPerLine != null) setSystemProp(layer, CAPTION_SYSTEM.charsPerLine, caption.charsPerLine);
@@ -763,13 +824,121 @@ export const findAppliedCaptions = () => {
   }
 };
 
-/** Premiere-only: read mogrts from nest. Stub keeps evalTS Scripts intersection valid. */
+const getSystemText = (layer: Layer, name: string): string => {
+  const system = getSystemGroup(layer);
+  if (!system) return "";
+  let prop: Property | null = null;
+  try {
+    prop = system.property(name) as Property;
+  } catch (e) {
+    // ignore
+  }
+  if (!prop) {
+    try {
+      for (let i = 1; i <= system.numProperties; i++) {
+        const p = system.property(i);
+        if (p && String(p.name) === name) {
+          prop = p as Property;
+          break;
+        }
+      }
+    } catch (e2) {
+      // ignore
+    }
+  }
+  if (!prop) return "";
+  try {
+    const val = prop.value as { text?: string } | string | number;
+    if (val && typeof val === "object" && "text" in val) return String(val.text || "");
+    return val == null ? "" : String(val);
+  } catch (e) {
+    return "";
+  }
+};
+
+const getSystemNumber = (layer: Layer, name: string): number | null => {
+  const system = getSystemGroup(layer);
+  if (!system) return null;
+  try {
+    const prop = system.property(name) as Property;
+    if (!prop) return null;
+    const n = Number(prop.value);
+    return isNaN(n) ? null : n;
+  } catch (e) {
+    return null;
+  }
+};
+
+const layerHasEssentialProperties = (layer: Layer): boolean => {
+  try {
+    const ep = layer.property("Essential Properties");
+    if (ep && (ep as PropertyGroup).numProperties > 0) return true;
+  } catch (e) {
+    // ignore
+  }
+  try {
+    const ep = (layer as any).essentialProperty as PropertyGroup | undefined;
+    if (ep && ep.numProperties > 0) return true;
+  } catch (e2) {
+    // ignore
+  }
+  return false;
+};
+
+const readLayerCaptionSegments = (layer: Layer): { text: string; timestamp: [number, number] }[] => {
+  let packed = "";
+  for (let i = 1; i <= CAPTION_BATCH_COUNT; i++) {
+    packed += getSystemText(layer, captionBatchLayerName(i));
+  }
+  if (!packed) packed = getSystemText(layer, CAPTION_SYSTEM.rawData);
+  const tokens = unpackCaptions(packed);
+  const out: { text: string; timestamp: [number, number] }[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    const text = String(t.text == null ? "" : t.text).replace(/^\s+|\s+$/g, "");
+    if (!text) continue;
+    let start = Number(t.start);
+    let end = Number(t.end);
+    if (isNaN(start) || start < 0) start = 0;
+    if (isNaN(end) || end <= start) end = start + 0.05;
+    out.push({ text, timestamp: [start, end] });
+  }
+  return out;
+};
+
+/** Load from the single selected layer if it has Essential Properties (mogrt). */
 export const loadCaptionsFromTimeline = (): {
   compId?: number;
   sequenceId?: string;
   trackIndex?: number;
   segments: { text: string; timestamp: [number, number] }[];
-} | null => null;
+  segmentType?: number;
+  lineCount?: number;
+  charsPerLine?: number;
+} | null => {
+  try {
+    const comp = getActiveComp();
+    if (!comp) return null;
+    const selected = comp.selectedLayers;
+    if (!selected || selected.length !== 1) return null;
+    const layer = selected[0];
+    if (!layerHasEssentialProperties(layer)) return null;
+    const segments = readLayerCaptionSegments(layer);
+    if (!segments.length) return null;
+    const segmentType = getSystemNumber(layer, CAPTION_SYSTEM.segmentType);
+    const lineCount = getSystemNumber(layer, CAPTION_SYSTEM.lineCount);
+    const charsPerLine = getSystemNumber(layer, CAPTION_SYSTEM.charsPerLine);
+    return {
+      compId: comp.id,
+      segments,
+      segmentType: segmentType == null ? undefined : segmentType,
+      lineCount: lineCount == null ? undefined : lineCount,
+      charsPerLine: charsPerLine == null ? undefined : charsPerLine,
+    };
+  } catch (e: any) {
+    return null;
+  }
+};
 
 interface UpdateCaptionText {
   trackIndex?: number;
@@ -780,9 +949,15 @@ interface UpdateCaptionText {
   sequenceId?: string;
   text: string;
   captionsRawData?: string;
+  captionChunks?: string[];
 }
 
-export const updateCaptionText = ({ compId, captionIndex, captionsRawData }: UpdateCaptionText) => {
+export const updateCaptionText = ({
+  compId,
+  captionIndex,
+  captionsRawData,
+  captionChunks,
+}: UpdateCaptionText) => {
   if (compId == null) return null;
   try {
     const item = app.project.itemByID(compId);
@@ -801,8 +976,19 @@ export const updateCaptionText = ({ compId, captionIndex, captionsRawData }: Upd
       if (layers.length) target = layers[0];
     }
     if (!target) return null;
-    if (captionsRawData) setSystemProp(target, CAPTION_SYSTEM.rawData, captionsRawData);
+    if ((captionChunks && captionChunks.length) || captionsRawData) {
+      fillCaptionChunks(target, captionChunks, captionsRawData);
+    }
     return { updated: true };
+  } catch (e: any) {
+    return null;
+  }
+};
+
+export const updateCaptionTextFromFile = (jsonPath: string) => {
+  try {
+    const payload = readJsonUtf8(jsonPath) as UpdateCaptionText;
+    return updateCaptionText(payload);
   } catch (e: any) {
     return null;
   }

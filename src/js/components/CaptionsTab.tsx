@@ -18,7 +18,6 @@ interface CaptionsTabProps {
   fontSize: number;
   highlightIndex: number | null;
   screen: "landing" | "editor";
-  canLoad: boolean;
   onLoad: () => void;
   onDescribe: () => void;
   /** e.g. `Transcribe ( 2 )` from In/Out duration */
@@ -51,7 +50,6 @@ export const CaptionsTab = ({
   fontSize,
   highlightIndex,
   screen,
-  canLoad,
   onLoad,
   onDescribe,
   transcribeLabel = "Transcribe",
@@ -132,9 +130,8 @@ export const CaptionsTab = ({
               type="button"
               className="btn btn--ghost captions-tab__load-btn"
               onClick={onLoad}
-              disabled={!canLoad || !!progress}
-              data-tooltip={canLoad ? "Load captions found in this composition" : "No captions found in this composition"}
-              aria-label="Load existing captions"
+              disabled={!!progress}
+              aria-label="Load"
             >
               <Download size={15} />
               Load

@@ -16,14 +16,13 @@ export {
   defaultsFromDefinition,
   findControlByNames,
   getControlValue,
-  getStylesTrailingControls,
   indexControls,
   isColorArray,
   isGroup,
+  isHiddenUiGroup,
   isPointValue,
   stylePropsFromValues,
   uiName,
-  STYLES_TRAILING_SYSTEM_NAMES,
 } from "./clientControls";
 export type { StylePropPayload } from "./clientControls";
 export { hexToRgba, rgbaToHex } from "./color";

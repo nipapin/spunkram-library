@@ -1,4 +1,5 @@
 import { evalTS } from "../lib/utils/bolt";
+import { withHostJsonFile } from "../utils/captionHostPayload";
 import { requireHost } from "./host";
 import { wrap } from "./result";
 import type {
@@ -162,16 +163,22 @@ export const AE = {
     return wrap(() => evalTS("setCurrentTime", payload));
   },
   async createCaptions(payload: unknown) {
-    return wrap(() => evalTS("createCaptions", payload as any));
+    return wrap(() =>
+      withHostJsonFile(payload, (filePath) => evalTS("createCaptionsFromFile", filePath)),
+    );
   },
   async createCaptionsFromFile(jsonPath: string) {
     return wrap(() => evalTS("createCaptionsFromFile", jsonPath));
   },
   async resegmentCaptions(payload: unknown) {
-    return wrap(() => evalTS("resegmentCaptions", payload as any));
+    return wrap(() =>
+      withHostJsonFile(payload, (filePath) => evalTS("resegmentCaptionsFromFile", filePath)),
+    );
   },
   async updateCaptionText(payload: unknown) {
-    return wrap(() => evalTS("updateCaptionText", payload as any));
+    return wrap(() =>
+      withHostJsonFile(payload, (filePath) => evalTS("updateCaptionTextFromFile", filePath)),
+    );
   },
   async findAppliedCaptions() {
     return wrap(() => evalTS("findAppliedCaptions"));

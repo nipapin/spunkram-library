@@ -6,7 +6,6 @@ import {
   PRESET_DEFINITION,
   buildUiTree,
   getControlValue,
-  getStylesTrailingControls,
   isColorArray,
   isPointValue,
   uiName,
@@ -178,7 +177,7 @@ const ControlField = ({
     );
   }
 
-  // Text (type 6) — скрыт (Captions_Raw_Data / Font пишет CEP или отдельный picker)
+  // Text (type 6) — скрыт (captions_batch_* / Font пишет CEP или отдельный picker)
   return null;
 };
 
@@ -211,7 +210,6 @@ export const PresetFields = ({
   onReset,
 }: PresetFieldsProps) => {
   const tree = useMemo(() => buildUiTree(definition), [definition]);
-  const trailing = useMemo(() => getStylesTrailingControls(definition), [definition]);
 
   const setValue = (id: string, next: ControlValue) => {
     // один жест слайдера/scrub = один Ctrl+Z
@@ -255,18 +253,6 @@ export const PresetFields = ({
 
       <div className="preset-fields__params">
         {renderNodes(tree, 0, p.values, setValue)}
-        {trailing.length > 0 && (
-          <div className="preset-fields__trailing">
-            {trailing.map((control) => (
-              <ControlField
-                key={control.id}
-                control={control}
-                values={p.values}
-                onValue={setValue}
-              />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

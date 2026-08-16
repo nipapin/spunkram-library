@@ -47,7 +47,7 @@ export type TranscribeResult = {
     chaptersReceipt?: string;
     cost?: number;
     durationSeconds?: number;
-    /** Ответ Scribe as-is — пишем в System EP Captions_Raw_Data */
+    /** Ответ Scribe as-is — CEP пакует в System captions_batch_01..15 */
     raw?: ScribeResponse;
 };
 
