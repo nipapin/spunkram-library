@@ -7,12 +7,17 @@ export type DescribeStage =
   | "converting"
   | "transcribing"
   | "creating"
-  | "summarizing";
+  | "summarizing"
+  | "loading";
 export interface DescribeProgress {
   stage: DescribeStage;
 }
 
 export type ProgressStep = { stage: DescribeStage; label: string; hint: string };
+
+export const LOAD_CAPTIONS_PROGRESS_STEPS: ProgressStep[] = [
+  { stage: "loading", label: "Loading captions", hint: "Reading captions from the selected MOGRT" },
+];
 
 export const CAPTIONS_PROGRESS_STEPS: ProgressStep[] = [
   { stage: "rendering", label: "Rendering", hint: "Exporting composition to file" },

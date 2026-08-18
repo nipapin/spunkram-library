@@ -1,5 +1,5 @@
 import { ChevronDown, CopyPlus, RotateCcw } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { StylePreset } from "../../context/ConfigurationWrapper";
 import {
   ControlType,
@@ -17,6 +17,7 @@ import {
 } from "../presets";
 import { CEP_WRITTEN_SYSTEM_NAMES } from "../../shared/caption-system";
 import { rangeFillStyle } from "../utils/rangeFillStyle";
+import { getSystemFontsList } from "../lib/utils/system-fonts";
 import { ScrubNumber } from "./ScrubNumber";
 import { ColorField } from "./ColorField";
 import "./PresetFields.scss";
@@ -56,7 +57,7 @@ const menuOptionLabel = (entry: { strDB: { localeString: string; str: string }[]
 const Collapse = ({
   title,
   depth,
-  defaultOpen = true,
+  defaultOpen = false,
   children,
 }: {
   title: string;
@@ -81,6 +82,51 @@ const Collapse = ({
       </button>
       {open && <div className="preset-fields__collapse-body">{children}</div>}
     </div>
+  );
+};
+
+const isFontControl = (control: ClientControl, label: string) =>
+  !!control.fonteditinfo || label === "Caption Font";
+
+const FontSelect = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) => {
+  const [fonts, setFonts] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSystemFontsList().then((list) => {
+      if (!cancelled) setFonts(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const options = useMemo(() => {
+    if (!fonts) return value ? [value] : [];
+    if (value && !fonts.includes(value)) return [value, ...fonts];
+    return fonts;
+  }, [fonts, value]);
+
+  return (
+    <select
+      className="preset-fields__select"
+      value={value}
+      disabled={!fonts}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {!fonts && <option value={value}>{value || "Loading fonts…"}</option>}
+      {options.map((font) => (
+        <option key={font} value={font}>
+          {font}
+        </option>
+      ))}
+    </select>
   );
 };
 
@@ -201,11 +247,18 @@ const ControlField = ({
     return (
       <div className="preset-fields__param">
         <span className="preset-fields__param-label">{label}</span>
-        <input
-          className="preset-fields__select"
-          value={text}
-          onChange={(e) => onValue(control.id, withLocalizedText(raw, e.target.value))}
-        />
+        {isFontControl(control, label) ? (
+          <FontSelect
+            value={text}
+            onChange={(next) => onValue(control.id, withLocalizedText(raw, next))}
+          />
+        ) : (
+          <input
+            className="preset-fields__select"
+            value={text}
+            onChange={(e) => onValue(control.id, withLocalizedText(raw, e.target.value))}
+          />
+        )}
       </div>
     );
   }
@@ -223,7 +276,7 @@ const renderNodes = (
     if (node.kind === "group") {
       const name = uiName(node.control);
       return (
-        <Collapse key={node.control.id} title={name} depth={depth} defaultOpen>
+        <Collapse key={node.control.id} title={name} depth={depth}>
           {renderNodes(node.children, depth + 1, values, onValue)}
         </Collapse>
       );

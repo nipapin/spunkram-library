@@ -162,6 +162,9 @@ export const PPRO = {
   async loadCaptionsFromTimeline() {
     return wrap(() => evalTS("loadCaptionsFromTimeline"));
   },
+  async getSystemFonts() {
+    return wrap(() => evalTS("getSystemFonts"));
+  },
   async saveSessionData(payload: unknown) {
     return wrap(() => evalTS("saveSessionData", payload as any));
   },

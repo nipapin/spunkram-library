@@ -14,6 +14,7 @@ interface CaptionsTabProps {
   captions: Caption[];
   meta: { type: DescribeType; offset: number };
   progress: DescribeProgress | null;
+  loadingCaptions?: boolean;
   sentenceCount: number;
   fontSize: number;
   highlightIndex: number | null;
@@ -45,6 +46,7 @@ export const CaptionsTab = ({
   captions,
   meta,
   progress,
+  loadingCaptions = false,
   sentenceCount,
   fontSize,
   highlightIndex,
@@ -140,11 +142,11 @@ export const CaptionsTab = ({
               type="button"
               className="btn btn--ghost captions-tab__load-btn"
               onClick={onLoad}
-              disabled={!!progress}
+              disabled={!!progress || loadingCaptions}
               aria-label="Load"
             >
-              <Download size={15} />
-              Load
+              {loadingCaptions ? <span className="spinner" /> : <Download size={15} />}
+              {loadingCaptions ? "Loading…" : "Load"}
             </button>
           </div>
         </div>

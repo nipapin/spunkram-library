@@ -3,6 +3,7 @@ import { CaptionsTab } from "../../components/CaptionsTab";
 import {
   ProgressDialog,
   CAPTIONS_PROGRESS_STEPS,
+  LOAD_CAPTIONS_PROGRESS_STEPS,
   type DescribeProgress,
   type DescribeType,
 } from "../../components/ProgressDialog";
@@ -142,6 +143,7 @@ export const CaptionsApp = ({
   const [data, setData] = useState<TranscribeResult | null>(null);
   const [customSegments, setCustomSegments] = useState<CaptionsChunk[] | null>(null);
   const [progress, setProgress] = useState<DescribeProgress | null>(null);
+  const [loadProgress, setLoadProgress] = useState<DescribeProgress | null>(null);
   // разбивка, реально применённая к хосту в последний раз (создание/Update) —
   // пока текущие mode/lines/characters совпадают с ней, кнопка Update не нужна
   const [appliedConfig, setAppliedConfig] = useState<AppliedSegmentConfig | null>(null);
@@ -285,7 +287,8 @@ export const CaptionsApp = ({
   };
 
   const handleLoad = async () => {
-    if (progress) return;
+    if (progress || loadProgress) return;
+    setLoadProgress({ stage: "loading" });
     try {
       const loaded = (await sdkData(hostSdk().loadCaptionsFromTimeline())) as
         | {
@@ -351,6 +354,8 @@ export const CaptionsApp = ({
       setScreen("editor");
     } catch {
       // не isMGT / несколько слоёв / пустой mogrt — тихая ошибка
+    } finally {
+      setLoadProgress(null);
     }
   };
 
@@ -910,10 +915,16 @@ export const CaptionsApp = ({
         title="Generating captions"
         steps={CAPTIONS_PROGRESS_STEPS}
       />
+      <ProgressDialog
+        progress={loadProgress}
+        title="Loading captions"
+        steps={LOAD_CAPTIONS_PROGRESS_STEPS}
+      />
       <CaptionsTab
         captions={captions}
         meta={meta}
         progress={progress}
+        loadingCaptions={!!loadProgress}
         sentenceCount={data?.chunk.chunks?.length ?? 0}
         fontSize={fontSize}
         highlightIndex={highlightIndex}

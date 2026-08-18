@@ -1,4 +1,5 @@
-﻿export { importMedia, importVoiceoverAudio } from "./ppro-import-media";
+﻿export { getSystemFonts } from "../utils/system-fonts";
+export { importMedia, importVoiceoverAudio } from "./ppro-import-media";
 export { applyPackItem } from "./ppro-apply-item";
 import { applyPackItem } from "./ppro-apply-item";
 export {

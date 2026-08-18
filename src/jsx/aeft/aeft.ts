@@ -1,4 +1,5 @@
-﻿export { importMedia, importVoiceoverAudio } from "./aeft-import-media";
+﻿export { getSystemFonts } from "../utils/system-fonts";
+export { importMedia, importVoiceoverAudio } from "./aeft-import-media";
 export { applyPackItem } from "./aeft-apply-item";
 import { applyPackItem } from "./aeft-apply-item";
 export {
