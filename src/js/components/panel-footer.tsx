@@ -1,11 +1,11 @@
 import { Play, Music, Maximize2, Scan } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   THUMB_SIZE_DEFAULT,
   THUMB_SIZE_MAX,
   THUMB_SIZE_MIN,
   usePanelUI,
 } from "@/lib/panel-ui-context";
+import "./panel-footer.scss";
 
 export function PanelFooter({ className = "" }: { className?: string }) {
   const {
@@ -24,21 +24,14 @@ export function PanelFooter({ className = "" }: { className?: string }) {
   } = usePanelUI();
 
   return (
-    <footer
-      className={`flex items-center gap-3 border-t border-white/5 px-3 py-2 ${className}`}
-    >
-      <div className="flex shrink-0 items-center gap-1.5">
+    <footer className={`panel-footer ${className}`.trim()}>
+      <div className="panel-footer__cluster">
         <button
           type="button"
           aria-label="Play preview"
           aria-pressed={playPreview}
           onClick={togglePlayPreview}
-          className={cn(
-            "flex size-7 items-center justify-center rounded-md transition-colors",
-            playPreview
-              ? "bg-primary/20 text-primary"
-              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-          )}
+          className={playPreview ? "panel-footer__btn panel-footer__btn--on" : "panel-footer__btn"}
         >
           <Play className="size-4 fill-current" />
         </button>
@@ -47,12 +40,7 @@ export function PanelFooter({ className = "" }: { className?: string }) {
           aria-label="Audio"
           aria-pressed={audioEnabled}
           onClick={toggleAudio}
-          className={cn(
-            "flex size-7 items-center justify-center rounded-md transition-colors",
-            audioEnabled
-              ? "bg-primary/20 text-primary"
-              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-          )}
+          className={audioEnabled ? "panel-footer__btn panel-footer__btn--on" : "panel-footer__btn"}
         >
           <Music className="size-4" />
         </button>
@@ -63,34 +51,24 @@ export function PanelFooter({ className = "" }: { className?: string }) {
           aria-label="Show NEW badges"
           title={showNewBadges ? "Hide NEW badges" : "Show NEW badges"}
           onClick={() => setShowNewBadges(!showNewBadges)}
-          className={cn(
-            "relative ml-0.5 inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors",
-            showNewBadges ? "bg-primary" : "bg-secondary",
-          )}
+          className={
+            showNewBadges ? "panel-footer__switch panel-footer__switch--on" : "panel-footer__switch"
+          }
         >
-          <span
-            className={cn(
-              "pointer-events-none block size-3 rounded-full bg-background shadow transition-transform",
-              showNewBadges ? "translate-x-3.5" : "translate-x-0.5",
-            )}
-          />
+          <span className="panel-footer__switch-thumb" />
         </button>
       </div>
 
-      <div className="min-w-0 flex-1 truncate px-1 text-center text-[11px] text-muted-foreground">
-        {hoveredItemName ? (
-          <span className="text-foreground/90">{hoveredItemName}</span>
-        ) : (
-          <span className="opacity-40">Hover a preview</span>
-        )}
+      <div className={hoveredItemName ? "panel-footer__hint panel-footer__hint--name" : "panel-footer__hint panel-footer__hint--empty"}>
+        {hoveredItemName || "Hover a preview"}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="panel-footer__cluster">
         <button
           type="button"
           aria-label="Fit thumbnails to default size"
           onClick={() => setThumbSize(THUMB_SIZE_DEFAULT)}
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          className="panel-footer__btn"
         >
           <Scan className="size-4" />
         </button>
@@ -99,12 +77,7 @@ export function PanelFooter({ className = "" }: { className?: string }) {
           aria-label="Toggle focus mode"
           aria-pressed={focusMode}
           onClick={toggleFocusMode}
-          className={cn(
-            "flex size-7 items-center justify-center rounded-md transition-colors",
-            focusMode
-              ? "bg-primary/20 text-primary"
-              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-          )}
+          className={focusMode ? "panel-footer__btn panel-footer__btn--on" : "panel-footer__btn"}
         >
           <Maximize2 className="size-4" />
         </button>
@@ -117,7 +90,7 @@ export function PanelFooter({ className = "" }: { className?: string }) {
           onChange={(e) => setThumbSize(Number(e.target.value))}
           aria-label="Thumbnail size"
           aria-valuetext={`size ${thumbSize}, ${gridColumns} columns`}
-          className="thumb-size-range h-1 w-24 cursor-pointer appearance-none rounded-full bg-secondary"
+          className="panel-footer__range"
         />
       </div>
     </footer>

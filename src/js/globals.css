@@ -8,38 +8,40 @@
    * Ported from original lab() theme → sRGB channel triples for rgba()/rgb().
    * CEP Chromium does not support lab()/oklch().
    */
-  --background: 7, 10, 23;
-  --foreground: 240, 241, 247;
-  --card: 17, 20, 37;
-  --card-foreground: 240, 241, 247;
-  --popover: 17, 20, 37;
-  --popover-foreground: 240, 241, 247;
-  --primary: 106, 83, 248;
-  --primary-foreground: 252, 252, 252;
-  --secondary: 30, 34, 53;
-  --secondary-foreground: 240, 241, 247;
-  --muted: 30, 34, 53;
-  --muted-foreground: 142, 145, 161;
-  --accent: 106, 83, 248;
-  --accent-foreground: 252, 252, 252;
+  --background: 6, 5, 14;
+  --foreground: 232, 234, 242;
+  --card: 14, 12, 26;
+  --card-foreground: 232, 234, 242;
+  --popover: 14, 12, 26;
+  --popover-foreground: 232, 234, 242;
+  --primary: 124, 77, 255;
+  --primary-foreground: 255, 255, 255;
+  --secondary: 24, 20, 42;
+  --secondary-foreground: 232, 234, 242;
+  --muted: 24, 20, 42;
+  --muted-foreground: 156, 163, 190;
+  --accent: 124, 77, 255;
+  --accent-foreground: 255, 255, 255;
   --destructive: 246, 44, 52;
-  --border: 255, 255, 255;
-  --input: 255, 255, 255;
-  --ring: 106, 83, 248;
-  --chart-1: 106, 83, 248;
-  --chart-2: 0, 158, 255;
+  --border: 42, 36, 64;
+  --input: 42, 36, 64;
+  --ring: 124, 77, 255;
+  --chart-1: 124, 77, 255;
+  --chart-2: 185, 163, 255;
   --chart-3: 224, 164, 25;
   --chart-4: 245, 78, 75;
   --chart-5: 73, 147, 89;
-  --sidebar: 11, 14, 28;
-  --sidebar-foreground: 220, 221, 230;
-  --sidebar-primary: 106, 83, 248;
-  --sidebar-primary-foreground: 252, 252, 252;
-  --sidebar-accent: 30, 34, 53;
-  --sidebar-accent-foreground: 240, 241, 247;
-  --sidebar-border: 255, 255, 255;
-  --sidebar-ring: 106, 83, 248;
+  --sidebar: 14, 12, 26;
+  --sidebar-foreground: 232, 234, 242;
+  --sidebar-primary: 124, 77, 255;
+  --sidebar-primary-foreground: 255, 255, 255;
+  --sidebar-accent: 24, 20, 42;
+  --sidebar-accent-foreground: 232, 234, 242;
+  --sidebar-border: 42, 36, 64;
+  --sidebar-ring: 124, 77, 255;
   --radius: 0.75rem;
+  --font-sans: "Geist Variable", Geist, ui-sans-serif, system-ui, sans-serif;
+  --font-headline: "Unbounded Variable", Unbounded, sans-serif;
 }
 
 @layer base {
@@ -64,9 +66,15 @@
   body {
     background-color: rgb(var(--background));
     color: rgb(var(--foreground));
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-      Arial, sans-serif;
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-headline);
+    letter-spacing: -0.03em;
   }
 
   button,
@@ -102,4 +110,98 @@
     outline: none;
     box-shadow: none;
   }
+}
+
+@layer components {
+  .pill-brand {
+    color: #fff;
+    background-color: #5a2ad4;
+    background-image: linear-gradient(
+      145deg,
+      #3d1c8f 0%,
+      #5a2ad4 38%,
+      #6b38f0 58%,
+      #9b7eff 88%,
+      #c4b5fd 100%
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+      0 14px 40px -22px rgba(110, 60, 255, 0.65);
+    border: 0;
+    transition: background-image 200ms ease, box-shadow 200ms ease;
+  }
+
+  .pill-brand:hover:not(:disabled) {
+    background-image: linear-gradient(
+      145deg,
+      #4a22ad 0%,
+      #6b38f0 35%,
+      #7c4dff 65%,
+      #b9a3ff 92%,
+      #e8e0ff 100%
+    );
+  }
+
+  .glass-card {
+    border: 1px solid rgba(42, 36, 64, 0.55);
+    background: rgba(14, 12, 26, 0.48);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+      0 4px 24px -6px rgba(0, 0, 0, 0.55),
+      0 12px 40px -16px rgba(45, 20, 90, 0.35);
+    -webkit-backdrop-filter: blur(28px) saturate(185%);
+    backdrop-filter: blur(28px) saturate(185%);
+  }
+
+  .glass-bar {
+    border: 1px solid rgba(124, 77, 255, 0.25);
+    background: rgba(14, 12, 26, 0.48);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+      0 4px 24px -6px rgba(0, 0, 0, 0.55);
+    -webkit-backdrop-filter: blur(28px) saturate(185%);
+    backdrop-filter: blur(28px) saturate(185%);
+  }
+}
+
+.spunkram-shell {
+  position: relative;
+  background-color: rgb(6, 5, 14);
+  background-image:
+    radial-gradient(ellipse 130% 85% at 50% -35%, rgba(124, 58, 237, 0.2), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 100% 15%, rgba(59, 130, 246, 0.1), transparent 52%),
+    radial-gradient(ellipse 50% 42% at 0% 85%, rgba(139, 92, 246, 0.12), transparent 48%);
+}
+
+.spunkram-shell__mesh,
+.spunkram-shell__grid {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.spunkram-shell__grid {
+  background-image:
+    linear-gradient(rgba(42, 36, 64, 0.2) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42, 36, 64, 0.2) 1px, transparent 1px);
+  background-size: 4.5rem 4.5rem;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 14%,
+    #000 86%,
+    transparent 100%
+  );
+}
+
+.spunkram-shell__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
 }

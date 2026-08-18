@@ -17,7 +17,7 @@ export default function Filters() {
   };
 
   return (
-    <div className="flex shrink-0 items-center gap-3 border-b border-white/5 bg-background px-2.5 py-2">
+    <div className="mx-2.5 mt-2 flex shrink-0 items-center gap-3 rounded-2xl px-2.5 py-2 glass-bar">
       <TypeFilter />
       <DestinationFilter />
       <OrientationFilter />

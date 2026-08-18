@@ -4,7 +4,7 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: var(--bg-page);
+  background: transparent;
   overflow: hidden;
 }
 
@@ -21,8 +21,9 @@
 }
 
 .app-header__title {
+  font-family: var(--font-headline);
   font-size: 13px;
-  font-weight: 700;
-  letter-spacing: .4px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
 }

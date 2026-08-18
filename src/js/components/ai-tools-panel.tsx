@@ -95,14 +95,12 @@ export function AiToolsPanel({
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <AiToolsList
-        monthly={monthly}
-        extra={extra}
-        monthlyLimit={monthlyLimit}
-        isFreeUser={isFreeUser}
-        onOpenTool={openTool}
-      />
-    </div>
+    <AiToolsList
+      monthly={monthly}
+      extra={extra}
+      monthlyLimit={monthlyLimit}
+      isFreeUser={isFreeUser}
+      onOpenTool={openTool}
+    />
   );
 }

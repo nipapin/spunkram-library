@@ -1,18 +1,16 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import { Scissors, Video, Sparkles, ShoppingBag, User, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
 import { useAuth } from "@/lib/auth-context";
 import { useNotifications } from "@/lib/notifications-context";
 import { useDownloadManager } from "@/lib/download-manager-context";
+import "./panel-header.scss";
 
 const NAV_ITEMS = [
   { id: "editing", label: "Editing", icon: Scissors },
   { id: "footages", label: "Footages", icon: Video },
   { id: "ai-tools", label: "AI Tools", icon: Sparkles },
 ] as const;
-
-const ACCENT_PILL =
-  "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
 
 export function PanelHeader({
   active,
@@ -28,39 +26,84 @@ export function PanelHeader({
   const { signedIn, subscription } = useAuth();
   const { unreadMarketCount, clearUnread } = useNotifications();
   const { activeCount } = useDownloadManager();
+  const navRef = useRef<HTMLElement>(null);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [thumb, setThumb] = useState({ left: 0, width: 0, visible: false });
+  const [animateThumb, setAnimateThumb] = useState(false);
+
+  const navIndex = NAV_ITEMS.findIndex((item) => item.id === active);
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const el = navIndex >= 0 ? tabRefs.current[navIndex] : null;
+
+    const place = () => {
+      if (!nav || !el) {
+        setThumb((prev) => ({ ...prev, visible: false }));
+        return;
+      }
+      setThumb({
+        left: el.offsetLeft,
+        width: el.offsetWidth,
+        visible: true,
+      });
+    };
+
+    place();
+    const frame = requestAnimationFrame(() => setAnimateThumb(true));
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(place) : null;
+    if (nav) ro?.observe(nav);
+    if (el) ro?.observe(el);
+    window.addEventListener("resize", place);
+    return () => {
+      cancelAnimationFrame(frame);
+      ro?.disconnect();
+      window.removeEventListener("resize", place);
+    };
+  }, [navIndex]);
 
   return (
-    <header className="flex items-center gap-2 border-b border-white/5 px-2.5 py-2.5">
+    <header className="panel-header">
       <button
         type="button"
+        className="panel-header__logo"
         aria-label="Settings"
         title="Extension settings"
         onClick={onOpenSettings}
-        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-primary to-primary/70 shadow-[0_0_16px_2px] shadow-primary/60 ring-1 ring-inset ring-white/15 transition-transform duration-200 hover:scale-110"
       >
-        <img src={logo} alt="Spunkram logo" width={38} height={38} className="size-9 object-contain" />
+        <img src={logo} alt="Spunkram logo" width={38} height={38} />
       </button>
 
-      <nav className="flex flex-1 items-center gap-1 rounded-full border border-white/10 bg-card/70 px-1.5 py-1 backdrop-blur">
-        {NAV_ITEMS.map((item) => {
+      <nav ref={navRef} className="panel-header__nav">
+        <span
+          className={
+            "panel-header__thumb" +
+            (thumb.visible ? " panel-header__thumb--on" : "") +
+            (animateThumb ? " panel-header__thumb--animate" : "")
+          }
+          style={{
+            transform: `translateX(${thumb.left}px)`,
+            width: thumb.width,
+          }}
+          aria-hidden
+        />
+        {NAV_ITEMS.map((item, index) => {
           const Icon = item.icon;
           const isActive = active === item.id;
           return (
             <button
               key={item.id}
               type="button"
+              ref={(node) => {
+                tabRefs.current[index] = node;
+              }}
               onClick={() => onSelect(item.id)}
               aria-label={item.label}
               aria-pressed={isActive}
-              className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium transition-all",
-                isActive
-                  ? ACCENT_PILL
-                  : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
-              )}
+              className={isActive ? "panel-header__tab panel-header__tab--active" : "panel-header__tab"}
             >
               <Icon className="size-3.5" strokeWidth={2.25} />
-              <span className="hidden whitespace-nowrap min-[490px]:inline">{item.label}</span>
+              <span className="panel-header__tab-label">{item.label}</span>
             </button>
           );
         })}
@@ -68,15 +111,16 @@ export function PanelHeader({
 
       <button
         type="button"
+        className={
+          active === "market"
+            ? "panel-header__market panel-header__market--active"
+            : "panel-header__market"
+        }
         onClick={() => {
           clearUnread();
           onSelect("market");
         }}
         aria-pressed={active === "market"}
-        className={cn(
-          "relative flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors min-[490px]:px-3",
-          ACCENT_PILL,
-        )}
         aria-label="Market"
       >
         {activeCount > 0 ? (
@@ -84,9 +128,9 @@ export function PanelHeader({
         ) : (
           <ShoppingBag className="size-3.5" strokeWidth={2.25} />
         )}
-        <span className="hidden whitespace-nowrap min-[490px]:inline">Market</span>
+        <span className="panel-header__tab-label">Market</span>
         {unreadMarketCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground ring-2 ring-background">
+          <span className="panel-header__badge">
             {unreadMarketCount > 9 ? "9+" : unreadMarketCount}
           </span>
         )}
@@ -94,20 +138,22 @@ export function PanelHeader({
 
       <button
         type="button"
+        className={
+          active === "account"
+            ? "panel-header__account panel-header__account--active"
+            : "panel-header__account"
+        }
         aria-label="Account"
         onClick={onOpenAccount}
-        className={cn(
-          "relative flex size-10 shrink-0 items-center justify-center rounded-full border border-solid border-white/10 bg-card/70 text-white transition-colors hover:bg-white/10",
-          active === "account" && "ring-1 ring-primary/50",
-        )}
       >
-        <User className="size-4.5" />
+        <User className="size-4" strokeWidth={2.25} />
         {signedIn && (
           <span
-            className={cn(
-              "absolute right-0.5 top-0.5 size-2 rounded-full ring-2 ring-background",
-              subscription.subscribed ? "bg-emerald-400" : "bg-amber-400",
-            )}
+            className={
+              subscription.subscribed
+                ? "panel-header__status panel-header__status--on"
+                : "panel-header__status panel-header__status--free"
+            }
           />
         )}
       </button>

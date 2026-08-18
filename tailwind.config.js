@@ -54,6 +54,10 @@ export default {
           ring: "rgba(var(--sidebar-ring), <alpha-value>)",
         },
       },
+      fontFamily: {
+        sans: ['"Geist Variable"', "Geist", "ui-sans-serif", "system-ui", "sans-serif"],
+        headline: ['"Unbounded Variable"', "Unbounded", "sans-serif"],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

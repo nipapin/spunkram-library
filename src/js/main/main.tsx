@@ -447,6 +447,7 @@ function EditingWorkspace({
         onToggleTutorials={() => setTutorialsOpen(!tutorialsOpen)}
         query={query}
         onQuery={setQuery}
+        packName={packSettings?.main.name}
       />
       <div className="flex min-h-0 flex-1">
         {tutorialsOpen ? (
@@ -460,7 +461,6 @@ function EditingWorkspace({
             tree={tree}
             active={category}
             onSelect={setCategory}
-            packName={packSettings?.main.name}
           />
         )}
         {packError ? (
@@ -772,8 +772,12 @@ function AppShell() {
 
   if (!signedIn) {
     return (
-      <div className="relative flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
-        <LoginScreen />
+      <div className="spunkram-shell flex h-full w-full flex-col overflow-hidden text-foreground">
+        <div className="spunkram-shell__mesh" />
+        <div className="spunkram-shell__grid" />
+        <div className="spunkram-shell__content">
+          <LoginScreen />
+        </div>
       </div>
     );
   }
@@ -781,7 +785,10 @@ function AppShell() {
   const showUpdateBanner = Boolean(updateVersion && updateZxpUrl);
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
+    <div className="spunkram-shell flex h-full w-full flex-col overflow-hidden text-foreground">
+      <div className="spunkram-shell__mesh" />
+      <div className="spunkram-shell__grid" />
+      <div className="spunkram-shell__content">
       <PanelHeader
         active={settingsOpen ? "settings" : nav}
         onSelect={handleNav}
@@ -863,6 +870,7 @@ function AppShell() {
           setNav("market");
         }}
       />
+      </div>
     </div>
   );
 }

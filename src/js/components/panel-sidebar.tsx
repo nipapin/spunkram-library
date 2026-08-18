@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRight, Folder, Layers, Film, Music, Package, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronRight, Folder, Layers, Film, Music, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import * as panelStore from "@/lib/userdata-store";
 import type { PackTreeIcon, PackTreeNode } from "@/lib/utils/pack-types";
+import "./panel-sidebar.scss";
 
 const SIDEBAR_WIDTH_KEY = "spunkram.sidebarWidth";
 const SIDEBAR_MIN_WIDTH = 140;
@@ -22,6 +23,39 @@ function loadSidebarWidth(): number {
     // ignore storage errors
   }
   return SIDEBAR_DEFAULT_WIDTH;
+}
+
+function FolderKids({ open, children }: { open: boolean; children: ReactNode }) {
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number | "auto">(open ? "auto" : 0);
+
+  useLayoutEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+
+    if (open) {
+      const frame = requestAnimationFrame(() => setHeight(el.scrollHeight));
+      const timer = window.setTimeout(() => setHeight("auto"), 240);
+      return () => {
+        cancelAnimationFrame(frame);
+        window.clearTimeout(timer);
+      };
+    }
+
+    const px = el.getBoundingClientRect().height;
+    setHeight(px);
+    const frame = requestAnimationFrame(() => setHeight(0));
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
+
+  return (
+    <div
+      className="sidebar-tree__kids"
+      style={{ height: height === "auto" ? "auto" : `${height}px` }}
+    >
+      <div ref={innerRef}>{children}</div>
+    </div>
+  );
 }
 
 function TreeIcon({ icon, active }: { icon: PackTreeIcon; active?: boolean }) {
@@ -91,7 +125,7 @@ function TreeNodeRow({
         className={cn(
           "group flex w-full items-center gap-1.5 rounded-lg py-1.5 text-left text-xs transition-colors",
           isActive
-            ? "bg-primary/10 font-semibold text-foreground"
+            ? "bg-[#7c4dff]/15 font-semibold text-foreground"
             : "text-muted-foreground hover:text-foreground",
         )}
         style={{ paddingLeft: 8 + depth * 10, paddingRight: 8 }}
@@ -106,7 +140,7 @@ function TreeNodeRow({
           >
             <ChevronRight
               className={cn(
-                "size-3 text-muted-foreground transition-transform",
+                "size-3 text-muted-foreground transition-transform duration-200 ease-out",
                 open && "rotate-90",
               )}
             />
@@ -140,8 +174,8 @@ function TreeNodeRow({
         </button>
       </div>
 
-      {isFolder && open && (
-        <div>
+      {isFolder && (
+        <FolderKids open={open}>
           {node.children.map((child) => (
             <TreeNodeRow
               key={child.id}
@@ -154,7 +188,7 @@ function TreeNodeRow({
               showNewBadges={showNewBadges}
             />
           ))}
-        </div>
+        </FolderKids>
       )}
     </div>
   );
@@ -164,14 +198,11 @@ export function PanelSidebar({
   tree,
   active,
   onSelect,
-  packName,
   orientation = "vertical",
 }: {
   tree: PackTreeNode[];
   active: string;
   onSelect: (id: string) => void;
-  /** Display name of the currently loaded pack (shown above the tree). */
-  packName?: string;
   orientation?: "vertical" | "horizontal";
 }) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
@@ -254,7 +285,7 @@ export function PanelSidebar({
 
   if (orientation === "horizontal") {
     return (
-      <nav className="flex flex-wrap items-center gap-1.5 border-b border-white/5 px-2.5 py-2">
+      <nav className="mx-2.5 mt-2 flex flex-wrap items-center gap-1.5 rounded-2xl px-2.5 py-2 glass-bar">
         {tree.map((node) => {
           const isActive = active === node.id;
           return (
@@ -266,8 +297,8 @@ export function PanelSidebar({
               className={cn(
                 "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
                 isActive
-                  ? "border-primary/50 bg-primary/20 font-semibold text-foreground"
-                  : "border-white/10 bg-card/50 text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                  ? "border-0 pill-brand font-semibold"
+                  : "border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 text-muted-foreground hover:text-foreground",
               )}
             >
               <span className="whitespace-nowrap">{node.label}</span>
@@ -290,19 +321,10 @@ export function PanelSidebar({
 
   return (
     <aside
-      className="relative flex shrink-0 border-r border-white/5"
+      className="relative flex shrink-0 border-r border-[rgb(42,36,64)]"
       style={{ width }}
     >
       <nav className="min-w-0 flex-1 overflow-y-auto flex flex-col gap-0.5 px-1 py-2">
-        {packName ? (
-          <div
-            className="mb-1 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-foreground"
-            title={packName}
-          >
-            <Package className="size-3.5 shrink-0 text-primary" />
-            <span className="min-w-0 truncate">{packName}</span>
-          </div>
-        ) : null}
         {tree.length === 0 ? (
           <p className="px-2 py-3 text-[11px] text-muted-foreground">
             No pack loaded

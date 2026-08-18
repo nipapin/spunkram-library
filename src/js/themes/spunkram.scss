@@ -1,65 +1,84 @@
-// Brand: Spunkram — matches main panel Tailwind tokens (globals.css)
-// --primary: 106, 83, 248  →  #6a53f8
-// --background: 7, 10, 23  →  #070a17
-// --card: 17, 20, 37       →  #111425
+// Brand: Spunkram — landing glass / violet (motionflow.pro/spunkram)
+// Page #06050E, accent #7C4DFF, CTA 145° violet wash.
 
 // backgrounds
-$bg-page: #070a17;
-$bg-panel: #111425;
-$card-gradient: linear-gradient(180deg, #15192c, #111425);
-$bg-header: rgba(17, 20, 37, 0.92);
-$bg-tabbar: rgba(17, 20, 37, 0.7);
-$bg-input: #1e2235;
-$bg-input-dark: #0f1220;
-$bg-modal: #070a17;
-$surface-active: #1e2235;
-$surface-segmented: linear-gradient(180deg, #6a53f8, rgba(106, 83, 248, 0.7));
-$caption-editing-bg: linear-gradient(180deg, #1a1e32, #15192c);
-$caption-highlight-bg: linear-gradient(180deg, #252048, #1a1e32);
+$bg-page: #06050e;
+$bg-panel: #0e0c1a;
+$card-gradient: rgba(14, 12, 26, 0.48);
+$bg-header: rgba(14, 12, 26, 0.48);
+$bg-tabbar: rgba(14, 12, 26, 0.48);
+$bg-input: rgba(24, 20, 42, 0.62);
+$bg-input-dark: rgba(14, 12, 26, 0.72);
+$bg-modal: #06050e;
+$surface-active: rgba(24, 20, 42, 0.72);
+$surface-segmented: linear-gradient(
+  145deg,
+  rgba(61, 28, 143, 0.92) 0%,
+  rgba(107, 56, 240, 0.9) 55%,
+  rgba(185, 163, 255, 0.88) 100%
+);
+$caption-editing-bg: rgba(24, 20, 42, 0.78);
+$caption-highlight-bg: rgba(90, 42, 212, 0.22);
 
 // borders
-$border: rgba(255, 255, 255, 0.08);
-$border-card: rgba(255, 255, 255, 0.1);
-$border-input: rgba(255, 255, 255, 0.1);
-$border-strong: rgba(255, 255, 255, 0.14);
-$border-hover: rgba(255, 255, 255, 0.18);
+$border: rgba(42, 36, 64, 0.55);
+$border-card: rgba(42, 36, 64, 0.55);
+$border-input: rgba(42, 36, 64, 0.65);
+$border-strong: rgba(72, 62, 108, 0.75);
+$border-hover: rgba(124, 77, 255, 0.45);
 
 // text
-$text-primary: #f0f1f7;
-$text-body: #e8e9f0;
+$text-primary: #e8eaf2;
+$text-body: #e8eaf2;
 $text-secondary: #c8cad6;
-$text-muted: #8e91a1;
-$text-dim: #8e91a1;
-$text-faint: #6b6e7e;
-$text-ghost: #5a5d6c;
+$text-muted: #9ca3be;
+$text-dim: #9ca3be;
+$text-faint: #6c728c;
+$text-ghost: #5c6280;
 
-// accent (CTA) — same as extension --primary
-$accent: #6a53f8;
-$accent-2: #5742e0;
-$accent-hover: #7d69fa;
-$accent-soft: rgba(106, 83, 248, 0.12);
-$accent-glow: rgba(106, 83, 248, 0.4);
-$accent-ring: rgba(106, 83, 248, 0.6);
-$accent-gradient: linear-gradient(180deg, #6a53f8 0%, rgba(106, 83, 248, 0.72) 100%);
-$accent-gradient-hover: linear-gradient(180deg, #7d69fa 0%, rgba(106, 83, 248, 0.8) 100%);
-$accent-gradient-disabled: linear-gradient(180deg, #5544c4 0%, #46389e 100%);
+// accent (CTA)
+$accent: #7c4dff;
+$accent-2: #5a2ad4;
+$accent-hover: #9b7eff;
+$accent-soft: rgba(124, 77, 255, 0.12);
+$accent-glow: rgba(110, 60, 255, 0.4);
+$accent-ring: rgba(124, 77, 255, 0.55);
+$accent-gradient: linear-gradient(
+  145deg,
+  #3d1c8f 0%,
+  #5a2ad4 38%,
+  #6b38f0 58%,
+  #9b7eff 88%,
+  #c4b5fd 100%
+);
+$accent-gradient-hover: linear-gradient(
+  145deg,
+  #4a22ad 0%,
+  #6b38f0 35%,
+  #7c4dff 65%,
+  #b9a3ff 92%,
+  #e8e0ff 100%
+);
+$accent-gradient-disabled: linear-gradient(145deg, #2a1458 0%, #3d1c8f 50%, #4a32a0 100%);
 
 // status
-$success: #4ade80;
-$highlight: #6a53f8;
-$highlight-border: rgba(106, 83, 248, 0.45);
+$success: #34d399;
+$highlight: #7c4dff;
+$highlight-border: rgba(124, 77, 255, 0.45);
 $error: #ed553b;
 $error-soft: #f0a0a0;
 
-// radii — closer to main --radius 0.75rem
-$radius-sm: 6px;
-$radius-md: 8px;
-$radius-lg: 10px;
-$radius-xl: 12px;
-$radius-xxl: 12px;
+// radii
+$radius-sm: 8px;
+$radius-md: 10px;
+$radius-lg: 12px;
+$radius-xl: 16px;
+$radius-xxl: 20px;
 
-// type
-$font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+// type — SaaS pairing: Unbounded headlines, Geist UI
+$font-sans: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+$font-headline: "Unbounded Variable", Unbounded, sans-serif;
+$font-family: $font-sans;
 
 $tokens: (
   "bg-page": $bg-page,
@@ -106,4 +125,5 @@ $tokens: (
   "radius-xl": $radius-xl,
   "radius-xxl": $radius-xxl,
   "font-family": $font-family,
+  "font-headline": $font-headline,
 );

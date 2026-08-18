@@ -10,7 +10,7 @@ export default function SearchInput(
         type="text"
         placeholder="Find assets"
         {...props}
-        className="w-full rounded-full border border-white/10 bg-card/70 py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none"
+          className="w-full rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-[#7c4dff]/60 focus:outline-none"
       />
     </div>
   );

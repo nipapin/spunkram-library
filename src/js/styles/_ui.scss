@@ -33,19 +33,22 @@ textarea {
   gap: 6px;
   height: 30px;
   padding: 0 12px;
-  background: var(--bg-input);
+  background: rgba(14, 12, 26, 0.5);
   border: 1px solid var(--border-input);
-  border-radius: var(--radius-md);
+  border-radius: 999px;
   color: var(--text-secondary);
   font-family: var(--font-family);
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: border-color .12s, background-color .12s;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  transition: border-color 200ms ease, background 200ms ease, color 200ms ease;
 
   &:hover:not(:disabled) {
-    border-color: var(--text-faint);
+    border-color: var(--border-strong);
+    background: var(--surface-active);
+    color: var(--text-primary);
   }
 
   &:disabled {
@@ -57,36 +60,42 @@ textarea {
 .btn--primary {
   height: 46px;
   border: 0;
-  border-radius: var(--radius-xl);
+  border-radius: 999px;
   color: #ffffff;
   font-size: 13px;
   font-weight: 700;
-  background: var(--accent-gradient);
+  background-color: #5a2ad4;
+  background-image: var(--accent-gradient);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+    0 14px 40px -22px rgba(110, 60, 255, 0.65);
+  transition: background-image 200ms ease, box-shadow 200ms ease, opacity 200ms ease;
 
   &:hover:not(:disabled) {
-    background: var(--accent-gradient-hover);
+    background-image: var(--accent-gradient-hover);
   }
 
   &:disabled {
     color: #ffffffb0;
-    background: var(--accent-gradient-disabled);
+    background-image: var(--accent-gradient-disabled);
   }
 }
 
 .btn--ghost {
   height: 36px;
   padding: 0 14px;
-  border: 1px solid var(--border-input);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
-  background: transparent;
+  background: rgba(14, 12, 26, 0.5);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
 
   &:hover:not(:disabled) {
-    border-color: var(--text-faint);
+    border-color: var(--border-strong);
     color: var(--text-primary);
-    background: #ffffff0a;
+    background: var(--surface-active);
   }
 }
 
@@ -94,16 +103,17 @@ textarea {
 // "второстепенное / основное" действие в один ряд (напр. Add Markers / Copy Chapters)
 .btn--secondary {
   height: 46px;
-  border: 1px solid var(--border-input);
-  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  border-radius: 999px;
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 700;
-  background: var(--surface-active);
+  background: rgba(14, 12, 26, 0.5);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
 
   &:hover:not(:disabled) {
-    border-color: var(--text-faint);
-    background: var(--bg-input);
+    border-color: var(--border-strong);
+    background: var(--surface-active);
   }
 
   &:disabled {
@@ -124,13 +134,13 @@ textarea {
   flex-shrink: 0;
   background: transparent;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   color: var(--text-dim);
   cursor: pointer;
-  transition: background-color .12s, color .12s;
+  transition: background 200ms ease, color 200ms ease;
 
   &:hover:not(:disabled) {
-    background: #ffffff0f;
+    background: var(--accent-soft);
     color: var(--text-primary);
   }
 
@@ -144,9 +154,14 @@ textarea {
 
 .card {
   background: var(--card-gradient);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-card);
   border-radius: var(--radius-xxl);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+    0 4px 24px -6px rgba(0, 0, 0, 0.55),
+    0 12px 40px -16px rgba(45, 20, 90, 0.35);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+  backdrop-filter: blur(28px) saturate(185%);
 }
 
 .chip {
@@ -178,10 +193,14 @@ textarea {
   flex-shrink: 0;
   margin: 8px 10px 0;
   padding: 4px;
-  background: rgba(17, 20, 37, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(14, 12, 26, 0.48);
+  border: 1px solid rgba(124, 77, 255, 0.25);
   border-radius: 999px;
-  backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+    0 4px 24px -6px rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+  backdrop-filter: blur(28px) saturate(185%);
 }
 
 .tab {
@@ -193,16 +212,17 @@ textarea {
   color: var(--text-dim);
   font-family: var(--font-family);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: color .12s, background-color .12s, box-shadow .12s, border-color .12s;
+  transition: color 200ms ease, background 200ms ease, box-shadow 200ms ease;
 }
 
 .tab--active {
-  color: #fcfcfc;
-  background: var(--accent-gradient);
-  border: 1px solid rgba(106, 83, 248, 0.6);
-  box-shadow: 0 4px 12px rgba(106, 83, 248, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  color: #fff;
+  background: var(--surface-segmented);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+    0 8px 24px -12px rgba(110, 60, 255, 0.65);
 }
 
 // ───────────────────────── segmented control (toggle group) ─────────────────────────
@@ -211,9 +231,12 @@ textarea {
   display: flex;
   gap: 3px;
   padding: 3px;
-  background: rgba(17, 20, 37, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(14, 12, 26, 0.48);
+  border: 1px solid rgba(124, 77, 255, 0.25);
   border-radius: 999px;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+  backdrop-filter: blur(28px) saturate(185%);
 }
 
 .segmented__btn {
@@ -227,14 +250,16 @@ textarea {
   font-size: 11.5px;
   font-weight: 700;
   cursor: pointer;
-  transition: background-color .12s, border-color .12s, color .12s, box-shadow .12s;
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease;
 }
 
 .segmented__btn--active {
-  background: var(--accent-gradient);
-  border-color: rgba(106, 83, 248, 0.6);
+  background: var(--surface-segmented);
+  border-color: transparent;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(106, 83, 248, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+    0 8px 24px -12px rgba(110, 60, 255, 0.65);
 }
 
 // ───────────────────────── toggle switch ─────────────────────────
@@ -262,7 +287,7 @@ textarea {
   inset: 0;
   background: var(--border-strong);
   border-radius: 10px;
-  transition: background-color .15s;
+  transition: background-color 200ms ease;
 }
 
 .toggle input:checked ~ .toggle__track {
@@ -299,15 +324,15 @@ textarea {
   flex: 1;
   text-align: center;
   padding: 8px 0;
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  border: 1.5px solid transparent;
+  border-radius: 999px;
+  background: rgba(14, 12, 26, 0.5);
+  border: 1px solid var(--border);
   color: var(--text-dim);
   font-family: var(--font-family);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color .12s, border-color .12s, color .12s;
+  transition: background 200ms ease, border-color 200ms ease, color 200ms ease;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -318,9 +343,11 @@ textarea {
 // заливка акцентом целиком (Sentences/Words/Custom, sort-теги)
 .btn-group__item--active-fill {
   background: var(--accent-gradient);
-  border-color: rgba(106, 83, 248, 0.6);
+  border-color: transparent;
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(106, 83, 248, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+    0 8px 24px -12px rgba(110, 60, 255, 0.65);
 }
 
 // подсветка рамкой (Pop-in/Slide-up/Fade в редакторе стиля)
@@ -342,19 +369,20 @@ textarea {
 .chip-toggle {
   cursor: pointer;
   padding: 5px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   font-family: var(--font-family);
   font-size: 11.5px;
   font-weight: 600;
-  background: var(--bg-input);
+  background: rgba(14, 12, 26, 0.5);
   color: var(--text-dim);
-  border: 0;
+  border: 1px solid var(--border);
   white-space: nowrap;
-  transition: background-color .12s, color .12s;
+  transition: background 200ms ease, color 200ms ease, border-color 200ms ease;
 }
 
 .chip-toggle--active {
-  background: var(--accent);
+  border-color: transparent;
+  background: var(--accent-gradient);
   color: #ffffff;
 }
 
@@ -457,7 +485,7 @@ textarea.field {
   padding: 8px 10px;
   background: var(--bg-input);
   border: 1px solid var(--border-input);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
 }
 
 .field-row__label {
@@ -558,10 +586,14 @@ textarea.field {
   z-index: 1100;
   min-width: 170px;
   padding: 4px 0;
-  background: var(--bg-panel);
+  background: rgba(14, 12, 26, 0.92);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px #00000066;
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+    0 12px 40px -16px rgba(0, 0, 0, 0.7);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+  backdrop-filter: blur(28px) saturate(185%);
 }
 
 .menu-item {

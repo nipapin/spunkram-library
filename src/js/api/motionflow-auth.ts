@@ -27,6 +27,7 @@ export const AUTH_ENDPOINTS = {
   revokeDevice: "/api/cep/devices/revoke",
   subscribe: `${SITE_ORIGIN}/spunkram`,
   manageSubscription: `${PUBLIC_AUTH_ORIGIN}/profile/subscriptions?${clientQuery()}`,
+  contact: `${PUBLIC_AUTH_ORIGIN}/spunkram#contact`,
 } as const;
 
 /** Browser confirm page — Spunkram site (login modal → Allow/Deny). */
@@ -390,6 +391,10 @@ export function openMotionflowSubscribe(): void {
 
 export function openMotionflowManageSubscription(): void {
   openLinkInBrowser(manageUrlOverride || AUTH_ENDPOINTS.manageSubscription);
+}
+
+export function openMotionflowContact(): void {
+  openLinkInBrowser(AUTH_ENDPOINTS.contact);
 }
 
 export function openVerificationUrl(url: string): void {

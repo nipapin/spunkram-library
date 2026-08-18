@@ -1,27 +1,15 @@
-import { useMemo, useState } from "react";
-import {
-  ArrowLeft,
-  CheckCircle2,
-  ExternalLink,
-  Loader2,
-  LogOut,
-  Monitor,
-  Plus,
-  RefreshCw,
-  Trash2,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ArrowUpRight, Check, Loader2, LogOut, Plus, RefreshCw } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
-  openMotionflowManageSubscription,
+  openMotionflowContact,
   openMotionflowSubscribe,
 } from "@/api/motionflow-auth";
+import { fetchGenerationsStatus } from "@/api/credits";
 import { getUserSystemData } from "@/lib/api/usp";
 import { parseDeviceFingerprint } from "@/lib/api/market-api";
 import type { MotionflowAccountSession } from "@/lib/api/preferences";
-
-const ACCENT_PILL =
-  "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
+import "./account-panel.scss";
 
 function formatDate(iso?: string): string | null {
   if (!iso) return null;
@@ -37,6 +25,129 @@ function formatDate(iso?: string): string | null {
 function accountInitial(account: Pick<MotionflowAccountSession, "name" | "email">): string {
   const source = (account.name || account.email || "?").trim();
   return source.charAt(0).toUpperCase() || "?";
+}
+
+function Sheen() {
+  return <span className="account-spunkram__sheen" aria-hidden />;
+}
+
+function parseFingerprint(raw: string): { mac?: string; user?: string; os?: string } {
+  return parseDeviceFingerprint(raw || "");
+}
+
+/** 6-byte MAC as 12 hex chars. Hashed fingerprints (32+ hex) are not MACs. */
+function realMacHex(raw?: string): string | null {
+  const hex = (raw || "").replace(/[^a-f0-9]/gi, "").toLowerCase();
+  return hex.length === 12 ? hex : null;
+}
+
+function sessionName(device: {
+  name?: string;
+  user_fingerprint: string;
+}): string {
+  const fp = parseFingerprint(device.user_fingerprint);
+  return (device.name || fp.user || "").trim().toLowerCase();
+}
+
+function uniqueSessionDevices<
+  T extends {
+    id: string;
+    ip: string;
+    user_fingerprint: string;
+    name?: string;
+    current?: boolean;
+  },
+>(devices: T[], currentMac?: string): Array<T & { revokeIds: string[] }> {
+  const parent = devices.map((_, i) => i);
+  const find = (i: number): number => {
+    if (parent[i] !== i) parent[i] = find(parent[i]);
+    return parent[i];
+  };
+  const union = (a: number, b: number) => {
+    const pa = find(a);
+    const pb = find(b);
+    if (pa !== pb) parent[pa] = pb;
+  };
+
+  const byKey = new Map<string, number>();
+  const addKey = (key: string, index: number) => {
+    if (!key) return;
+    const existing = byKey.get(key);
+    if (existing == null) byKey.set(key, index);
+    else union(existing, index);
+  };
+
+  devices.forEach((device, index) => {
+    const fp = parseFingerprint(device.user_fingerprint);
+    const mac = realMacHex(fp.mac);
+    const ip = (device.ip || "").trim().toLowerCase();
+    const name = sessionName(device);
+    if (mac) addKey(`mac:${mac}`, index);
+    if (device.current && currentMac) {
+      const localMac = realMacHex(currentMac);
+      if (localMac) addKey(`mac:${localMac}`, index);
+    }
+    if (name && ip) addKey(`name-ip:${name}|${ip}`, index);
+  });
+
+  const groups = new Map<number, T[]>();
+  devices.forEach((device, index) => {
+    const root = find(index);
+    const list = groups.get(root);
+    if (list) list.push(device);
+    else groups.set(root, [device]);
+  });
+
+  const currentMacHex = realMacHex(currentMac);
+  const unique: Array<T & { revokeIds: string[] }> = [];
+  for (const list of groups.values()) {
+    const preferred =
+      list.find((d) => d.current) ||
+      list.find((d) => realMacHex(parseFingerprint(d.user_fingerprint).mac) === currentMacHex) ||
+      list.find((d) => realMacHex(parseFingerprint(d.user_fingerprint).mac)) ||
+      list[0];
+    unique.push({
+      ...preferred,
+      current:
+        list.some((d) => d.current) ||
+        list.some((d) => realMacHex(parseFingerprint(d.user_fingerprint).mac) === currentMacHex) ||
+        preferred.current,
+      revokeIds: [...new Set(list.map((d) => d.id).filter(Boolean))],
+    });
+  }
+
+  unique.sort((a, b) => Number(Boolean(b.current)) - Number(Boolean(a.current)));
+  return unique;
+}
+
+function creditsFromStatus(
+  status: {
+    used?: number;
+    remaining?: number;
+    subscription_generations_left?: number;
+    extra_generations_left?: number;
+  },
+  generationLimit: number,
+): { monthlyLeft: number; extraLeft: number; used: number } {
+  const monthlyLeft =
+    typeof status.subscription_generations_left === "number"
+      ? status.subscription_generations_left
+      : typeof status.remaining === "number"
+        ? status.remaining
+        : generationLimit;
+  const extraLeft =
+    typeof status.extra_generations_left === "number" ? status.extra_generations_left : 0;
+  const used =
+    typeof status.used === "number" ? status.used : Math.max(0, generationLimit - monthlyLeft);
+  return {
+    monthlyLeft: Math.max(0, monthlyLeft),
+    extraLeft: Math.max(0, extraLeft),
+    used: Math.max(0, used),
+  };
+}
+
+function Kicker({ children }: { children: ReactNode }) {
+  return <p className="account-spunkram__kicker">{children}</p>;
 }
 
 export function AccountPanel({ onBack }: { onBack: () => void }) {
@@ -58,27 +169,55 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
   } = useAuth();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const currentMac = useMemo(() => getUserSystemData().mac, []);
+  const [credits, setCredits] = useState<{
+    monthlyLeft: number;
+    extraLeft: number;
+    used: number;
+  } | null>(null);
+  const sys = useMemo(() => getUserSystemData(), []);
+  const currentMac = sys.mac;
 
   const otherAccounts = useMemo(
     () => savedAccounts.filter((a) => a.id !== auth.id),
     [savedAccounts, auth.id],
   );
+  const sessionDevices = useMemo(
+    () => uniqueSessionDevices(subscription.devices, currentMac),
+    [subscription.devices, currentMac],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchGenerationsStatus().then((status) => {
+      if (cancelled || !status) return;
+      setCredits(creditsFromStatus(status, generationLimit));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [generationLimit, subscription.subscribed]);
 
   async function handleRecheck() {
     setBusy(true);
     setMessage(null);
     const result = await recheck();
+    const status = await fetchGenerationsStatus();
+    if (status) setCredits(creditsFromStatus(status, generationLimit));
     setBusy(false);
-    setMessage(result.ok ? "Subscription status updated" : result.message || "Recheck failed");
+    if (!result.ok) setMessage(result.message || "Recheck failed");
   }
 
-  async function handleRevoke(deviceId: string) {
+  async function handleRevoke(deviceIds: string[]) {
     setBusy(true);
     setMessage(null);
-    const result = await revoke(deviceId);
+    let lastError: string | null = null;
+    for (const id of deviceIds) {
+      if (!id) continue;
+      const result = await revoke(id);
+      if (!result.ok) lastError = result.message || "Revoke failed";
+    }
     setBusy(false);
-    if (!result.ok) setMessage(result.message || "Revoke failed");
+    if (lastError) setMessage(lastError);
   }
 
   async function handleSwitch(id: string) {
@@ -114,275 +253,273 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
   }
 
   const renewLabel = formatDate(subscription.renews_at);
+  const planName = subscription.error
+    ? "Unavailable"
+    : subscription.subscribed
+      ? subscription.plan || "Editor"
+      : "Free";
+  const planStatus = subscription.error
+    ? "Error"
+    : subscription.subscribed
+      ? "Active"
+      : isFreeUser
+        ? "Free"
+        : "Inactive";
+  const displayName = auth.name || auth.email || "Spunkram user";
+  const isCancelled = (subscription.status || "").toLowerCase().includes("cancel");
+  const monthlyLeft = credits?.monthlyLeft ?? generationLimit;
+  const extraLeft = credits?.extraLeft ?? 0;
+  const usedCount = credits?.used ?? 0;
+  const monthlyPct =
+    generationLimit > 0 ? Math.min(100, Math.round((monthlyLeft / generationLimit) * 100)) : 0;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-2 border-b border-white/5 px-2.5 py-2">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-        >
-          <ArrowLeft className="size-3.5" />
-          Back
-        </button>
-        <h2 className="text-xs font-semibold text-foreground">Account</h2>
-      </div>
+    <div className="account-spunkram">
+      <div className="account-spunkram__mesh" />
+      <div className="account-spunkram__grid" />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
-        {message && (
-          <div className="mb-3 rounded-lg border border-white/10 bg-secondary/50 px-2.5 py-2 text-[11px] text-muted-foreground">
-            {message}
-          </div>
-        )}
-
-        {loginBusy && loginCode && (
-          <div className="mb-3 rounded-xl border border-primary/30 bg-card/60 px-3 py-3 text-center">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Confirm this code in the browser
-            </p>
-            <p className="mt-1 font-mono text-lg font-semibold tracking-widest text-foreground">
-              {loginCode}
-            </p>
-            <button
-              type="button"
-              onClick={cancelLogin}
-              className="mt-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-
-        <section className="mb-3 rounded-xl border border-white/10 bg-card/60 p-3">
-          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Profile
-          </h3>
-          <div className="flex items-center gap-2">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">
-              {accountInitial({ name: auth.name, email: auth.email || "" })}
-            </div>
-            <div className="min-w-0 flex-1 space-y-1">
-              <p className="truncate text-sm font-medium text-foreground">
-                {auth.name || auth.email || "Spunkram user"}
-              </p>
-              {auth.email && (
-                <p className="truncate text-[11px] text-muted-foreground">{auth.email}</p>
-              )}
-            </div>
-            <button
-              type="button"
-              aria-label="Log out"
-              title="Log out"
-              disabled={busy || loginBusy}
-              onClick={() => void handleLogout()}
-              className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-secondary/70 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
-            >
-              <LogOut className="size-3.5" />
-            </button>
-          </div>
-        </section>
-
-        <section className="mb-3 rounded-xl border border-white/10 bg-card/60 p-3">
-          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Saved accounts
-          </h3>
-          <ul className="mb-2 space-y-1">
-            {otherAccounts.length === 0 ? (
-              <li className="rounded-lg border border-white/5 bg-background/30 px-2.5 py-2 text-[11px] text-muted-foreground">
-                No other accounts saved yet
-              </li>
-            ) : (
-              otherAccounts.map((account) => (
-                <li
-                  key={account.id}
-                  className="flex items-center gap-2 rounded-lg border border-white/5 bg-background/30 px-2.5 py-2"
-                >
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-foreground">
-                    {accountInitial(account)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[11px] font-medium text-foreground">
-                      {account.name || account.email}
-                    </div>
-                    <div className="truncate text-[9px] text-muted-foreground">{account.email}</div>
-                  </div>
+      <div className="account-spunkram__body">
+        <div className="account-spunkram__scroll">
+          <div className="account-spunkram__stack">
+            <section className="account-spunkram__card account-spunkram__card--profile">
+              <Sheen />
+              <div className="account-spunkram__inner account-spunkram__profile">
+                <div className="account-spunkram__avatar">
+                  {accountInitial({ name: auth.name, email: auth.email || "" })}
+                </div>
+                <div className="account-spunkram__profile-copy">
+                  <h2 className="account-spunkram__name">{displayName}</h2>
+                  {auth.email && <p className="account-spunkram__email">{auth.email}</p>}
+                </div>
+                <div className="account-spunkram__profile-actions">
                   <button
                     type="button"
-                    disabled={busy || loginBusy}
-                    onClick={() => void handleSwitch(account.id)}
-                    className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 disabled:opacity-50"
+                    className="account-btn account-btn--ghost account-btn--circle"
+                    title="Refresh status"
+                    aria-label="Refresh subscription"
+                    disabled={busy}
+                    onClick={() => void handleRecheck()}
                   >
-                    Switch
+                    {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
                   </button>
                   <button
                     type="button"
+                    className="account-btn account-btn--ghost account-btn--circle"
+                    title="Sign out"
+                    aria-label="Sign out"
                     disabled={busy || loginBusy}
-                    aria-label={`Remove ${account.email}`}
-                    title="Remove"
-                    onClick={() => void handleRemove(account.id)}
-                    className="flex size-6 items-center justify-center rounded-full border border-white/10 text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive disabled:opacity-50"
+                    onClick={() => void handleLogout()}
                   >
-                    <Trash2 className="size-3" />
+                    <LogOut className="size-3.5" />
                   </button>
-                </li>
-              ))
+                </div>
+              </div>
+            </section>
+
+            {message && <p className="account-spunkram__msg">{message}</p>}
+
+            {loginBusy && loginCode && (
+              <section className="account-spunkram__card account-spunkram__card--compact">
+                <Sheen />
+                <div className="account-spunkram__inner account-spunkram__inner--center">
+                  <Kicker>Confirm in browser</Kicker>
+                  <p className="account-spunkram__code">{loginCode}</p>
+                  <button type="button" className="account-btn account-btn--ghost account-btn--tiny" onClick={cancelLogin}>
+                    Cancel
+                  </button>
+                </div>
+              </section>
             )}
-          </ul>
-          <button
-            type="button"
-            disabled={busy || loginBusy}
-            onClick={() => void handleAddAccount()}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-background/40 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 disabled:opacity-50"
-          >
-            {loginBusy ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Plus className="size-3.5" />
-            )}
-            Add account
-            <ExternalLink className="size-3 opacity-70" />
-          </button>
-        </section>
 
-        <section className="mb-3 rounded-xl border border-white/10 bg-card/60 p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Spunkram subscription
-            </h3>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void handleRecheck()}
-              className="flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-            >
-              {busy ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <RefreshCw className="size-3" />
-              )}
-              Refresh
-            </button>
-          </div>
-
-          {subscription.error ? (
-            <p className="text-xs font-medium text-destructive">{subscription.error}</p>
-          ) : subscription.subscribed ? (
-            <div className="space-y-1.5">
-              <p className="flex items-center gap-1.5 text-xs text-foreground">
-                <CheckCircle2 className="size-3.5 text-emerald-400" />
-                <strong>{subscription.plan || "Pro"}</strong>
-                <span className="text-muted-foreground">· active</span>
-              </p>
-              {renewLabel && (
-                <p className="text-[11px] text-muted-foreground">
-                  Renews {renewLabel}
-                </p>
-              )}
-              <p className="text-[11px] text-muted-foreground">
-                {generationLimit} AI generations / month
-              </p>
-              <button
-                type="button"
-                onClick={openMotionflowManageSubscription}
-                className="mt-1 flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-              >
-                Manage subscription
-                <ExternalLink className="size-3" />
-              </button>
-            </div>
-          ) : isFreeUser ? (
-            <div className="space-y-2">
-              <p className="flex items-center gap-1.5 text-xs text-foreground">
-                <strong>Free plan</strong>
-                <span className="text-muted-foreground">· Spunkram</span>
-              </p>
-              <button
-                type="button"
-                onClick={openMotionflowSubscribe}
-                className={cn(
-                  "flex w-full items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium",
-                  ACCENT_PILL,
-                )}
-              >
-                Subscribe to Spunkram from $9.9/mo
-                <ExternalLink className="size-3" />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">No active subscription</p>
-              <p className="text-[11px] text-muted-foreground">
-                {generationLimit} AI generations (upgrade for full monthly quota)
-              </p>
-              <button
-                type="button"
-                onClick={openMotionflowSubscribe}
-                className={cn(
-                  "flex w-full items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium",
-                  ACCENT_PILL,
-                )}
-              >
-                Subscribe from $9.9/mo
-                <ExternalLink className="size-3" />
-              </button>
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-xl border border-white/10 bg-card/60 p-3">
-          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Connected devices
-          </h3>
-          <ul className="max-h-56 space-y-1.5 overflow-y-auto">
-            {subscription.devices.length === 0 ? (
-              <li className="rounded-lg border border-white/5 bg-background/30 px-2.5 py-2 text-center text-[11px] text-muted-foreground">
-                No devices listed
-              </li>
-            ) : (
-              subscription.devices.map((device) => {
-                const fp = parseDeviceFingerprint(device.user_fingerprint || "");
-                const isCurrent =
-                  device.current || (fp.mac && fp.mac === currentMac);
-                const osHint = (fp.os || "").toLowerCase().includes("win")
-                  ? "Win"
-                  : fp.os
-                    ? "Mac"
-                    : "Device";
-                return (
-                  <li
-                    key={device.id || `${device.ip}-${device.user_fingerprint}`}
-                    className="flex items-center gap-2 rounded-lg border border-white/5 bg-background/30 px-2.5 py-2"
-                  >
-                    <Monitor className="size-3.5 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[11px] font-medium text-foreground">
-                        {device.name || fp.user || "Device"} · {osHint}
-                      </div>
-                      <div className="truncate text-[9px] text-muted-foreground">
-                        {(fp.mac || "—") + " · " + (device.ip || "—")}
-                      </div>
-                    </div>
-                    {isCurrent ? (
-                      <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[9px] font-semibold text-primary">
-                        Current
+            <div className="account-spunkram__pair">
+              <section className="account-spunkram__card account-spunkram__card--tile">
+                <Sheen />
+                <div className="account-spunkram__inner account-spunkram__tile">
+                  <div className="account-spunkram__tile-head">
+                    <Kicker>Plan</Kicker>
+                    {subscription.subscribed ? (
+                      <span
+                        className={
+                          isCancelled
+                            ? "account-spunkram__badge account-spunkram__badge--amber"
+                            : "account-spunkram__badge"
+                        }
+                      >
+                        <Check className="size-3" strokeWidth={3} />
+                        {isCancelled ? "Cancelled" : "Active"}
                       </span>
-                    ) : (
+                    ) : null}
+                  </div>
+                  <div className="account-spunkram__tile-foot">
+                    <p className="account-spunkram__tile-title">{planName}</p>
+                    {subscription.error ? (
+                      <p className="account-spunkram__sub">{subscription.error}</p>
+                    ) : renewLabel ? (
+                      <p className="account-spunkram__sub">until {renewLabel}</p>
+                    ) : planStatus !== "Active" ? (
+                      <p className="account-spunkram__sub">{planStatus}</p>
+                    ) : null}
+                  </div>
+                </div>
+              </section>
+
+              <section className="account-spunkram__card account-spunkram__card--tile">
+                <Sheen />
+                <div className="account-spunkram__inner account-spunkram__tile">
+                  <div className="account-spunkram__tile-head">
+                    <Kicker>Generations</Kicker>
+                    <button
+                      type="button"
+                      className="account-btn account-btn--primary account-btn--tiny"
+                      onClick={openMotionflowSubscribe}
+                    >
+                      <Plus className="size-3" strokeWidth={2.5} />
+                      Add extra
+                    </button>
+                  </div>
+                  <div>
+                    <p className="account-spunkram__price">{monthlyLeft + extraLeft}</p>
+                    <p className="account-spunkram__sub">
+                      {monthlyLeft}/{generationLimit} monthly
+                      {extraLeft > 0 ? ` · ${extraLeft} extra` : ""}
+                    </p>
+                    <div className="account-spunkram__track">
+                      <div className="account-spunkram__fill" style={{ width: `${monthlyPct}%` }} />
+                    </div>
+                    <div className="account-spunkram__usage">
+                      <span>
+                        {usedCount} used of {generationLimit} monthly
+                        {extraLeft > 0 ? ` · ${extraLeft} extra left` : ""}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            {!subscription.subscribed && (
+              <button type="button" className="account-btn account-btn--primary account-btn--block" onClick={openMotionflowSubscribe}>
+                Subscribe from $9.9/mo
+                <ArrowUpRight className="size-3.5" />
+              </button>
+            )}
+
+            <section className="account-spunkram__card account-spunkram__card--compact">
+              <Sheen />
+              <div className="account-spunkram__inner">
+                <div className="account-spunkram__tile-head">
+                  <Kicker>Accounts</Kicker>
+                  <button
+                    type="button"
+                    className="account-btn account-btn--ghost account-btn--tiny"
+                    disabled={busy || loginBusy}
+                    onClick={() => void handleAddAccount()}
+                  >
+                    {loginBusy ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
+                    Add
+                  </button>
+                </div>
+                {otherAccounts.length === 0 ? (
+                  <p className="account-spunkram__empty">No other accounts saved</p>
+                ) : (
+                  otherAccounts.map((account) => (
+                    <div key={account.id} className="account-spunkram__account">
+                      <span className="account-spunkram__mini">{accountInitial(account)}</span>
+                      <div className="account-spunkram__grow">
+                        <p className="account-spunkram__device-name">{account.name || account.email}</p>
+                        <p className="account-spunkram__device-meta">{account.email}</p>
+                      </div>
                       <button
                         type="button"
-                        disabled={busy}
-                        onClick={() => void handleRevoke(device.id)}
-                        className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
+                        className="account-btn account-btn--ghost account-btn--tiny"
+                        disabled={busy || loginBusy}
+                        onClick={() => void handleSwitch(account.id)}
                       >
-                        Revoke
+                        Switch
                       </button>
-                    )}
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        </section>
+                      <button
+                        type="button"
+                        className="account-btn account-btn--ghost account-btn--tiny account-btn--danger"
+                        disabled={busy || loginBusy}
+                        onClick={() => void handleRemove(account.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className="account-spunkram__card account-spunkram__card--compact">
+              <Sheen />
+              <div className="account-spunkram__inner">
+                <Kicker>Sessions</Kicker>
+                {sessionDevices.length === 0 ? (
+                  <p className="account-spunkram__empty">No devices listed</p>
+                ) : (
+                  sessionDevices.map((device) => {
+                    const fp = parseDeviceFingerprint(device.user_fingerprint || "");
+                    const isCurrent = device.current || (fp.mac && fp.mac === currentMac);
+                    const osHint = (fp.os || "").toLowerCase().includes("win")
+                      ? "Windows"
+                      : fp.os
+                        ? "macOS"
+                        : sys.os || "Device";
+                    return (
+                      <div
+                        key={device.revokeIds.join("-") || device.id || `${device.ip}-${device.user_fingerprint}`}
+                        className="account-spunkram__device"
+                      >
+                        <div className="account-spunkram__grow">
+                          <p className="account-spunkram__device-name">
+                            {device.name || fp.user || "Device"}
+                            <span className="account-spunkram__os">{osHint}</span>
+                          </p>
+                          <p className="account-spunkram__device-meta">
+                            {(fp.mac || "—") + " · " + (device.ip || "—")}
+                          </p>
+                        </div>
+                        {isCurrent ? (
+                          <span className="account-spunkram__current">This device</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="account-btn account-btn--ghost account-btn--tiny account-btn--danger"
+                            disabled={busy}
+                            onClick={() => void handleRevoke(device.revokeIds)}
+                          >
+                            Revoke
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+
+            <section className="account-spunkram__card account-spunkram__card--compact">
+              <Sheen />
+              <div className="account-spunkram__inner">
+                <div className="account-spunkram__tile-head">
+                  <p className="account-spunkram__tile-title">Need any help?</p>
+                  <button
+                    type="button"
+                    className="account-btn account-btn--ghost account-btn--tiny"
+                    onClick={openMotionflowContact}
+                  >
+                    Contact
+                    <ArrowUpRight className="size-3.5" />
+                  </button>
+                </div>
+                <p className="account-spunkram__sub">
+                  If you have a question or run into an issue, get in touch — we’ll help you resolve it.
+                </p>
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -33,6 +33,7 @@ export {
   revokeMotionflowDevice,
   openMotionflowSubscribe,
   openMotionflowManageSubscription,
+  openMotionflowContact,
   normalizeMePayload,
   setSubscriptionUrls,
   type MotionflowUser,

@@ -361,7 +361,7 @@ function HistoryItemCard({
   }, [item.id, item.audioUrl, item.fileName, item.localPath]);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-card/60 p-3 ring-1 ring-inset ring-white/5">
+    <div className="glass-card rounded-2xl p-3">
       <p className="mb-1 line-clamp-2 text-[11px] text-foreground/90">{snippet}</p>
       <p className="mb-2 text-[10px] text-muted-foreground">
         {item.voiceName || "Voice"}

@@ -17,7 +17,7 @@ export const App = () => {
     (!didInitialLoad || loading || media.length === 0) && page === 1 && !error;
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
+    <div className="flex h-full w-full flex-col overflow-hidden text-foreground">
       <Filters />
       <ProgressBar />
       {error && media.length === 0 ? (

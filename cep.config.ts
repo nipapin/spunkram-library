@@ -3,10 +3,27 @@ import { version } from "./package.json";
 
 /**
  * Extension identity:
- * com.spunkramlibrary.cep / Spunkram Library
+ * - `npm run zxp` / `zip` / `release` → prod: com.spunkramlibrary.cep
+ * - `npm run zxp:dev` / local symlink / watch → dev: com.spunkramlibrarydev.cep
+ *
+ * IMPORTANT: use exact `process.env.NAME` member expressions (not dynamic
+ * `process.env[name]`). Vite `define` + Rollup `replace` inline them at build
+ * time so ExtendScript / CEP never see bare `process` (ReferenceError).
+ *
+ * Prod ZXP is already installed at com.spunkramlibrary.cep — local `npm run build`
+ * must keep the Dev id so it does not fight that folder.
  */
-const id = "com.spunkramlibrary.cep";
-const displayName = "Spunkram Library";
+const flavor = (process.env.SPUNKRAM_EXT_FLAVOR || "").toLowerCase();
+const isPackage =
+  process.env.ZXP_PACKAGE === "true" || process.env.ZIP_PACKAGE === "true";
+const isDevExt =
+  flavor === "dev" || (flavor !== "prod" && !isPackage);
+
+const id = isDevExt
+  ? "com.spunkramlibrarydev.cep"
+  : "com.spunkramlibrary.cep";
+
+const displayName = isDevExt ? "Spunkram Library Dev" : "Spunkram Library";
 
 const config: CEP_Config = {
   version,

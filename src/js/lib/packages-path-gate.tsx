@@ -17,8 +17,7 @@ import { selectFolder } from "@/lib/utils/bolt";
 import { hasConfiguredPackagesInstallPath } from "@/lib/utils/pack-install";
 import { cn } from "@/lib/utils";
 
-const ACCENT_PILL =
-  "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
+const ACCENT_PILL = "pill-brand";
 
 type PackagesPathGateValue = {
   /** Resolves true once a packages path is configured (existing or newly chosen). */

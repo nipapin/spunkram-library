@@ -29,8 +29,7 @@ import { applyExtensionUpdate } from "@/utils/extension-update";
 import * as panelStore from "@/lib/userdata-store";
 import { clearAllActivePackStorageKeys } from "@/lib/utils/pack-host";
 
-const ACCENT_PILL =
-  "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
+const ACCENT_PILL = "pill-brand";
 
 function ToggleRow({
   label,
@@ -110,7 +109,7 @@ function ConfirmDialog({
 }) {
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-xs rounded-xl border border-white/10 bg-card p-4 shadow-2xl">
+      <div className="w-full max-w-xs glass-card rounded-[20px] p-4">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         <p className="mt-1 text-[11px] text-muted-foreground">{body}</p>
         <div className="mt-3 flex gap-2">
@@ -279,21 +278,21 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-2 border-b border-white/5 px-2.5 py-2">
+      <div className="mx-2.5 mt-2 flex items-center gap-2 rounded-2xl px-2.5 py-1.5 glass-bar">
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+          className="flex items-center gap-1 rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-[rgb(14,12,26)]"
         >
           <ArrowLeft className="size-3.5" />
           Back
         </button>
-        <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+        <div className="flex items-center gap-1.5 text-xs font-semibold tracking-tight text-foreground">
           <Settings2 className="size-3.5 text-primary" />
           Settings
         </div>
         <span
-          className="ml-auto rounded-full border border-white/10 bg-card/70 px-2 py-0.5 text-[10px] text-muted-foreground"
+          className="ml-auto rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 px-2 py-0.5 text-[10px] text-muted-foreground"
           title="Revision"
         >
           {EXTENSION_VERSION}
@@ -301,7 +300,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
-        <section className="mb-3 rounded-xl border border-white/10 bg-card/60 p-3">
+        <section className="mb-3 glass-card rounded-[20px] p-3">
           <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             File System
           </h3>
@@ -342,7 +341,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
           </div>
         </section>
 
-        <section className="mb-3 rounded-xl border border-white/10 bg-card/60 p-3">
+        <section className="mb-3 glass-card rounded-[20px] p-3">
           <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             API Server
           </h3>
@@ -368,7 +367,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
           </label>
         </section>
 
-        <section className="mb-3 rounded-xl border border-white/10 bg-card/60 p-3">
+        <section className="mb-3 glass-card rounded-[20px] p-3">
           <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Render Options
           </h3>
@@ -381,7 +380,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
         </section>
 
         {isAdmin && (
-          <section className="mb-3 rounded-xl border border-primary/25 bg-card/60 p-3 ring-1 ring-inset ring-primary/10">
+          <section className="mb-3 glass-card rounded-[20px] p-3 ring-1 ring-inset ring-primary/20">
             <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Admin · Builds
             </h3>
@@ -466,7 +465,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
           </section>
         )}
 
-        <section className="rounded-xl border border-white/10 bg-card/60 p-3">
+        <section className="glass-card rounded-[20px] p-3">
           <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Restoring An Extension
           </h3>

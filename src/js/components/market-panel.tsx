@@ -18,8 +18,7 @@ import * as panelStore from "@/lib/userdata-store";
 import { useDownloadManager, type DownloadJob } from "@/lib/download-manager-context";
 import { usePackagesPathGate } from "@/lib/packages-path-gate";
 
-const ACCENT_PILL =
-  "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
+const ACCENT_PILL = "pill-brand";
 
 function hostPrimaryType(): PackHostId | null {
   return currentPackHost();
@@ -226,7 +225,7 @@ function MarketCard({
   return (
     <article
       className={cn(
-        "group overflow-hidden rounded-xl border border-white/10 bg-card/60 transition-colors hover:border-primary/40",
+        "group glass-card overflow-hidden rounded-[16px] transition-colors hover:border-[#7c4dff]/40",
         active && "ring-1 ring-primary/50",
         installed && !active && "ring-1 ring-primary/20",
       )}
@@ -257,11 +256,7 @@ function MarketCard({
             v{item.version}
           </div>
         )}
-        {active ? (
-          <div className="absolute bottom-1.5 left-1.5 rounded-md bg-emerald-500/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
-            active
-          </div>
-        ) : installed ? (
+        {installed && !active ? (
           <div className="absolute bottom-1.5 left-1.5 rounded-md bg-primary/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary-foreground">
             installed
           </div>
@@ -326,7 +321,11 @@ function MarketCard({
             onClick={() => runAction(action.type)}
             className={cn(
               "flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-[10px] font-semibold transition-colors",
-              action.disabled ? "cursor-not-allowed border border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : ACCENT_PILL,
+              action.type === "active"
+                ? "cursor-not-allowed border border-white/10 bg-secondary/70 text-muted-foreground"
+                : action.disabled
+                  ? "cursor-not-allowed border border-white/10 bg-secondary/50 text-muted-foreground"
+                  : ACCENT_PILL,
             )}
           >
             {jobBusy && (action.type === "install" || action.type === "update")
@@ -505,11 +504,11 @@ export function MarketPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b border-white/5 px-2.5 py-2">
+      <div className="mx-2.5 mt-2 flex flex-wrap items-center gap-2 rounded-2xl px-2.5 py-1.5 glass-bar">
         <button
           type="button"
           onClick={onBack}
-          className="mr-auto flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+          className="mr-auto flex items-center gap-1 rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-[rgb(14,12,26)]"
         >
           <ArrowLeft className="size-3.5" />
           Back
@@ -517,7 +516,7 @@ export function MarketPanel({
         <button
           type="button"
           onClick={() => openMotionflowSubscribe()}
-          className="flex items-center justify-center gap-1.5 rounded-full border border-white/10 bg-card/40 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+          className="flex items-center justify-center gap-1.5 rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 px-2.5 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:border-[#7c4dff]/40"
         >
           <ExternalLink className="size-3" />
           Web store
@@ -525,7 +524,7 @@ export function MarketPanel({
       </div>
 
       {!subscriptionActive && (
-        <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-2 text-[11px] text-foreground">
+        <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-[16px] border border-[#7c4dff]/30 bg-[#7c4dff]/10 px-2.5 py-2 text-[11px] text-foreground">
           <span className="flex-1">
             Packs are available free with a Spunkram subscription from <strong>$9.9/month</strong>
           </span>

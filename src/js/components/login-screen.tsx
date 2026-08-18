@@ -6,8 +6,7 @@ import { FogBackground } from "@/components/fog-background";
 import logo from "@/assets/logo.png";
 import type { MotionflowAccountSession } from "@/lib/api/preferences";
 
-const ACCENT_PILL =
-  "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
+const ACCENT_PILL = "pill-brand";
 
 function accountInitial(account: MotionflowAccountSession): string {
   const source = (account.name || account.email || "?").trim();
@@ -64,7 +63,7 @@ export function LoginScreen() {
             <img src={logo} alt="Spunkram" width={48} height={48} className="size-11 object-contain" />
           </div>
           <div>
-            <h1 className="text-base font-semibold drop-shadow-[0_1px_8px_rgba(0,0,0,0.65)]">
+            <h1 className="font-headline text-lg font-semibold tracking-tight drop-shadow-[0_1px_8px_rgba(0,0,0,0.65)]">
               {showChooser ? "Choose an account" : "Welcome to Spunkram"}
             </h1>
             <p className="mt-1 max-w-xs text-[11px] text-muted-foreground drop-shadow-[0_1px_6px_rgba(0,0,0,0.55)]">
