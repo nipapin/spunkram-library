@@ -26,12 +26,53 @@ export function PanelHeader({
   const { signedIn, subscription } = useAuth();
   const { unreadMarketCount, clearUnread } = useNotifications();
   const { activeCount } = useDownloadManager();
+  const headerRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [showLabels, setShowLabels] = useState(false);
   const [thumb, setThumb] = useState({ left: 0, width: 0, visible: false });
   const [animateThumb, setAnimateThumb] = useState(false);
 
   const navIndex = NAV_ITEMS.findIndex((item) => item.id === active);
+
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    const update = () => {
+      if (header.dataset.phMeasuring === "1") return;
+      header.dataset.phMeasuring = "1";
+      const keepLabels = header.classList.contains("panel-header--labels");
+      header.classList.add("panel-header--measure-labels");
+      header.classList.remove("panel-header--labels");
+
+      const styles = window.getComputedStyle(header);
+      const pad =
+        (parseFloat(styles.paddingLeft) || 0) + (parseFloat(styles.paddingRight) || 0);
+      const gap = parseFloat(styles.gap) || 8;
+      const kids = Array.from(header.children) as HTMLElement[];
+      let needed = pad;
+      kids.forEach((kid, i) => {
+        if (i) needed += gap;
+        needed += kid.scrollWidth;
+      });
+      const overflow = needed - header.clientWidth;
+
+      header.classList.remove("panel-header--measure-labels");
+      if (keepLabels) header.classList.add("panel-header--labels");
+      header.dataset.phMeasuring = "0";
+      setShowLabels((prev) => (prev ? overflow <= 2 : overflow <= 0));
+    };
+
+    update();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    ro?.observe(header);
+    window.addEventListener("resize", update);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const nav = navRef.current;
@@ -60,10 +101,13 @@ export function PanelHeader({
       ro?.disconnect();
       window.removeEventListener("resize", place);
     };
-  }, [navIndex]);
+  }, [navIndex, showLabels]);
 
   return (
-    <header className="panel-header">
+    <header
+      ref={headerRef}
+      className={showLabels ? "panel-header panel-header--labels" : "panel-header"}
+    >
       <button
         type="button"
         className="panel-header__logo"
@@ -99,6 +143,7 @@ export function PanelHeader({
               }}
               onClick={() => onSelect(item.id)}
               aria-label={item.label}
+              title={item.label}
               aria-pressed={isActive}
               className={isActive ? "panel-header__tab panel-header__tab--active" : "panel-header__tab"}
             >
@@ -122,6 +167,7 @@ export function PanelHeader({
         }}
         aria-pressed={active === "market"}
         aria-label="Market"
+        title="Market"
       >
         {activeCount > 0 ? (
           <Loader2 className="size-3.5 animate-spin" strokeWidth={2.25} />
