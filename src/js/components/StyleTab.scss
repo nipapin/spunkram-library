@@ -1,6 +1,8 @@
 .style-tab {
   flex: 1;
-  padding: 12px;
+  min-height: 0;
+  // Match `.tabs` width: panel already has horizontal margin
+  padding: 12px 0;
   display: flex;
   flex-direction: column;
   gap: 12px;

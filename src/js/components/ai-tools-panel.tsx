@@ -62,7 +62,7 @@ export function AiToolsPanel({
       activeTool === "captions"
         ? "Captions"
         : activeTool === "chapters"
-          ? "Chapter"
+          ? "Chapters"
           : "Voiceover";
     return (
       <div className="ai-tools-scope tool-shell">

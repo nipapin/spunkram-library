@@ -16,7 +16,13 @@ import {
   type StylePreset,
   type StylesSyncStatus,
 } from "../js/styles";
-import { createDefaultValues, defaultsFromDefinition, stylePropsFromValues } from "../js/presets";
+import {
+  createDefaultValues,
+  defaultsFromDefinition,
+  diffStyleProps,
+  stylePropsFromValues,
+  type StylePropPayload,
+} from "../js/presets";
 import type { ControlValues, MogrtDefinition } from "../js/presets";
 import type { GroupingMode } from "../js/utils/transcribe";
 import { csi } from "../js/lib/utils/bolt";
@@ -183,11 +189,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     if (paths?.aep) setAepPath(paths.aep);
   }, []);
 
-  const refreshStyles = useCallback(async () => {
-    setRefreshingStyles(true);
-    setStylesStatus((s) => (s === "ready" ? s : "loading"));
-    try {
-      const result = await syncCaptionStyles();
+  const applySyncResult = useCallback(
+    (result: Awaited<ReturnType<typeof syncCaptionStyles>>) => {
       setPresets(result.presets);
       setDefinitions(result.definitions);
       setSelectedPresetId(result.selectedPresetId);
@@ -197,13 +200,28 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       if (selected) {
         applyPreparedAssets(getLocalStyleAssetPaths(selected.styleId));
       }
+    },
+    [applyPreparedAssets],
+  );
+
+  const refreshStyles = useCallback(async () => {
+    setRefreshingStyles(true);
+    setStylesStatus((s) => (s === "ready" ? s : "loading"));
+    try {
+      // Catalog + local cache first so the grid isn't blocked by mogrt re-downloads.
+      applySyncResult(await syncCaptionStyles({ checkRemoteUpdates: false }));
+      void syncCaptionStyles({ checkRemoteUpdates: true })
+        .then(applySyncResult)
+        .catch(() => {
+          /* grid already shown */
+        });
     } catch (err) {
       setStylesError(err instanceof Error ? err.message : String(err));
       setStylesStatus("error");
     } finally {
       setRefreshingStyles(false);
     }
-  }, [applyPreparedAssets]);
+  }, [applySyncResult]);
 
   const ensureDefinitionLoaded = useCallback(
     async (styleId: string) => {
@@ -286,43 +304,87 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   );
 
   const applyValuesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const applyInFlight = useRef(false);
+  const pendingStyleApply = useRef<{ styleId: string; values: ControlValues; full: boolean } | null>(
+    null,
+  );
+  const lastPushedProps = useRef<{ styleId: string; props: StylePropPayload[] } | null>(null);
 
-  /** Пушим values во все caption-сегменты в хосте (debounce). */
-  const pushStyleValuesToHost = useCallback(
-    (styleId: string, values: ControlValues) => {
+  const flushStyleValuesToHost = useCallback(
+    (styleId: string, values: ControlValues, full: boolean) => {
       const definition = definitions[styleId];
       if (!definition?.clientControls?.length) return;
-      const props = stylePropsFromValues(definition, values);
-      if (!props.length) return;
-      if (applyValuesTimer.current) clearTimeout(applyValuesTimer.current);
-      applyValuesTimer.current = setTimeout(() => {
-        let sequenceId: string | undefined;
-        let compId: number | undefined;
-        try {
-          const raw = panelStore.getItem("aitools-cep-caption-meta");
-          if (raw) {
-            const meta = JSON.parse(raw) as {
-              hostRef?: { sequenceId?: string; compId?: number };
-            };
-            sequenceId = meta.hostRef?.sequenceId;
-            if (typeof meta.hostRef?.compId === "number") {
-              compId = meta.hostRef.compId;
-            }
+      const nextProps = stylePropsFromValues(definition, values);
+      if (!nextProps.length) return;
+
+      const prev = lastPushedProps.current;
+      const props =
+        full || !prev || prev.styleId !== styleId ? nextProps : diffStyleProps(prev.props, nextProps);
+      if (!props.length) {
+        lastPushedProps.current = { styleId, props: nextProps };
+        return;
+      }
+
+      let sequenceId: string | undefined;
+      let compId: number | undefined;
+      let trackIndex: number | undefined;
+      try {
+        const raw = panelStore.getItem("aitools-cep-caption-meta");
+        if (raw) {
+          const meta = JSON.parse(raw) as {
+            hostRef?: { sequenceId?: string; compId?: number; trackIndex?: number };
+          };
+          sequenceId = meta.hostRef?.sequenceId;
+          if (typeof meta.hostRef?.compId === "number") {
+            compId = meta.hostRef.compId;
           }
-        } catch {
-          // ignore
+          if (typeof meta.hostRef?.trackIndex === "number") {
+            trackIndex = meta.hostRef.trackIndex;
+          }
         }
-        const hostApi = MotionFlow.host === "AE" ? MotionFlow.AE : MotionFlow.PPRO;
-        // AE: caption lives on the timeline comp (same as hostRef.compId).
-        // Premiere uses active sequence / trackIndex.
-        hostApi
-          .applyCaptionStyleValues({ props, sequenceId, compId })
-          .catch((err) => {
-            console.warn("[Styles] applyCaptionStyleValues failed", err);
-          });
-      }, 120);
+      } catch {
+        // ignore
+      }
+
+      applyInFlight.current = true;
+      lastPushedProps.current = { styleId, props: nextProps };
+      const hostApi = MotionFlow.host === "AE" ? MotionFlow.AE : MotionFlow.PPRO;
+      hostApi
+        .applyCaptionStyleValues({ props, sequenceId, compId, trackIndex })
+        .catch((err) => {
+          console.warn("[Styles] applyCaptionStyleValues failed", err);
+        })
+        .finally(() => {
+          applyInFlight.current = false;
+          const pending = pendingStyleApply.current;
+          if (!pending) return;
+          pendingStyleApply.current = null;
+          flushStyleValuesToHost(pending.styleId, pending.values, pending.full);
+        });
     },
     [definitions],
+  );
+
+  /** Пушим values в caption-клипы: debounce + один in-flight evalScript, только дельта. */
+  const pushStyleValuesToHost = useCallback(
+    (styleId: string, values: ControlValues, opts?: { full?: boolean }) => {
+      const definition = definitions[styleId];
+      if (!definition?.clientControls?.length) return;
+      if (applyValuesTimer.current) clearTimeout(applyValuesTimer.current);
+      applyValuesTimer.current = setTimeout(() => {
+        if (applyInFlight.current) {
+          const prev = pendingStyleApply.current;
+          pendingStyleApply.current = {
+            styleId,
+            values,
+            full: !!opts?.full || !!prev?.full,
+          };
+          return;
+        }
+        flushStyleValuesToHost(styleId, values, !!opts?.full);
+      }, 40);
+    },
+    [definitions, flushStyleValuesToHost],
   );
 
   /** Выбор в UI + подгрузка definition для Styles. aep/mogrt — на Transcribe. */
@@ -347,7 +409,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         ? target.values
         : defaultsFromDefinition(definition);
       if (Object.keys(values).length) {
-        pushStyleValuesToHost(target.styleId, values);
+        pushStyleValuesToHost(target.styleId, values, { full: true });
       }
     });
   };

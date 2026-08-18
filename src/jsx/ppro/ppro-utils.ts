@@ -5,6 +5,7 @@ import {
   captionBatchLayerName,
   packedCaptionsDisplayText,
   resolveCaptionChunks,
+  unpackCaptionChunks,
   unpackCaptions,
 } from "../../shared/caption-system";
 
@@ -437,9 +438,8 @@ const jsonStringifyAscii = (value: unknown): string => {
 };
 
 /**
- * One write, same path as Captions_Raw_Data.
- * updateUI=false until the last chunk — each true rebuilds mogrt expressions
- * (Captions_Raw_Data JSON.stringify of the full transcript).
+ * One write, same path as other System text fields.
+ * updateUI=false until the last chunk — each true rebuilds mogrt expressions.
  */
 const applyMogrtTextValue = (
   prop: ComponentParam,
@@ -543,7 +543,7 @@ export const fillFirstMogrtText = (clip: TrackItem, text: string): boolean => {
   return false;
 };
 
-/** Packed captions → System captions_batch_01..15. Never writes Captions_Raw_Data. */
+/** Packed captions → captions_batch_01..15 (Store hidden). Never writes Captions_Raw_Data. */
 export const fillMogrtCaptionChunks = (
   clip: TrackItem,
   data?: string | string[] | null,
@@ -636,7 +636,7 @@ const writeChunkDebug = (data: {
   }
 };
 
-/** System: captions_batch_*, Segment Type, Line Count, Chars Per Line, Composition Height. */
+/** Store/Bridge: captions_batch_*, Segment Type, Line Count, Chars Per Line, Composition Height. */
 export const fillMogrtNumber = (clip: TrackItem, propName: string, n: number): boolean => {
   let mgt: ReturnType<TrackItem["getMGTComponent"]> | null = null;
   try {
@@ -665,6 +665,53 @@ export const fillMogrtNumber = (clip: TrackItem, propName: string, n: number): b
   }
 };
 
+/**
+ * Fit caption MOGRT by height to the sequence.
+ * Motion effect is found by matchName ("AE.ADBE Motion") because displayName depends on host language.
+ * Scale is accessed via parameter index 1 (the 2nd parameter, 0-based index 1).
+ * Sets Scale to (seqHeight / baseHeight) * 100 (where baseHeight defaults to 2048).
+ */
+export const fitCaptionMogrtHeight = (
+  clip: TrackItem,
+  seqHeight: number,
+  baseHeight: number = 2048,
+): boolean => {
+  try {
+    if (!clip || !clip.components || !seqHeight || seqHeight <= 0 || baseHeight <= 0) {
+      return false;
+    }
+    const targetScale = (seqHeight / baseHeight) * 100;
+    const components = clip.components;
+    for (let a = 0; a < components.numItems; a++) {
+      const fx = components[a];
+      if (
+        fx &&
+        (fx.matchName === "AE.ADBE Motion" ||
+          (fx.matchName && fx.matchName.indexOf("Motion") !== -1) ||
+          fx.displayName === "Motion")
+      ) {
+        if (fx.properties && fx.properties.numItems > 1) {
+          const prop = fx.properties[1];
+          if (prop) {
+            prop.setValue(targetScale, true);
+            return true;
+          }
+        }
+        for (let b = 0; b < fx.properties.numItems; b++) {
+          const prop = fx.properties[b];
+          if (prop && (prop.displayName === "Scale" || prop.displayName === "Масштаб")) {
+            prop.setValue(targetScale, true);
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+};
+
 export const fillMogrtSystemProps = (
   clip: TrackItem,
   opts: {
@@ -685,11 +732,12 @@ export const fillMogrtSystemProps = (
   if (opts.charsPerLine != null) fillMogrtNumber(clip, CAPTION_SYSTEM.charsPerLine, opts.charsPerLine);
   if (opts.compositionHeight != null && opts.compositionHeight > 0) {
     fillMogrtNumber(clip, CAPTION_SYSTEM.compositionHeight, opts.compositionHeight);
+    fitCaptionMogrtHeight(clip, opts.compositionHeight, 2048);
   }
   return rawOk;
 };
 
-/** Наш caption-клип: MGT с System captions_batch_01 (или legacy Captions_Raw_Data). */
+/** Caption mogrt: captions_batch_01 (legacy: Captions_Raw_Data). */
 export const isCaptionMogrtClip = (clip: TrackItem): boolean => {
   try {
     const mgt = clip.getMGTComponent();
@@ -723,7 +771,26 @@ const readMogrtTextProp = (
   }
 };
 
-/** Packed captions_batch_01..15 concatenated (not display text). */
+/** Packed captions_batch_01..15 as 15 strings (v4 lookup + batches, or legacy equal-split). */
+export const readMogrtCaptionChunks = (clip: TrackItem): string[] => {
+  const chunks: string[] = [];
+  try {
+    const mgt = clip.getMGTComponent();
+    if (!mgt) return chunks;
+    let sawBatch = false;
+    for (let i = 1; i <= CAPTION_BATCH_COUNT; i++) {
+      const chunk = readMogrtTextProp(mgt, captionBatchLayerName(i));
+      if (chunk != null) sawBatch = true;
+      chunks.push(chunk == null ? "" : chunk);
+    }
+    if (sawBatch) return chunks;
+  } catch (e) {
+    // ignore
+  }
+  return [];
+};
+
+/** Packed captions_batch_01..15 concatenated (legacy). Prefer readMogrtCaptionChunks. */
 export const readMogrtPackedCaptions = (clip: TrackItem): string => {
   try {
     const mgt = clip.getMGTComponent();
@@ -759,7 +826,10 @@ export const readMogrtNumber = (clip: TrackItem, propName: string): number | nul
 export const readMogrtCaptionSegments = (
   clip: TrackItem,
 ): { text: string; timestamp: [number, number] }[] => {
-  const tokens = unpackCaptions(readMogrtPackedCaptions(clip));
+  const chunks = readMogrtCaptionChunks(clip);
+  const tokens = chunks.length
+    ? unpackCaptionChunks(chunks)
+    : unpackCaptions(readMogrtPackedCaptions(clip));
   const out: { text: string; timestamp: [number, number] }[] = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
@@ -780,14 +850,14 @@ export const readMogrtText = (clip: TrackItem): string => {
     const mgt = clip.getMGTComponent();
     if (!mgt) return String(clip.name || "");
     const tryProp = (name: string): string | null => readMogrtTextProp(mgt, name);
-    let packed = "";
+    const chunks: string[] = [];
     let sawBatch = false;
     for (let i = 1; i <= CAPTION_BATCH_COUNT; i++) {
       const chunk = tryProp(captionBatchLayerName(i));
       if (chunk != null) sawBatch = true;
-      packed += chunk == null ? "" : chunk;
+      chunks.push(chunk == null ? "" : chunk);
     }
-    if (sawBatch) return packedCaptionsDisplayText(packed);
+    if (sawBatch) return packedCaptionsDisplayText(chunks);
     const main = tryProp(CAPTION_SYSTEM.rawData);
     if (main != null && String(main).length) {
       try {
@@ -934,7 +1004,13 @@ const setMogrtParamValue = (
   }
 };
 
-export type StylePropPayload = { path: string[]; type: number; value: unknown };
+export type StylePropPayload = {
+  path: string[];
+  type: number;
+  value: unknown;
+  /** 0-based index among non-group params with the same displayName (definition order). */
+  leafIndex?: number;
+};
 
 export type MogrtMatchDebug = {
   prop: string;
@@ -970,8 +1046,8 @@ export const dumpMogrtParams = (clip: TrackItem): { i: number; name: string; raw
  * Применяет style values к MGT-компоненту клипа. Premiere отдаёт параметры
  * mogrt плоским списком display-имён (без структуры групп), поэтому листья с
  * одинаковыми именами (например несколько "Fill" в разных группах) матчим по
- * порядку: props приходят в порядке definition, и относительный порядок
- * одноимённых параметров в mogrt тот же.
+ * leafIndex из definition (N-й не-group параметр с этим именем). Без leafIndex —
+ * fallback: первый unused / preferLast для Spacing>Spacing.
  */
 export const applyMogrtStyleProps = (
   clip: TrackItem,
@@ -991,10 +1067,14 @@ export const applyMogrtStyleProps = (
     // в плоском списке лист всегда идёт после группы — берём последнего
     // кандидата, это спасает и клипы, где uuid-список группы был затёрт
     const preferLast = prop.path.length >= 2 && prop.path[prop.path.length - 2] === name;
+    const targetLeaf =
+      typeof prop.leafIndex === "number" && isFinite(prop.leafIndex) ? Math.floor(prop.leafIndex) : -1;
     let paramIndex = -1;
+    let matchCount = 0;
     for (let i = 0; i < params.numItems; i++) {
-      if (used[i]) continue;
-      if (String(params[i].displayName) !== name) continue;
+      const displayName = String(params[i].displayName);
+      if (displayName !== name) continue;
+      if (MOGRT_SYSTEM_PROP_NAMES[displayName]) continue;
       // группа с тем же именем, что и лист — не трогаем и не помечаем used:
       // она никогда не цель записи
       try {
@@ -1002,6 +1082,15 @@ export const applyMogrtStyleProps = (
       } catch (e) {
         // getValue упал — считаем обычным параметром
       }
+      if (targetLeaf >= 0) {
+        if (matchCount === targetLeaf) {
+          paramIndex = i;
+          break;
+        }
+        matchCount++;
+        continue;
+      }
+      if (used[i]) continue;
       paramIndex = i;
       if (!preferLast) break;
     }
@@ -1272,16 +1361,33 @@ export const fitClipScaleToSeq = (
     const components = clip.components;
     for (let a = 0; a < components.numItems; a++) {
       const fx = components[a];
-      if (fx.displayName !== "Motion") continue;
-      for (let b = 0; b < fx.properties.numItems; b++) {
-        const prop = fx.properties[b];
-        if (prop.displayName !== "Scale") continue;
-        const current = Number(prop.getValue());
-        if (!isFinite(current)) return false;
-        const next =
-          seqAspect >= sourceAspect ? current / divideW : current / divideH;
-        prop.setValue(next, true);
-        return true;
+      if (
+        fx &&
+        (fx.matchName === "AE.ADBE Motion" ||
+          (fx.matchName && fx.matchName.indexOf("Motion") !== -1) ||
+          fx.displayName === "Motion")
+      ) {
+        if (fx.properties && fx.properties.numItems > 1) {
+          const prop = fx.properties[1];
+          const current = Number(prop.getValue());
+          if (isFinite(current)) {
+            const next =
+              seqAspect >= sourceAspect ? current / divideW : current / divideH;
+            prop.setValue(next, true);
+            return true;
+          }
+        }
+        for (let b = 0; b < fx.properties.numItems; b++) {
+          const prop = fx.properties[b];
+          if (prop && (prop.displayName === "Scale" || prop.displayName === "Масштаб")) {
+            const current = Number(prop.getValue());
+            if (!isFinite(current)) return false;
+            const next =
+              seqAspect >= sourceAspect ? current / divideW : current / divideH;
+            prop.setValue(next, true);
+            return true;
+          }
+        }
       }
     }
     return false;

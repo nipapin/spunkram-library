@@ -15,10 +15,28 @@ import {
   type ControlValues,
   type MogrtDefinition,
 } from "../presets";
+import { CEP_WRITTEN_SYSTEM_NAMES } from "../../shared/caption-system";
 import { rangeFillStyle } from "../utils/rangeFillStyle";
 import { ScrubNumber } from "./ScrubNumber";
 import { ColorField } from "./ColorField";
 import "./PresetFields.scss";
+
+const localizedText = (value: ControlValue): string => {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "strDB" in value) {
+    const db = (value as { strDB?: { str?: string }[] }).strDB;
+    return db?.[0]?.str ?? "";
+  }
+  return "";
+};
+
+const withLocalizedText = (previous: ControlValue, text: string): ControlValue => {
+  if (previous && typeof previous === "object" && "strDB" in previous) {
+    const db = (previous as { strDB: { localeString: string; str: string }[] }).strDB;
+    return { strDB: db.map((e, i) => (i === 0 ? { ...e, str: text } : e)) };
+  }
+  return { strDB: [{ localeString: "en_US", str: text }] };
+};
 
 interface PresetFieldsProps {
   value: StylePreset;
@@ -109,7 +127,7 @@ const ControlField = ({
 
   if (control.type === ControlType.Point && isPointValue(raw)) {
     return (
-      <div className="preset-fields__param preset-fields__param--stack">
+      <div className="preset-fields__param preset-fields__param--point">
         <span className="preset-fields__param-label">{label}</span>
         <div className="preset-fields__point">
           {(["x", "y"] as const).map((axis) => (
@@ -157,7 +175,7 @@ const ControlField = ({
     const min = hasRange ? (control.min as number) : control.type === ControlType.Angle ? -360 : 0;
     const max = hasRange ? (control.max as number) : control.type === ControlType.Angle ? 360 : 100;
     const span = Math.max(0.0001, max - min);
-    const step = span <= 10 ? 0.1 : span <= 100 ? 0.5 : 1;
+    const step = span <= 1 ? 0.01 : span <= 10 ? 0.1 : span <= 100 ? 0.5 : 1;
 
     return (
       <div className="field-row preset-fields__slider-row">
@@ -177,7 +195,21 @@ const ControlField = ({
     );
   }
 
-  // Text (type 6) — скрыт (captions_batch_* / Font пишет CEP или отдельный picker)
+  if (control.type === ControlType.Text) {
+    if ((CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(label)) return null;
+    const text = localizedText(raw);
+    return (
+      <div className="preset-fields__param">
+        <span className="preset-fields__param-label">{label}</span>
+        <input
+          className="preset-fields__select"
+          value={text}
+          onChange={(e) => onValue(control.id, withLocalizedText(raw, e.target.value))}
+        />
+      </div>
+    );
+  }
+
   return null;
 };
 
@@ -190,9 +222,8 @@ const renderNodes = (
   nodes.map((node) => {
     if (node.kind === "group") {
       const name = uiName(node.control);
-      const defaultOpen = node.control.groupexpanded ?? depth < 2;
       return (
-        <Collapse key={node.control.id} title={name} depth={depth} defaultOpen={defaultOpen}>
+        <Collapse key={node.control.id} title={name} depth={depth} defaultOpen>
           {renderNodes(node.children, depth + 1, values, onValue)}
         </Collapse>
       );

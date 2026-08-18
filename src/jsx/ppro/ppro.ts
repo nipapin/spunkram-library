@@ -49,17 +49,15 @@ import { CAPTION_SYSTEM } from "../../shared/caption-system";
 import {
   applyMogrtStyleProps,
   collectCaptionClips,
-  dumpMogrtParams,
   fillMogrtCaptionChunks,
   fillMogrtSystemProps,
   findCaptionTrackIndex,
   findFreeVideoTrack,
+  fitCaptionMogrtHeight,
   getNextCaptionsName,
-  isCaptionMogrtClip,
   readMogrtCaptionSegments,
   readMogrtNumber,
   secondsToTime,
-  type MogrtMatchDebug,
 } from "./ppro-utils";
 
 /** @deprecated Bolt sample — not part of MotionFlow SDK surface */
@@ -392,7 +390,7 @@ interface CaptionLayer {
   charsPerLine?: number;
 }
 
-/** Scribe `words[]` (word + spacing) — packed into System captions_batch_01..15. */
+/** Scribe `words[]` (word + spacing) — packed v4 into captions_batch_01..15. */
 const captionsRawDataJson = (caption: CaptionLayer): string => {
   if (caption.captionsRawData) return caption.captionsRawData;
   const words = caption.words && caption.words.length
@@ -410,7 +408,7 @@ const captionsRawDataJson = (caption: CaptionLayer): string => {
     });
     if (i < words.length - 1) {
       tokens.push({
-        text: " ",
+        text: "",
         start: w.timestamp[1],
         end: words[i + 1].timestamp[0],
         type: "spacing",
@@ -471,6 +469,7 @@ export const createCaptions = (captions: CaptionLayer[]) => {
       charsPerLine: caption.charsPerLine,
       compositionHeight: seq.frameSizeVertical,
     });
+    fitCaptionMogrtHeight(trackItem, seq.frameSizeVertical, 2048);
 
     return {
       created: 1,
@@ -631,6 +630,7 @@ export const resegmentCaptions = (payload: {
       charsPerLine: caption.charsPerLine,
       compositionHeight: seq.frameSizeVertical,
     });
+    fitCaptionMogrtHeight(clips[0], seq.frameSizeVertical, 2048);
     for (let i = 1; i < clips.length; i++) {
       try {
         clips[i].remove(false, false);
@@ -871,61 +871,27 @@ export const applyStyleProject = (payload: ApplyStyleProjectPayload) => {
 
 /**
  * Apply style values to caption clips in the active sequence.
- * Caption mogrts are identified by System captions_batch_01 (legacy: Captions_Raw_Data).
+ * Caption mogrts are identified by captions_batch_01 (legacy: Captions_Raw_Data).
  * compId is AE-only and ignored here.
  */
 export const applyCaptionStyleValues = (payload: {
   compId?: number;
   sequenceId?: string;
+  trackIndex?: number;
   props: { path: string[]; type: number; value: unknown }[];
 }) => {
   try {
     const seq = resolveCaptionSequence(payload && payload.sequenceId);
     if (!seq || !payload || !payload.props || !payload.props.length) return { updated: 0 };
+    const trackIndex = findCaptionTrackIndex(seq, payload.trackIndex);
+    if (trackIndex < 0) return { updated: 0 };
+    const clips = collectCaptionClips(seq.videoTracks[trackIndex]);
     let updated = 0;
-    // РґРёР°РіРЅРѕСЃС‚РёРєР° РїРµСЂРІРѕРіРѕ caption-РєР»РёРїР°: РїР°СЂР°РјРµС‚СЂС‹ mogrt + СЂРµР·СѓР»СЊС‚Р°С‚ РјР°С‚С‡РёРЅРіР° вЂ”
-    // РїРёС€РµС‚СЃСЏ РІ %TEMP%/captions_cep/style_apply_debug.json РЅР° РєР°Р¶РґС‹Р№ РІС‹Р·РѕРІ
-    let debugParams: { i: number; name: string; raw: string }[] | null = null;
-    let debugMatches: MogrtMatchDebug[] | null = null;
-    for (let t = 0; t < seq.videoTracks.numTracks; t++) {
-      const track = seq.videoTracks[t];
-      for (let c = 0; c < track.clips.numItems; c++) {
-        const clip = track.clips[c];
-        if (!isCaptionMogrtClip(clip)) continue;
-        const collect = debugMatches === null;
-        const matches: MogrtMatchDebug[] = [];
-        if (applyMogrtStyleProps(clip, payload.props, collect ? matches : undefined) > 0) updated++;
-        if (collect) {
-          debugMatches = matches;
-          debugParams = dumpMogrtParams(clip);
-        }
-      }
+    for (let c = 0; c < clips.length; c++) {
+      if (applyMogrtStyleProps(clips[c], payload.props) > 0) updated++;
     }
-    writeStyleDebug({
-      // РјР°СЂРєРµСЂ РІРµСЂСЃРёРё jsx-РєРѕРґР° вЂ” РїРѕ РЅРµРјСѓ РІРёРґРЅРѕ, С‡С‚Рѕ С…РѕСЃС‚ РїРѕРґС…РІР°С‚РёР» СЃРІРµР¶РёР№ Р±РёР»Рґ
-      debugVersion: 4,
-      updated,
-      props: payload.props,
-      params: debugParams,
-      matches: debugMatches,
-    });
     return { updated };
   } catch (e: any) {
     return { updated: 0, error: String(e && e.message ? e.message : e) };
-  }
-};
-
-// РґР°РјРї РїРѕСЃР»РµРґРЅРµРіРѕ РїСЂРёРјРµРЅРµРЅРёСЏ СЃС‚РёР»РµР№ вЂ” С‡РёС‚Р°РµС‚СЃСЏ СЃРЅР°СЂСѓР¶Рё РґР»СЏ РѕС‚Р»Р°РґРєРё РјР°С‚С‡РёРЅРіР°
-const writeStyleDebug = (data: unknown) => {
-  try {
-    const dir = new Folder(Folder.temp.fsName + "/captions_cep");
-    if (!dir.exists) dir.create();
-    const f = new File(dir.fsName + "/style_apply_debug.json");
-    f.encoding = "UTF-8";
-    f.open("w");
-    f.write(JSON.stringify(data as object));
-    f.close();
-  } catch (e) {
-    // РґРёР°РіРЅРѕСЃС‚РёРєР° РЅРµ РґРѕР»Р¶РЅР° Р»РѕРјР°С‚СЊ РѕСЃРЅРѕРІРЅРѕР№ С„Р»РѕСѓ
   }
 };

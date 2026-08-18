@@ -1,4 +1,4 @@
-import { ArrowLeft, Bookmark, Check, ChevronRight, Copy, Globe, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { Bookmark, Check, ChevronRight, Copy, Globe, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useConfiguration } from "../../context/ConfigurationWrapper";
 import { SRC_LANGS, TRANSLATE_TARGETS } from "../data/languages";
@@ -21,7 +21,7 @@ interface ChaptersTabProps {
   screen: "landing" | "results";
   progress: DescribeProgress | null;
   onGenerate: () => void;
-  /** e.g. Generate Chapters ( 2 ) */
+  /** e.g. Generate ( 2 ) */
   generateLabel?: string;
   onBack: () => void;
   /** false when user has no generations left — Regenerate buttons stay disabled. */
@@ -39,6 +39,8 @@ interface ChaptersTabProps {
   regeneratingDescription: boolean;
   tags: string;
   onUpdateTags: (value: string) => void;
+  /** Normalize tags to `#tag1 #tag2` (e.g. on blur). */
+  onNormalizeTags?: () => void;
   onRegenerateTags: () => void;
   regeneratingTags: boolean;
   chapters: Chapter[];
@@ -75,7 +77,7 @@ export const ChaptersTab = ({
   screen,
   progress,
   onGenerate,
-  generateLabel = "Generate Chapters",
+  generateLabel = "Generate",
   onBack,
   canRegenerate = true,
   history = [],
@@ -91,6 +93,7 @@ export const ChaptersTab = ({
   regeneratingDescription,
   tags,
   onUpdateTags,
+  onNormalizeTags,
   onRegenerateTags,
   regeneratingTags,
   chapters,
@@ -111,6 +114,15 @@ export const ChaptersTab = ({
 
   const sortedChapters = useMemo(() => [...chapters].sort((a, b) => a.time - b.time), [chapters]);
   const useHours = sortedChapters.length > 0 && sortedChapters[sortedChapters.length - 1].time >= HOUR;
+
+  // Same label as HistoryItem: first video title, else first chapter, else fallback
+  const headerTitle = useMemo(() => {
+    const title = titles.find((t) => t.trim())?.trim();
+    if (title) return title;
+    const firstChapter = sortedChapters[0]?.title?.trim();
+    if (firstChapter) return firstChapter;
+    return "Untitled chapters";
+  }, [titles, sortedChapters]);
 
   // копирует только список таймкодов (напр. для закреплённого комментария) —
   // без основного текста описания
@@ -141,14 +153,16 @@ export const ChaptersTab = ({
     return (
       <div className="chapters-tab chapters-tab--landing">
         <div className="chapters-tab__landing-body thin-scroll">
-          <div className="card chapters-tab__intro">
-            <Sparkles size={26} className="chapters-tab__intro-icon" />
-            <p className="chapters-tab__intro-title">Generate YouTube chapters</p>
-            <p className="chapters-tab__intro-text">
-              Transcribes the timeline audio and generates a title, description, tags and chapters —
-              ready to paste into YouTube.
-            </p>
-          </div>
+          {history.length === 0 && (
+            <div className="card chapters-tab__intro">
+              <Sparkles size={26} className="chapters-tab__intro-icon" />
+              <p className="chapters-tab__intro-title">Generate YouTube chapters</p>
+              <p className="chapters-tab__intro-text">
+                Transcribes the timeline audio and generates a title, description, tags and chapters —
+                ready to paste into YouTube.
+              </p>
+            </div>
+          )}
 
           {history.length > 0 && (
             <div className="chapters-tab__history">
@@ -236,17 +250,18 @@ export const ChaptersTab = ({
 
   return (
     <div className="chapters-tab">
-      <div className="tabs">
+      <div className="chapters-tab__results-header">
+        <span className="chapters-tab__results-title" title={headerTitle}>
+          {headerTitle}
+        </span>
         <button
           type="button"
-          className="icon-btn chapters-tab__back"
-          data-tooltip="Back"
+          className="icon-btn chapters-tab__close"
           onClick={onBack}
-          aria-label="Back to main screen"
+          aria-label="Close"
         >
-          <ArrowLeft size={15} />
+          <X size={15} strokeWidth={2} />
         </button>
-        <span className="chapters-tab__header-title">Chapters</span>
       </div>
 
       <div className="chapters-tab__results-body thin-scroll">
@@ -275,6 +290,7 @@ export const ChaptersTab = ({
           placeholder="#spunkram #adobe #etc"
           rows={2}
           onChange={onUpdateTags}
+          onBlur={onNormalizeTags}
           onRegenerate={onRegenerateTags}
           regenerating={regeneratingTags}
           canRegenerate={canRegenerate}

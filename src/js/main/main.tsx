@@ -297,7 +297,7 @@ function StatusToast({ onOpenMarket }: { onOpenMarket?: () => void }) {
     const img = card.imageUrl?.trim() || "";
     return (
       <div className="pointer-events-none absolute bottom-3 left-3 z-30 w-[min(100%-1.5rem,300px)]">
-        <div className="pointer-events-auto overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-card via-card to-primary/20 shadow-2xl shadow-black/50 ring-1 ring-inset ring-white/10">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-card via-card to-primary/20 shadow-2xl shadow-black/50 ring-1 ring-inset ring-white/10">
           <div className="flex gap-0">
             <div className="flex min-w-0 flex-1 flex-col justify-between gap-3 p-3.5 pr-2">
               <div className="min-w-0">
@@ -312,7 +312,7 @@ function StatusToast({ onOpenMarket }: { onOpenMarket?: () => void }) {
               </div>
               <button
                 type="button"
-                className="inline-flex w-fit items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+                className="pointer-events-auto inline-flex w-fit items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => {
                   if (card.detailsUrl) openMarketUrl(card.detailsUrl);
                   else onOpenMarket?.();
@@ -347,7 +347,7 @@ function StatusToast({ onOpenMarket }: { onOpenMarket?: () => void }) {
     <div
       role={statusMessage.tone === "error" ? "alert" : "status"}
       className={cn(
-        "pointer-events-auto absolute bottom-3 left-1/2 z-40 flex w-[min(100%-1.25rem,360px)] -translate-x-1/2 items-start gap-2 rounded-xl border px-3 py-2.5 text-[12px] font-medium leading-snug shadow-xl backdrop-blur-md",
+        "pointer-events-none absolute bottom-3 left-1/2 z-40 flex w-[min(100%-1.25rem,360px)] -translate-x-1/2 items-start gap-2 rounded-xl border px-3 py-2.5 text-[12px] font-medium leading-snug shadow-xl backdrop-blur-md",
         statusMessage.tone === "error"
           ? "border-rose-400/35 bg-[#1a1014]/95 text-rose-100"
           : statusMessage.tone === "success"
@@ -364,7 +364,7 @@ function StatusToast({ onOpenMarket }: { onOpenMarket?: () => void }) {
       <button
         type="button"
         aria-label="Dismiss"
-        className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-white/45 transition-colors hover:bg-white/10 hover:text-white"
+        className="pointer-events-auto mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-white/45 transition-colors hover:bg-white/10 hover:text-white"
         onClick={clearStatus}
       >
         <X className="size-3.5" strokeWidth={2.5} />

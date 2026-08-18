@@ -46,3 +46,9 @@ export type ControlValues = Record<string, ControlValue>;
 export type ControlTreeNode =
   | { kind: "group"; control: ClientControl; children: ControlTreeNode[] }
   | { kind: "control"; control: ClientControl };
+
+/** Порядок UI из AE Essential Properties. Definition даёт типы/id, не индекс. */
+export type UiOrderNode = {
+  name: string;
+  children?: UiOrderNode[];
+};

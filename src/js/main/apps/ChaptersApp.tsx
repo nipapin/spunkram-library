@@ -7,6 +7,7 @@ import {
 } from "../../components/ProgressDialog";
 import { fs } from "../../lib/cep/node";
 import { reloadJSX } from "../../lib/utils/bolt";
+import { MotionFlow } from "@/sdk";
 import { hostSdk, sdkData } from "@/sdk/host-api";
 import { convertToMp3 } from "../../utils/ffmpeg";
 import { getBundledAudioPresetPath } from "../../utils/audioPreset";
@@ -24,7 +25,9 @@ import {
   regenerateTags,
   regenerateTitles,
   sectionsToChapters,
+  tagsToHashtags,
   tagsToText,
+  parseTagsText,
   type Chapter,
 } from "../../utils/chapters";
 import { friendlyErrorMessage, isSoftHostError } from "../../utils/user-error";
@@ -289,8 +292,10 @@ export const ChaptersApp = ({
     const user = getUserIdentity();
 
     setProgress({ stage: "rendering" });
+    await MotionFlow.ready();
+    throwIfCancelled(signal);
     const effectivePresetPath = getBundledAudioPresetPath() || undefined;
-    const describeRaw = await sdkData(hostSdk().describe(effectivePresetPath));
+    const describeRaw = await sdkData(MotionFlow.describe(effectivePresetPath));
     throwIfCancelled(signal);
     const describeFail = describeRaw as {
       ok?: false;
@@ -492,6 +497,12 @@ export const ChaptersApp = ({
     persistResult({ ...result, tags });
   };
 
+  const handleNormalizeTags = () => {
+    const normalized = tagsToHashtags(parseTagsText(result.tags));
+    if (normalized === result.tags) return;
+    persistResult({ ...result, tags: normalized });
+  };
+
   const handleUpdateChapterTitle = (id: string, title: string) => {
     persistResult({
       ...result,
@@ -552,10 +563,14 @@ export const ChaptersApp = ({
     const item = history.find((h) => h.id === id);
     if (!item) return;
     activeHistoryIdRef.current = id;
-    setResult(item.result);
+    const nextResult = {
+      ...item.result,
+      tags: tagsToHashtags(parseTagsText(item.result.tags ?? "")),
+    };
+    setResult(nextResult);
     setTranscription(item.transcription);
     try {
-      panelStore.setItem(RESULT_KEY, JSON.stringify(item.result));
+      panelStore.setItem(RESULT_KEY, JSON.stringify(nextResult));
       if (item.transcription) {
         panelStore.setItem(TRANSCRIPTION_KEY, JSON.stringify(item.transcription));
       }
@@ -607,7 +622,7 @@ export const ChaptersApp = ({
         screen={screen}
         progress={progress}
         onGenerate={handleGenerate}
-        generateLabel={withGenerationCostLabel("Generate Chapters", generationCost)}
+        generateLabel={withGenerationCostLabel("Generate", generationCost)}
         onBack={handleBack}
         canRegenerate={generationsLeft > 0}
         history={historyPreview}
@@ -623,6 +638,7 @@ export const ChaptersApp = ({
         regeneratingDescription={regeneratingDescription}
         tags={result.tags}
         onUpdateTags={handleUpdateTags}
+        onNormalizeTags={handleNormalizeTags}
         onRegenerateTags={handleRegenerateTags}
         regeneratingTags={regeneratingTags}
         chapters={result.chapters}

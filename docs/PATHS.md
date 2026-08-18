@@ -13,15 +13,11 @@
 
 Panel UI state (favorites, history, AI config, active pack, …) lives in **userdata**, not Chromium `localStorage` — see `src/js/lib/userdata-store.ts`. Auth/preferences remain in `…/Spunkram Extension/preferences.json`.
 
-## Dev vs prod extension id
+## Extension id
 
-| Mode | Bundle id | Menu name |
-|---|---|---|
-| Local (`dev` / `watch` / `build` / `symlink`) | `com.spunkramlibrarydev.cep` | **Spunkram Library Dev** |
-| `npm run zxp:dev` | `com.spunkramlibrarydev.cep` | **Spunkram Library Dev** |
-| `npm run zxp` / `zip` / `release` | `com.spunkramlibrary.cep` | **Spunkram Library** |
-
-Так можно держать установленный prod ZXP и параллельно symlink-dev панель.
+| Bundle id | Menu name |
+|---|---|
+| `com.spunkramlibrary.cep` | **Spunkram Library** |
 
 ## Release / auto-update
 

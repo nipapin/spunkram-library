@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, AudioWaveform, ChevronUp, Download, Globe } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useConfiguration } from "../../context/ConfigurationWrapper";
 import { SRC_LANGS, TRANSLATE_TARGETS } from "../data/languages";
 import { rangeFillStyle } from "../utils/rangeFillStyle";
@@ -37,7 +37,6 @@ interface CaptionsTabProps {
 type SubTab = "transcribe" | "style";
 
 const SEG_MODES: { value: GroupingMode; label: string }[] = [
-  { value: "sentence", label: "Sentences" },
   { value: "words", label: "Words" },
   { value: "custom", label: "Custom" },
 ];
@@ -79,13 +78,19 @@ export const CaptionsTab = ({
     updateTranslateTo,
   } = useConfiguration();
 
+  // Sentences убран из UI — мигрируем сохранённый sentence → words
+  useEffect(() => {
+    if (mode === "sentence") updateMode("words");
+  }, [mode, updateMode]);
+
   // текущие настройки уже применены к хосту — кнопка Update не имеет смысла.
   // Для custom сравниваем ещё и lines/characters, не только mode (иначе смена
   // слайдеров внутри custom не считалась бы изменением)
   const isResegmentApplied =
     !!appliedResegmentConfig &&
     appliedResegmentConfig.mode === mode &&
-    (mode !== "custom" || (appliedResegmentConfig.lines === lines && appliedResegmentConfig.characters === characters));
+    (mode !== "custom" ||
+      (appliedResegmentConfig.lines === lines && appliedResegmentConfig.characters === characters));
 
   // лендинг — явный screen из App (не деривируем из captions.length), чтобы
   // Back мог вернуть сюда без сброса данных
@@ -122,7 +127,12 @@ export const CaptionsTab = ({
           </div>
 
           <div className="captions-tab__landing-actions">
-            <button className="btn btn--primary captions-tab__transcribe-btn" onClick={onDescribe} disabled={!!progress}>
+            <button
+              type="button"
+              className="btn btn--primary captions-tab__transcribe-btn"
+              onClick={onDescribe}
+              disabled={!!progress}
+            >
               {progress ? <span className="spinner" /> : <AudioWaveform size={15} />}
               {progress ? "Working…" : transcribeLabel}
             </button>
@@ -148,7 +158,6 @@ export const CaptionsTab = ({
         <button
           type="button"
           className="icon-btn captions-tab__back"
-          data-tooltip="Back"
           onClick={onBack}
           aria-label="Back to main screen"
         >
@@ -170,110 +179,118 @@ export const CaptionsTab = ({
         </button>
       </div>
 
-      {subTab === "style" ? (
-        <StyleTab />
-      ) : (
-        <>
-          <div className="captions-tab__list thin-scroll">
-            <div className="captions-tab__transcript-head">
-              <span className="captions-tab__section-label">
-                TRANSCRIPT · {captions.length} SEGMENT{captions.length === 1 ? "" : "S"}
-              </span>
+      <div className="captions-tab__panel">
+        {subTab === "style" ? (
+          <StyleTab />
+        ) : (
+          <>
+            <div className="captions-tab__list">
+              <div className="captions-tab__transcript-head">
+                <span className="captions-tab__section-label">
+                  TRANSCRIPT · {captions.length} SEGMENT{captions.length === 1 ? "" : "S"}
+                </span>
+              </div>
+              {captions.map((caption, index) => (
+                <EditableCaption
+                  key={index}
+                  index={index}
+                  caption={caption}
+                  fontSize={fontSize}
+                  offset={meta.offset}
+                  sentenceCount={sentenceCount}
+                  captionCount={captions.length}
+                  highlighted={index === highlightIndex}
+                  onSave={(c, text) => onSaveCaption(c, index, text)}
+                  onSeek={(c) => onSeek(c, index)}
+                  onSplit={onSplit}
+                  onMerge={onMerge}
+                  onMoveWord={onMoveWord}
+                  onSplitWords={onSplitWords}
+                />
+              ))}
             </div>
-            {captions.map((caption, index) => (
-              <EditableCaption
-                key={index}
-                index={index}
-                caption={caption}
-                fontSize={fontSize}
-                offset={meta.offset}
-                sentenceCount={sentenceCount}
-                captionCount={captions.length}
-                highlighted={index === highlightIndex}
-                onSave={(c, text) => onSaveCaption(c, index, text)}
-                onSeek={(c) => onSeek(c, index)}
-                onSplit={onSplit}
-                onMerge={onMerge}
-                onMoveWord={onMoveWord}
-                onSplitWords={onSplitWords}
-              />
-            ))}
-          </div>
 
-          <div className={`card captions-tab__resegment ${resegmentOpen ? "captions-tab__resegment--open" : ""}`}>
-            <div className="captions-tab__resegment-head" onClick={() => setResegmentOpen((v) => !v)} aria-expanded={resegmentOpen}>
-              <span className="captions-tab__section-label">RE-SEGMENT</span>
-              <ChevronUp
-                size={14}
-                className={`captions-tab__resegment-chevron ${resegmentOpen ? "" : "captions-tab__resegment-chevron--closed"}`}
-              />
-            </div>
-            {resegmentOpen && (
-              <>
-                <div className="btn-group captions-tab__resegment-modes">
-                  {SEG_MODES.map((m) => (
+            <div
+              className={`card captions-tab__resegment ${resegmentOpen ? "captions-tab__resegment--open" : ""}`}
+            >
+              <div
+                className="captions-tab__resegment-head"
+                onClick={() => setResegmentOpen((v) => !v)}
+                aria-expanded={resegmentOpen}
+              >
+                <span className="captions-tab__section-label">RE-SEGMENT</span>
+                <ChevronUp
+                  size={14}
+                  className={`captions-tab__resegment-chevron ${resegmentOpen ? "captions-tab__resegment-chevron--open" : ""}`}
+                />
+              </div>
+              {resegmentOpen && (
+                <>
+                  <div className="btn-group captions-tab__resegment-modes">
+                    {SEG_MODES.map((m) => (
+                      <button
+                        key={m.value}
+                        type="button"
+                        className={`btn-group__item ${mode === m.value ? "btn-group__item--active-fill" : ""}`}
+                        onClick={() => updateMode(m.value)}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                  {mode === "custom" && (
+                    <>
+                      <div className="captions-tab__resegment-row">
+                        <span className="captions-tab__resegment-label">Lines / caption</span>
+                        <input
+                          type="range"
+                          className="range"
+                          min={1}
+                          max={4}
+                          value={lines}
+                          onChange={(e) => updateLines(Number(e.target.value))}
+                          style={rangeFillStyle(lines, 1, 4)}
+                        />
+                        <span className="captions-tab__resegment-value">{lines}</span>
+                      </div>
+                      <div className="captions-tab__resegment-row">
+                        <span className="captions-tab__resegment-label">Characters / line</span>
+                        <input
+                          type="range"
+                          className="range"
+                          min={4}
+                          max={40}
+                          value={characters}
+                          onChange={(e) => updateCharacters(Number(e.target.value))}
+                          style={rangeFillStyle(characters, 4, 40)}
+                        />
+                        <span className="captions-tab__resegment-value">{characters}</span>
+                      </div>
+                    </>
+                  )}
+                  {!isResegmentApplied && (
                     <button
-                      key={m.value}
                       type="button"
-                      className={`btn-group__item ${mode === m.value ? "btn-group__item--active-fill" : ""}`}
-                      onClick={() => updateMode(m.value)}
+                      className="btn btn--primary btn--full captions-tab__resegment-update"
+                      onClick={onUpdateResegment}
+                      disabled={resegmenting}
                     >
-                      {m.label}
+                      {resegmenting ? (
+                        <>
+                          <span className="spinner" />
+                          Updating…
+                        </>
+                      ) : (
+                        "Update"
+                      )}
                     </button>
-                  ))}
-                </div>
-                {mode === "custom" && (
-                  <>
-                    <div className="captions-tab__resegment-row">
-                      <span className="captions-tab__resegment-label">Lines / caption</span>
-                      <input
-                        type="range"
-                        className="range"
-                        min={1}
-                        max={4}
-                        value={lines}
-                        onChange={(e) => updateLines(Number(e.target.value))}
-                        style={rangeFillStyle(lines, 1, 4)}
-                      />
-                      <span className="captions-tab__resegment-value">{lines}</span>
-                    </div>
-                    <div className="captions-tab__resegment-row">
-                      <span className="captions-tab__resegment-label">Characters / line</span>
-                      <input
-                        type="range"
-                        className="range"
-                        min={4}
-                        max={40}
-                        value={characters}
-                        onChange={(e) => updateCharacters(Number(e.target.value))}
-                        style={rangeFillStyle(characters, 4, 40)}
-                      />
-                      <span className="captions-tab__resegment-value">{characters}</span>
-                    </div>
-                  </>
-                )}
-                {!isResegmentApplied && (
-                  <button
-                    type="button"
-                    className="btn btn--primary btn--full captions-tab__resegment-update"
-                    onClick={onUpdateResegment}
-                    disabled={resegmenting}
-                  >
-                    {resegmenting ? (
-                      <>
-                        <span className="spinner" />
-                        Updating…
-                      </>
-                    ) : (
-                      "Update"
-                    )}
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        </>
-      )}
+                  )}
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };

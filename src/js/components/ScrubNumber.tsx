@@ -49,6 +49,7 @@ export const ScrubNumber = ({ value, onChange, min, max, step, suffix, className
     if (typeof step === "number") return step;
     if (typeof min === "number" && typeof max === "number") {
       const span = max - min;
+      if (span <= 1) return 0.01;
       if (span <= 10) return 0.1;
       if (span <= 100) return 0.5;
       return 1;

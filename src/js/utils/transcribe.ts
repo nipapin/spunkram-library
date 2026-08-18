@@ -97,15 +97,61 @@ export type TranscribeOptions = {
     token?: string;
 };
 
-export const transcribe = async (audioPath: string, options: TranscribeOptions = {}): Promise<TranscribeResult> => {
+/** Copy Node Buffer / Uint8Array into a standalone Blob — CEP CEF can send an empty body if given a shared Buffer view. */
+const audioFileBlob = (audioPath: string): Blob => {
     const buffer = fs.readFileSync(audioPath);
+    const copy = Uint8Array.from(buffer);
+    return new Blob([copy], { type: "audio/mpeg" });
+};
 
+type MultipartResult = { status: number; text: string };
+
+/**
+ * CEP CEF often drops multipart Content-Type when `fetch` is given a headers object.
+ * XHR + FormData sets the boundary itself and is the reliable path in the panel.
+ */
+const postMultipart = (
+    url: string,
+    form: FormData,
+    token: string | undefined,
+    signal: AbortSignal,
+): Promise<MultipartResult> =>
+    new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", url);
+        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.timeout = REQUEST_TIMEOUT_MS;
+        xhr.responseType = "text";
+
+        const onAbort = () => xhr.abort();
+        if (signal.aborted) {
+            reject(Object.assign(new Error("Cancelled"), { name: "AbortError" }));
+            return;
+        }
+        signal.addEventListener("abort", onAbort, { once: true });
+
+        xhr.onload = () => {
+            signal.removeEventListener("abort", onAbort);
+            resolve({ status: xhr.status, text: xhr.responseText || "" });
+        };
+        xhr.onerror = () => {
+            signal.removeEventListener("abort", onAbort);
+            reject(new TypeError("Failed to fetch"));
+        };
+        xhr.ontimeout = () => {
+            signal.removeEventListener("abort", onAbort);
+            reject(Object.assign(new Error("timeout"), { name: "AbortError" }));
+        };
+        xhr.onabort = () => {
+            signal.removeEventListener("abort", onAbort);
+            reject(Object.assign(new Error("Cancelled"), { name: "AbortError" }));
+        };
+        xhr.send(form);
+    });
+
+export const transcribe = async (audioPath: string, options: TranscribeOptions = {}): Promise<TranscribeResult> => {
     const form = new FormData();
-    form.append(
-        "file",
-        new Blob([new Uint8Array(buffer)], { type: "audio/mpeg" }),
-        basename(audioPath),
-    );
+    form.append("file", audioFileBlob(audioPath), basename(audioPath));
     if (options.language && options.language !== "auto") form.append("language", options.language);
     if (options.translateTo && options.translateTo !== "off") form.append("translateTo", options.translateTo);
     if (typeof options.durationSeconds === "number" && options.durationSeconds > 0) {
@@ -115,24 +161,21 @@ export const transcribe = async (audioPath: string, options: TranscribeOptions =
     if (options.email) form.append("email", options.email);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort("timeout"), REQUEST_TIMEOUT_MS);
-    const onExternalAbort = () => controller.abort("cancelled");
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const onExternalAbort = () => controller.abort();
     if (options.signal) {
-        if (options.signal.aborted) controller.abort("cancelled");
+        if (options.signal.aborted) controller.abort();
         else options.signal.addEventListener("abort", onExternalAbort, { once: true });
     }
 
-    let response: Response;
+    let result: MultipartResult;
     try {
-        response = await fetch(`${API_BASE}/api/generations/captions`, {
-            method: "POST",
-            headers: options.token
-                ? { Authorization: `Bearer ${options.token}` }
-                : undefined,
-            body: form,
-            credentials: "include",
-            signal: controller.signal,
-        });
+        result = await postMultipart(
+            `${API_BASE}/api/generations/captions`,
+            form,
+            options.token,
+            controller.signal,
+        );
     } catch (e) {
         if (e instanceof Error && e.name === "AbortError") {
             if (options.signal?.aborted) throw new Error("Cancelled");
@@ -146,29 +189,29 @@ export const transcribe = async (audioPath: string, options: TranscribeOptions =
 
     if (options.signal?.aborted) throw new Error("Cancelled");
 
-    if (response.status === 401) {
+    if (result.status === 401) {
         throw new CaptionApiError("Unauthorized", 401, "UNAUTHORIZED");
     }
 
     let data: { error?: string; code?: string };
     try {
-        data = await response.json();
+        data = JSON.parse(result.text) as { error?: string; code?: string };
     } catch {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(`HTTP ${result.status}`);
     }
 
-    if (!response.ok) {
+    if (result.status < 200 || result.status >= 300) {
         if (data.code === "SUBSCRIPTION_REQUIRED") {
-            throw new CaptionApiError(data.error || "Subscription required", response.status, data.code);
+            throw new CaptionApiError(data.error || "Subscription required", result.status, data.code);
         }
         if (data.code === "GENERATION_LIMIT_REACHED") {
             throw new CaptionApiError(
                 data.error || "No generations left",
-                response.status,
+                result.status,
                 data.code,
             );
         }
-        throw new Error(data.error ?? `HTTP ${response.status}`);
+        throw new Error(data.error ?? `HTTP ${result.status}`);
     }
 
     return parseCaptionsApiResponse(data);
@@ -209,8 +252,10 @@ export const scribeToTranscription = (raw: ScribeResponse): TranscribeResult => 
         if (w.type && w.type !== "word") continue;
         const text = typeof w.text === "string" ? w.text.trim() : "";
         if (!text) continue;
-        if (typeof w.start !== "number" || typeof w.end !== "number") continue;
-        wordChunks.push({ text, timestamp: [w.start, w.end] });
+        const start = Number(w.start);
+        const end = Number(w.end);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+        wordChunks.push({ text, timestamp: [start, end] });
     }
     const sentences = sentencesFromWords(wordChunks);
     const fullText = raw.text ?? wordChunks.map((w) => w.text).join(" ");

@@ -108,6 +108,47 @@ export const getAeMetadata = (propName: string) => {
 };
 
 /**
+ * Fit caption layer by height to the composition.
+ * Transform group is accessed by matchName ("ADBE Transform Group") and Scale by ("ADBE Scale").
+ * Sets Scale to (compHeight / baseHeight) * 100 (where baseHeight defaults to 2048).
+ */
+export const fitCaptionLayerHeight = (
+  layer: Layer,
+  compHeight: number,
+  baseHeight: number = 2048,
+): boolean => {
+  try {
+    if (!layer || !compHeight || compHeight <= 0 || baseHeight <= 0) return false;
+    const targetScale = (compHeight / baseHeight) * 100;
+    if (!isFinite(targetScale)) return false;
+
+    const is3D = Boolean((layer as AVLayer).threeDLayer);
+    const scaleVal = is3D ? [targetScale, targetScale, 100] : [targetScale, targetScale];
+
+    try {
+      const transform = layer.property("ADBE Transform Group") as PropertyGroup | null;
+      if (transform) {
+        const scaleProp = transform.property("ADBE Scale") as Property | null;
+        if (scaleProp) {
+          scaleProp.setValue(scaleVal);
+          return true;
+        }
+      }
+    } catch (e1) {
+      // fallback
+    }
+
+    if ((layer as AVLayer).transform && (layer as AVLayer).transform.scale) {
+      (layer as AVLayer).transform.scale.setValue(scaleVal);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+};
+
+/**
  * Scale a layer to cover the active composition (Beta `applyAutoSizeForFootage`).
  * `source` must expose `.width` / `.height` (FootageItem, CompItem, or AVLayer).
  */

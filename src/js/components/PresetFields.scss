@@ -220,20 +220,31 @@
 
 .preset-fields__point {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.preset-fields__param--point .preset-fields__param-label {
+  width: auto;
+  min-width: 90px;
+  flex: 1;
 }
 
 .preset-fields__point-axis {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
   font-size: 10.5px;
   color: var(--text-faint);
 
   .scrub-number {
     justify-content: flex-start;
-    width: 100%;
+    width: 52px;
     background: var(--bg-input);
     border: 1px solid var(--border-input);
     border-radius: var(--radius-sm);

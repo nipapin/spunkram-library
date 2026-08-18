@@ -1,5 +1,5 @@
 import definitionJson from "./definition.json";
-import { defaultsFromDefinition, findControlByNames } from "./clientControls";
+import { defaultsFromDefinition, findControlByAnyNames } from "./clientControls";
 import type { ControlValues, MogrtDefinition } from "./types";
 
 export type {
@@ -9,12 +9,15 @@ export type {
   ControlValues,
   MogrtDefinition,
   PointValue,
+  UiOrderNode,
 } from "./types";
 export { ControlType } from "./types";
 export {
+  PRESET_UI_ORDER,
   buildUiTree,
   defaultsFromDefinition,
   findControlByNames,
+  findControlByAnyNames,
   getControlValue,
   indexControls,
   isColorArray,
@@ -22,6 +25,7 @@ export {
   isHiddenUiGroup,
   isPointValue,
   stylePropsFromValues,
+  diffStyleProps,
   uiName,
 } from "./clientControls";
 export type { StylePropPayload } from "./clientControls";
@@ -43,10 +47,10 @@ export const createDefaultValues = (
 
 /** UUID известных цветов для превью (по конкретному definition). */
 export const colorControlIds = (definition: MogrtDefinition = PRESET_DEFINITION) => {
-  const idByPath = (names: string[]) => findControlByNames(definition, names)?.id ?? "";
+  const idByPath = (...paths: string[][]) => findControlByAnyNames(definition, paths)?.id ?? "";
   return {
-    fill: idByPath(["Segment Static", "Fill"]),
-    highlight: idByPath(["Segment Animated", "Fill"]),
+    fill: idByPath(["Static Segment", "Fill"], ["Segment Static", "Fill"]),
+    highlight: idByPath(["Animated Segment", "Fill"], ["Segment Animated", "Fill"]),
     background: idByPath(["Background", "Fill"]),
   };
 };

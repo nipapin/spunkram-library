@@ -10,16 +10,14 @@ export type CaptionWordTiming = {
   timestamp: [number, number];
 };
 
-/** Segment Type в mogrt: 1 Words, 2 Sentences, 3 Custom (1-based, как menucontent). */
+/** Segment Type в mogrt: 1 Words, 2 Custom (1-based, как menucontent). */
 export const segmentTypeIndex = (mode: GroupingMode): number => {
   if (mode === "words") return SEGMENT_TYPE_INDEX.words;
-  if (mode === "sentence") return SEGMENT_TYPE_INDEX.sentence;
   return SEGMENT_TYPE_INDEX.custom;
 };
 
 export const groupingModeFromSegmentType = (index: number): GroupingMode => {
   if (index === SEGMENT_TYPE_INDEX.words) return "words";
-  if (index === SEGMENT_TYPE_INDEX.sentence) return "sentence";
   return "custom";
 };
 
@@ -27,7 +25,7 @@ export type HostCaptionPayload = {
   text: string;
   timestamp: [number, number];
   words: CaptionWordTiming[];
-  /** Packed captions_batch_01..15 — CEP режет здесь, хост только setValue. */
+  /** Packed captions_batch_01..15 — CEP собирает v4 LUT + батчи, хост только setValue. */
   captionChunks: string[];
   /** JSON Scribe-токенов; хост пакует сам, если captionChunks нет. */
   captionsRawData?: string;
@@ -93,7 +91,7 @@ export const toCaptionsRawData = (
       });
       if (i < captionWords.length - 1) {
         tokens.push({
-          text: " ",
+          text: "",
           start: w.timestamp[1],
           end: captionWords[i + 1].timestamp[0],
           type: "spacing",

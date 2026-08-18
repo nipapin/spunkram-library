@@ -4,7 +4,7 @@ import { openMotionflowSubscribe } from "@/api/motionflow-auth";
 
 const AI_TOOLS = [
   { id: "captions", label: "Captions", desc: "Auto-generate subtitles", icon: Captions, soon: false },
-  { id: "chapter", label: "Chapter", desc: "Split into chapters", icon: ListOrdered, soon: false },
+  { id: "chapter", label: "Chapters", desc: "Split into chapters", icon: ListOrdered, soon: false },
   { id: "voiceover", label: "Voiceover", desc: "AI narration with Minimax", icon: Mic, soon: false },
 ] as const;
 

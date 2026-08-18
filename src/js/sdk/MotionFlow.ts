@@ -29,6 +29,11 @@ export const MotionFlow = {
     return hostScriptsReady;
   },
 
+  /** Wait until Bolt JSX is loaded. Safe to call on every Transcribe / host action. */
+  async ready(): Promise<void> {
+    await ensureHost();
+  },
+
   /** Load Bolt JSX bundle + Beta legacy composers. Safe to call multiple times. */
   async loadHostScripts(): Promise<
     MfResult<{ legacyLoaded: string[]; legacyMissing: string[] }>

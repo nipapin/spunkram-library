@@ -5,7 +5,7 @@
  * dev server's origin and get forwarded by `server.proxy` in
  * `vite.config.ts` (avoids CORS during local panel development).
  */
-export const API_BASE = import.meta.env.DEV ? "" : "https://motionflow.pro";
+export const API_BASE = "https://motionflow.pro";
 
 export const GENERATIONS_ENDPOINTS = {
   /** POST — транскрипция аудио (multipart/form-data), см. utils/transcribe.ts */

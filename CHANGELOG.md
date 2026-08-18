@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Styles: Premiere delta-apply maps duplicate leaf names (e.g. Animated Fill) by definition `leafIndex`, not first match
+- Styles sliders with ranges ≤1 use step `0.01` so values like Pause Gap `0.35` keep thumb and fill aligned
+- Captions packer: spacing is empty text (`wordIndex: -1`); a space character was packed as a word
+- Captions Transcribe: show progress immediately, wait for host JSX, and don't let toasts steal clicks from the button
+- Captions: CEP uploads MP3 via XHR FormData (fetch + Authorization dropped the multipart boundary)
+
+### Changed
+
+- Captions CEP writes v4 lookup tables + offset batches into `captions_batch_01`…`15` (same codec as `captions.jsx`). Legacy `text~start~end~~` still reads back.
+- Captions: match Base Simple mogrt — `Store hidden` / `Bridge hidden`, spacing as empty string (`wordIndex: -1`), do not treat `Captions_Raw_Data` as a CEP-written field. Pause Gap / Hold Duration are user style (Global).
+- Captions: hide RE-SEGMENT UI; add rounded content panel under Transcribe/Styles tabs
+- Captions Styles: expand all collapse groups by default; compact Adjust Position X/Y inputs
+- Chapters: rename hub/shell to “Chapters”; hide welcome card when history exists; circular back without tooltip; normalize tags as `#tag1 #tag2`
+- Voiceover: history only in IconButton modal; fixed Generate button (Captions Transcribe styles); ScrubNumber + Y-resizable Script; unified 12px body type
+
 ## [0.7.0] - 2026-08-10
 
 ### Fixed

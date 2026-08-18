@@ -60,10 +60,11 @@ import {
   CAPTION_SYSTEM,
   captionBatchLayerName,
   resolveCaptionChunks,
+  unpackCaptionChunks,
   unpackCaptions,
 } from "../../shared/caption-system";
 import { readJsonUtf8 } from "../utils/utils";
-import { getActiveComp, getNextCaptionsName } from "./aeft-utils";
+import { getActiveComp, getNextCaptionsName, fitCaptionLayerHeight } from "./aeft-utils";
 
 // РІС‹РґРµР»РµРЅРЅС‹Рµ СЃР»РѕРё, Сѓ РєРѕС‚РѕСЂС‹С… СЂРµР°Р»СЊРЅРѕ РµСЃС‚СЊ Р·РІСѓРє вЂ” РЅР° РЅРёС… СЃС‚Р°РІРёРј "solo" РЅР° РІСЂРµРјСЏ СЂРµРЅРґРµСЂР°
 const layersWithAudio = (layers: Layer[]): AVLayer[] => {
@@ -303,7 +304,7 @@ const writeLayerSourceText = (layer: Layer, text: string) => {
   sourceText.setValue(new TextDocument(text));
 };
 
-/** Scribe `words[]` (word + spacing) — packed into System captions_batch_01..15. */
+/** Scribe `words[]` (word + spacing) — packed v4 into captions_batch_01..15. */
 const captionsRawDataJson = (caption: CaptionLayer): string => {
   if (caption.captionsRawData) return caption.captionsRawData;
   const words =
@@ -327,7 +328,7 @@ const captionsRawDataJson = (caption: CaptionLayer): string => {
     });
     if (i < words.length - 1) {
       tokens.push({
-        text: " ",
+        text: "",
         start: w.timestamp[1],
         end: words[i + 1].timestamp[0],
         type: "spacing",
@@ -338,26 +339,41 @@ const captionsRawDataJson = (caption: CaptionLayer): string => {
   return JSON.stringify(tokens);
 };
 
-const getSystemGroup = (layer: Layer): PropertyGroup | null => {
-  const names = [CAPTION_SYSTEM.group, "System"];
+/** Walk Essential Properties: batches are in Store hidden, Segment Type in Bridge hidden. */
+const findEssentialProp = (layer: Layer, name: string): Property | null => {
+  const walk = (group: PropertyGroup): Property | null => {
+    try {
+      for (let i = 1; i <= group.numProperties; i++) {
+        const p = group.property(i);
+        if (!p) continue;
+        if (String(p.name) === name) return p as Property;
+        try {
+          const nested = p as PropertyGroup;
+          if (typeof nested.numProperties === "number" && nested.numProperties > 0) {
+            const found = walk(nested);
+            if (found) return found;
+          }
+        } catch (e) {
+          // leaf property
+        }
+      }
+    } catch (e2) {
+      // ignore
+    }
+    return null;
+  };
   try {
     const ep = layer.property("Essential Properties");
     if (ep) {
-      for (let i = 0; i < names.length; i++) {
-        const system = ep.property(names[i]);
-        if (system) return system as PropertyGroup;
-      }
+      const found = walk(ep as PropertyGroup);
+      if (found) return found;
     }
   } catch (e) {
     // ignore
   }
   try {
     const ep = (layer as any).essentialProperty as PropertyGroup | undefined;
-    if (!ep) return null;
-    for (let i = 0; i < names.length; i++) {
-      const system = ep.property(names[i]);
-      if (system) return system as PropertyGroup;
-    }
+    if (ep) return walk(ep);
   } catch (e2) {
     // ignore
   }
@@ -365,50 +381,23 @@ const getSystemGroup = (layer: Layer): PropertyGroup | null => {
 };
 
 const setSystemProp = (layer: Layer, name: string, value: string | number): boolean => {
-  const system = getSystemGroup(layer);
-  if (!system) return false;
+  const prop = findEssentialProp(layer, name);
+  if (!prop) return false;
   try {
-    const prop = system.property(name) as Property;
-    if (!prop) return false;
-    try {
-      prop.setValue(value);
-      return true;
-    } catch (e) {
-      // РµСЃР»Рё РµСЃС‚СЊ РєР»СЋС‡Рё вЂ” РїРёС€РµРј РЅР° РІСЂРµРјСЏ 0
-      try {
-        prop.setValueAtTime(0, value);
-        return true;
-      } catch (e2) {
-        return false;
-      }
-    }
+    prop.setValue(value);
+    return true;
   } catch (e) {
-    return false;
+    try {
+      prop.setValueAtTime(0, value);
+      return true;
+    } catch (e2) {
+      return false;
+    }
   }
 };
 
 const setSystemTextProp = (layer: Layer, name: string, text: string): boolean => {
-  const system = getSystemGroup(layer);
-  if (!system) return false;
-  let prop: Property | null = null;
-  try {
-    prop = system.property(name) as Property;
-  } catch (e) {
-    // ignore
-  }
-  if (!prop) {
-    try {
-      for (let i = 1; i <= system.numProperties; i++) {
-        const p = system.property(i);
-        if (p && String(p.name) === name) {
-          prop = p as Property;
-          break;
-        }
-      }
-    } catch (e2) {
-      // ignore
-    }
-  }
+  const prop = findEssentialProp(layer, name);
   if (!prop) return false;
   const value = text == null ? "" : String(text);
   try {
@@ -437,16 +426,19 @@ const fillCaptionChunks = (layer: Layer, chunks?: string[] | null, rawJson?: str
 };
 
 /**
- * System EP шаблона: captions_batch_01..15, Segment Type, Line Count,
+ * Store/Bridge (legacy System) EP: captions_batch_01..15, Segment Type, Line Count,
  * Chars Per Line, Composition Height. Captions_Raw_Data / Captions_Data
- * считает expression. Остальные System-пропы (в т.ч. hidden-группы) не трогаем.
+ * считает expression. Pause Gap / Hold Duration — user style, не пишем.
  */
 const fillSystemEssentialProps = (layer: Layer, caption: CaptionLayer, compositionHeight: number) => {
   fillCaptionChunks(layer, caption.captionChunks, captionsRawDataJson(caption));
   if (caption.segmentType != null) setSystemProp(layer, CAPTION_SYSTEM.segmentType, caption.segmentType);
   if (caption.lineCount != null) setSystemProp(layer, CAPTION_SYSTEM.lineCount, caption.lineCount);
   if (caption.charsPerLine != null) setSystemProp(layer, CAPTION_SYSTEM.charsPerLine, caption.charsPerLine);
-  if (compositionHeight > 0) setSystemProp(layer, CAPTION_SYSTEM.compositionHeight, compositionHeight);
+  if (compositionHeight > 0) {
+    setSystemProp(layer, CAPTION_SYSTEM.compositionHeight, compositionHeight);
+    fitCaptionLayerHeight(layer, compositionHeight, 2048);
+  }
 };
 
 const collectComps = (item: Item, out: CompItem[]) => {
@@ -825,27 +817,7 @@ export const findAppliedCaptions = () => {
 };
 
 const getSystemText = (layer: Layer, name: string): string => {
-  const system = getSystemGroup(layer);
-  if (!system) return "";
-  let prop: Property | null = null;
-  try {
-    prop = system.property(name) as Property;
-  } catch (e) {
-    // ignore
-  }
-  if (!prop) {
-    try {
-      for (let i = 1; i <= system.numProperties; i++) {
-        const p = system.property(i);
-        if (p && String(p.name) === name) {
-          prop = p as Property;
-          break;
-        }
-      }
-    } catch (e2) {
-      // ignore
-    }
-  }
+  const prop = findEssentialProp(layer, name);
   if (!prop) return "";
   try {
     const val = prop.value as { text?: string } | string | number;
@@ -857,10 +829,8 @@ const getSystemText = (layer: Layer, name: string): string => {
 };
 
 const getSystemNumber = (layer: Layer, name: string): number | null => {
-  const system = getSystemGroup(layer);
-  if (!system) return null;
   try {
-    const prop = system.property(name) as Property;
+    const prop = findEssentialProp(layer, name);
     if (!prop) return null;
     const n = Number(prop.value);
     return isNaN(n) ? null : n;
@@ -886,12 +856,16 @@ const layerHasEssentialProperties = (layer: Layer): boolean => {
 };
 
 const readLayerCaptionSegments = (layer: Layer): { text: string; timestamp: [number, number] }[] => {
-  let packed = "";
+  const chunks: string[] = [];
+  let sawBatch = false;
   for (let i = 1; i <= CAPTION_BATCH_COUNT; i++) {
-    packed += getSystemText(layer, captionBatchLayerName(i));
+    const chunk = getSystemText(layer, captionBatchLayerName(i));
+    if (chunk) sawBatch = true;
+    chunks.push(chunk);
   }
-  if (!packed) packed = getSystemText(layer, CAPTION_SYSTEM.rawData);
-  const tokens = unpackCaptions(packed);
+  const tokens = sawBatch
+    ? unpackCaptionChunks(chunks)
+    : unpackCaptions(getSystemText(layer, CAPTION_SYSTEM.rawData));
   const out: { text: string; timestamp: [number, number] }[] = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
@@ -1021,14 +995,24 @@ interface StylePropPayload {
   path: string[];
   type: number;
   value: unknown;
+  leafIndex?: number;
 }
 
 interface ApplyCaptionStyleValuesPayload {
   compId?: number;
-  /** Premiere nested-sequence nodeId вЂ” ignored in AE. */
+  /** Premiere nested-sequence nodeId — ignored in AE. */
   sequenceId?: string;
+  trackIndex?: number;
   props: StylePropPayload[];
 }
+
+/** New mogrt renamed Segment Static → Static Segment (and Animated). */
+const EP_GROUP_ALIASES: { [name: string]: string[] } = {
+  "Static Segment": ["Static Segment", "Segment Static"],
+  "Segment Static": ["Segment Static", "Static Segment"],
+  "Animated Segment": ["Animated Segment", "Segment Animated"],
+  "Segment Animated": ["Segment Animated", "Animated Segment"],
+};
 
 const getEssentialRoot = (layer: Layer): PropertyGroup | null => {
   try {
@@ -1047,9 +1031,13 @@ const getEssentialRoot = (layer: Layer): PropertyGroup | null => {
 };
 
 const findNamedProp = (group: PropertyGroup, name: string): PropertyBase | null => {
-  for (let i = 1; i <= group.numProperties; i++) {
-    const prop = group.property(i);
-    if (prop && prop.name === name) return prop;
+  const aliases = EP_GROUP_ALIASES[name] || [name];
+  for (let a = 0; a < aliases.length; a++) {
+    const want = aliases[a];
+    for (let i = 1; i <= group.numProperties; i++) {
+      const prop = group.property(i);
+      if (prop && prop.name === want) return prop;
+    }
   }
   return null;
 };
@@ -1111,7 +1099,6 @@ export const applyCaptionStyleValues = ({ compId, props }: ApplyCaptionStyleValu
     }
     if (!item || !props || !props.length) return { updated: 0 };
 
-    app.beginUndoGroup("Apply Caption Style");
     let updated = 0;
     for (let i = 1; i <= item.numLayers; i++) {
       const layer = item.layers[i];
@@ -1119,14 +1106,8 @@ export const applyCaptionStyleValues = ({ compId, props }: ApplyCaptionStyleValu
       if (comment.indexOf("mf-caption:") !== 0) continue;
       if (applyPropsToLayer(layer, props) > 0) updated++;
     }
-    app.endUndoGroup();
     return { updated };
   } catch (e: any) {
-    try {
-      app.endUndoGroup();
-    } catch (e2) {
-      // ignore
-    }
     return { updated: 0, error: String(e && e.message ? e.message : e) };
   }
 };

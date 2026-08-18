@@ -25,7 +25,7 @@ import type {
 import { EMPTY_DEFINITION } from "./types";
 import { csi } from "../lib/utils/bolt";
 import { getActiveBrand } from "../lib/utils/brandTheme";
-import { defaultsFromDefinition, findControlByNames, isColorArray, rgbaToHex } from "../presets";
+import { defaultsFromDefinition, findControlByAnyNames, isColorArray, rgbaToHex } from "../presets";
 import type { ControlValues, MogrtDefinition } from "../presets/types";
 
 const cloneValues = (values: ControlValues): ControlValues =>
@@ -65,9 +65,9 @@ export const isPresetValuesDirty = (p: StylePreset): boolean => {
 };
 
 export const colorIdsFromDefinition = (definition: MogrtDefinition) => ({
-  fill: findControlByNames(definition, ["Segment Static", "Fill"])?.id ?? "",
-  highlight: findControlByNames(definition, ["Segment Animated", "Fill"])?.id ?? "",
-  background: findControlByNames(definition, ["Background", "Fill"])?.id ?? "",
+  fill: findControlByAnyNames(definition, [["Static Segment", "Fill"], ["Segment Static", "Fill"]])?.id ?? "",
+  highlight: findControlByAnyNames(definition, [["Animated Segment", "Fill"], ["Segment Animated", "Fill"]])?.id ?? "",
+  background: findControlByAnyNames(definition, [["Background", "Fill"]])?.id ?? "",
 });
 
 export const previewFromValues = (
@@ -431,7 +431,8 @@ const mapPool = async <T, R>(
 export const syncCaptionStyles = async (options?: {
   checkRemoteUpdates?: boolean;
 }): Promise<StylesSyncResult> => {
-  const checkRemote = options?.checkRemoteUpdates !== false;
+  // Default off: comparing every local .mogrt with R2 on boot blocked the grid.
+  const checkRemote = options?.checkRemoteUpdates === true;
   const localState = loadLocalState();
   const definitions: Record<string, MogrtDefinition> = {};
 

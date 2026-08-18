@@ -1,0 +1,137 @@
+[
+  {
+    "name": "Global",
+    "children": [
+      { "name": "Position" },
+      { "name": "Adjust Position" },
+      { "name": "Scale" },
+      { "name": "Padding %" },
+      { "name": "Pause Gap" },
+      { "name": "Hold Duration" }
+    ]
+  },
+  {
+    "name": "Typography",
+    "children": [
+      { "name": "Case" },
+      { "name": "Caption Font" },
+      { "name": "Line spacing" },
+      { "name": "Letter Spacing" },
+      {
+        "name": "Bounce",
+        "children": [
+          { "name": "Enable" },
+          { "name": "Frequency" },
+          { "name": "Amplitude" },
+          { "name": "Decay" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Animated Segment",
+    "children": [
+      { "name": "Fill" },
+      { "name": "Stroke" },
+      { "name": "Enable Stroke" },
+      { "name": "Stroke Width" },
+      {
+        "name": "Animation",
+        "children": [
+          { "name": "Position" },
+          { "name": "Scale" },
+          { "name": "Rotation" },
+          { "name": "Opacity" },
+          { "name": "Blur" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Static Segment",
+    "children": [
+      { "name": "Enable" },
+      { "name": "Fill" },
+      { "name": "Stroke" },
+      { "name": "Enable Stroke" },
+      { "name": "Stroke Width" },
+      { "name": "Opacity" }
+    ]
+  },
+  {
+    "name": "Follow",
+    "children": [
+      { "name": "Enable" },
+      { "name": "Fill" },
+      { "name": "Stroke" },
+      { "name": "Enable Stroke" },
+      { "name": "Stroke Width" },
+      {
+        "name": "Background",
+        "children": [
+          { "name": "Enable" },
+          { "name": "Fill" },
+          { "name": "Stroke" },
+          { "name": "Enable Stroke" },
+          { "name": "Stroke Width" },
+          { "name": "Padding X" },
+          { "name": "Padding Y" },
+          { "name": "Roundness" },
+          { "name": "Opacity" }
+        ]
+      },
+      {
+        "name": "Animation",
+        "children": [
+          { "name": "Position" },
+          { "name": "Scale" },
+          { "name": "Rotation" },
+          { "name": "Opacity" },
+          { "name": "Blur" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Background",
+    "children": [
+      { "name": "Background Enable" },
+      { "name": "Padding X" },
+      { "name": "Padding Y" },
+      { "name": "Roundness" },
+      { "name": "Fill" },
+      { "name": "Stroke" },
+      { "name": "Enable Stroke" },
+      { "name": "Stroke Width" },
+      { "name": "Opacity" }
+    ]
+  },
+  {
+    "name": "Store hidden",
+    "children": [
+      { "name": "captions_batch_01" },
+      { "name": "captions_batch_02" },
+      { "name": "captions_batch_03" },
+      { "name": "captions_batch_04" },
+      { "name": "captions_batch_05" },
+      { "name": "captions_batch_06" },
+      { "name": "captions_batch_07" },
+      { "name": "captions_batch_08" },
+      { "name": "captions_batch_09" },
+      { "name": "captions_batch_10" },
+      { "name": "captions_batch_11" },
+      { "name": "captions_batch_12" },
+      { "name": "captions_batch_13" },
+      { "name": "captions_batch_14" },
+      { "name": "captions_batch_15" }
+    ]
+  },
+  {
+    "name": "Bridge hidden",
+    "children": [
+      { "name": "Segment Type" },
+      { "name": "Line Count" },
+      { "name": "Chars Per Line" }
+    ]
+  }
+]

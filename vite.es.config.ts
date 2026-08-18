@@ -13,9 +13,6 @@ const GLOBAL_THIS = "thisObj";
 /** Inline package env so ExtendScript never sees bare `process`. */
 function extEnvDefines(): Record<string, string> {
   return {
-    "process.env.SPUNKRAM_EXT_FLAVOR": JSON.stringify(
-      process.env.SPUNKRAM_EXT_FLAVOR || "",
-    ),
     "process.env.ZXP_PACKAGE": JSON.stringify(process.env.ZXP_PACKAGE || ""),
     "process.env.ZIP_PACKAGE": JSON.stringify(process.env.ZIP_PACKAGE || ""),
   };

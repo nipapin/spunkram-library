@@ -9,6 +9,8 @@ interface GeneratedTextSectionProps {
   placeholder: string;
   rows?: number;
   onChange: (value: string) => void;
+  /** Normalize / commit when the field loses focus (e.g. tags → `#a #b`). */
+  onBlur?: () => void;
   onRegenerate: () => void;
   regenerating: boolean;
   canRegenerate?: boolean;
@@ -21,6 +23,7 @@ export const GeneratedTextSection = ({
   placeholder,
   rows = 3,
   onChange,
+  onBlur,
   onRegenerate,
   regenerating,
   canRegenerate = true,
@@ -63,6 +66,7 @@ export const GeneratedTextSection = ({
         className="generated-text-section__input"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         placeholder={placeholder}
         rows={rows}
         aria-label={label}

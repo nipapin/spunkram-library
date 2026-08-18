@@ -68,8 +68,16 @@
   font-size: 11.5px;
 }
 
-.chapters-tab__generate-btn.btn--primary {
+.chapters-tab__generate-btn.btn.btn--primary {
+  width: 100%;
   min-width: 0;
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  font-size: 12px;
+  border-radius: var(--radius-xl);
 }
 
 // ───────────────────────── history (landing) ─────────────────────────
@@ -184,29 +192,44 @@
 
 // ───────────────────────── results ─────────────────────────
 
-.chapters-tab__back {
+.chapters-tab__results-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
-  align-self: center;
-  margin: 0 2px;
+  margin: 8px 10px 0;
+  padding: 8px 10px;
+  background: rgba(17, 20, 37, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+}
+
+.chapters-tab__results-title {
+  flex: 1;
+  min-width: 0;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chapters-tab .icon-btn.chapters-tab__close {
+  flex-shrink: 0;
   width: 28px;
   height: 28px;
   border-radius: 999px;
   color: var(--text-dim);
 
-  &:hover {
+  &:hover:not(:disabled) {
+    border-radius: 999px;
     color: var(--text-body);
     background: rgba(106, 83, 248, 0.12);
   }
-}
-
-.chapters-tab__header-title {
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .02em;
-  color: var(--text-primary);
 }
 
 .chapters-tab__results-body {

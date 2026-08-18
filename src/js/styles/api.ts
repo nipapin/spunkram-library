@@ -28,6 +28,35 @@ export const authErrorMessage = (err: unknown): string | null => {
   return null;
 };
 
+const CATALOG_TIMEOUT_MS = 12000;
+
+const fetchWithTimeout = async (
+  url: string,
+  init: RequestInit | undefined,
+  timeoutMs: number,
+): Promise<Response> => {
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  let timer = 0;
+  try {
+    const request = fetch(url, ctrl ? { ...init, signal: ctrl.signal } : init);
+    const timeout = new Promise<Response>((_, reject) => {
+      timer = setTimeout(() => {
+        ctrl?.abort();
+        reject(new CaptionApiError("Captions server timed out", 0, "TIMEOUT"));
+      }, timeoutMs) as unknown as number;
+    });
+    return await Promise.race([request, timeout]);
+  } catch (err) {
+    if (err instanceof CaptionApiError) throw err;
+    if (ctrl?.signal.aborted) {
+      throw new CaptionApiError("Captions server timed out", 0, "TIMEOUT");
+    }
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 const asCaption = (
   raw: unknown,
   categoryName: string,
@@ -79,10 +108,14 @@ export const fetchCaptionsCatalog = async (brand?: BrandId): Promise<CaptionCata
   const url = brand
     ? `${CAPTIONS_ENDPOINTS.catalog}?brand=${encodeURIComponent(brand)}`
     : CAPTIONS_ENDPOINTS.catalog;
-  const response = await fetch(apiUrl(url), {
-    method: "GET",
-    headers: { Accept: "application/json" },
-  });
+  const response = await fetchWithTimeout(
+    apiUrl(url),
+    {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    },
+    CATALOG_TIMEOUT_MS,
+  );
   if (!response.ok) {
     throw new CaptionApiError(`Could not load captions (${response.status})`, response.status);
   }

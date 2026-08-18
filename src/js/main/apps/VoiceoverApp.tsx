@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -30,14 +30,12 @@ import * as panelStore from "@/lib/userdata-store";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { friendlyErrorMessage } from "@/utils/user-error";
 import { textGenerationsCost, withGenerationCostLabel } from "../../utils/generationCost";
-
-const ACCENT_PILL =
-  "bg-gradient-to-b from-primary to-primary/70 text-primary-foreground border border-primary/60 shadow-md shadow-primary/40 ring-1 ring-inset ring-white/15";
+import { rangeFillStyle } from "../../utils/rangeFillStyle";
+import { ScrubNumber } from "../../components/ScrubNumber";
+import "./VoiceoverApp.scss";
 
 const HISTORY_STORAGE_KEY = "spunkram.voiceoverHistory";
 const HISTORY_MAX = 30;
-/** Inline preview under the form; full list opens in a modal. */
-const HISTORY_PREVIEW = 5;
 
 const EMOTION_OPTIONS = [
   { id: "auto", name: "Auto" },
@@ -148,13 +146,6 @@ function playbackUrlFor(item: VoiceoverHistoryItem): string | null {
     return `file://${item.localPath!.replace(/\\/g, "/")}`;
   }
   return item.audioUrl || null;
-}
-
-function rangeStyle(value: number, min: number, max: number): CSSProperties {
-  const pct = ((value - min) / (max - min)) * 100;
-  return {
-    background: `linear-gradient(to right, rgb(var(--primary)) ${pct}%, rgba(var(--secondary), 1) ${pct}%)`,
-  };
 }
 
 function emotionLabel(id: string): string {
@@ -315,7 +306,7 @@ function VoicePreview({ voice }: { voice: VoiceoverVoice | undefined }) {
         {playing ? <Pause className="size-3" /> : <Play className="size-3" />}
       </button>
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1 truncate text-[10px] text-muted-foreground">
+        <p className="voiceover-app__preview-hint flex items-center gap-1 truncate">
           <Volume2 className="size-3 shrink-0" />
           {previewUrl
             ? `Preview · ${voice?.name || "voice"}`
@@ -658,228 +649,179 @@ export const VoiceoverApp = ({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-3">
-      <div className="rounded-xl border border-white/10 bg-card/60 p-3 ring-1 ring-inset ring-white/5">
-        <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-foreground">
-          <Mic className="size-3.5 text-primary" />
-          Voiceover
-        </div>
+    <div className="voiceover-app">
+      <div className="voiceover-app__body thin-scroll">
+        <div className="card voiceover-app__card">
+          <div className="voiceover-app__card-head">
+            <p className="voiceover-app__card-title">
+              <Mic className="size-3.5" style={{ color: "var(--accent)" }} />
+              Voiceover
+            </p>
+            {history.length > 0 ? (
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => setHistoryOpen(true)}
+                title="View all generations"
+                aria-label="View all generations"
+              >
+                <List size={14} strokeWidth={2} />
+              </button>
+            ) : null}
+          </div>
 
-        <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          Script
-        </label>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={5}
-          placeholder="Enter the narration text…"
-          className="mb-3 w-full resize-none rounded-lg border border-white/10 bg-background/50 px-2.5 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/50"
-        />
-
-        <div className="mb-3">
-          <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Language
-          </label>
-          <DropdownSelect
-            items={languages}
-            value={languageBoost}
-            onChange={setLanguageBoost}
-            labelFor={(l) => l.name}
-            placeholder="Select language"
+          <label className="voiceover-app__label">Script</label>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={5}
+            placeholder="Enter the narration text…"
+            className="voiceover-app__script"
           />
-        </div>
 
-        <div className="mb-3 grid grid-cols-2 gap-3">
-          <div className="min-w-0">
-            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Voice
-            </label>
+          <div className="voiceover-app__field">
+            <label className="voiceover-app__label">Language</label>
             <DropdownSelect
-              items={voices}
-              value={voiceId}
-              onChange={setVoiceId}
-              labelFor={(v) => v.name}
-              placeholder="Select voice"
-            />
-            <VoicePreview voice={selectedVoice} />
-          </div>
-          <div className="min-w-0">
-            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Emotion
-            </label>
-            <DropdownSelect
-              items={[...EMOTION_OPTIONS]}
-              value={emotion}
-              onChange={setEmotion}
-              labelFor={(e) => e.name}
-              placeholder="Select emotion"
+              items={languages}
+              value={languageBoost}
+              onChange={setLanguageBoost}
+              labelFor={(l) => l.name}
+              placeholder="Select language"
             />
           </div>
-        </div>
 
-        <div className="mb-3 space-y-3">
-          <div>
-            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Speed {speed.toFixed(1)}x
-            </label>
-            <div className="flex h-[34px] items-center">
+          <div className="voiceover-app__voice-grid">
+            <div className="min-w-0">
+              <label className="voiceover-app__label">Voice</label>
+              <DropdownSelect
+                items={voices}
+                value={voiceId}
+                onChange={setVoiceId}
+                labelFor={(v) => v.name}
+                placeholder="Select voice"
+              />
+              <VoicePreview voice={selectedVoice} />
+            </div>
+            <div className="min-w-0">
+              <label className="voiceover-app__label">Emotion</label>
+              <DropdownSelect
+                items={[...EMOTION_OPTIONS]}
+                value={emotion}
+                onChange={setEmotion}
+                labelFor={(e) => e.name}
+                placeholder="Select emotion"
+              />
+            </div>
+          </div>
+
+          <div className="voiceover-app__sliders">
+            <div className="field-row voiceover-app__slider-row">
+              <span className="field-row__label">Speed</span>
               <input
                 type="range"
+                className="range"
                 min={0.5}
                 max={2}
                 step={0.1}
                 value={speed}
                 onChange={(e) => setSpeed(Number(e.target.value))}
                 aria-label="Voiceover speed"
-                className="thumb-size-range h-1 w-full cursor-pointer appearance-none rounded-full"
-                style={rangeStyle(speed, 0.5, 2)}
+                style={rangeFillStyle(speed, 0.5, 2)}
+              />
+              <ScrubNumber
+                value={speed}
+                onChange={setSpeed}
+                min={0.5}
+                max={2}
+                step={0.1}
+                suffix="x"
               />
             </div>
-            <div className="mt-0.5 flex justify-between text-[9px] text-muted-foreground">
-              <span>0.5x</span>
-              <span>2.0x</span>
-            </div>
-          </div>
 
-          <div>
-            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Volume {volume.toFixed(1)}
-            </label>
-            <div className="flex h-[34px] items-center">
+            <div className="field-row voiceover-app__slider-row">
+              <span className="field-row__label">Volume</span>
               <input
                 type="range"
+                className="range"
                 min={0}
                 max={10}
                 step={0.1}
                 value={volume}
                 onChange={(e) => setVolume(Number(e.target.value))}
                 aria-label="Voiceover volume"
-                className="thumb-size-range h-1 w-full cursor-pointer appearance-none rounded-full"
-                style={rangeStyle(volume, 0, 10)}
+                style={rangeFillStyle(volume, 0, 10)}
               />
+              <ScrubNumber value={volume} onChange={setVolume} min={0} max={10} step={0.1} />
             </div>
-            <div className="mt-0.5 flex justify-between text-[9px] text-muted-foreground">
-              <span>0</span>
-              <span>10</span>
-            </div>
-          </div>
 
-          <div>
-            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Pitch {pitch > 0 ? "+" : ""}
-              {pitch}
-            </label>
-            <div className="flex h-[34px] items-center">
+            <div className="field-row voiceover-app__slider-row">
+              <span className="field-row__label">Pitch</span>
               <input
                 type="range"
+                className="range"
                 min={-12}
                 max={12}
                 step={1}
                 value={pitch}
                 onChange={(e) => setPitch(Number(e.target.value))}
                 aria-label="Voiceover pitch"
-                className="thumb-size-range h-1 w-full cursor-pointer appearance-none rounded-full"
-                style={rangeStyle(pitch, -12, 12)}
+                style={rangeFillStyle(pitch, -12, 12)}
               />
-            </div>
-            <div className="mt-0.5 flex justify-between text-[9px] text-muted-foreground">
-              <span>−12</span>
-              <span>+12</span>
+              <ScrubNumber value={pitch} onChange={setPitch} min={-12} max={12} step={1} />
             </div>
           </div>
         </div>
+      </div>
 
+      <div className="voiceover-app__footer">
         <button
           type="button"
           disabled={!canGenerate}
           onClick={() => void handleGenerate()}
-          className={cn(
-            "flex w-full items-center justify-center gap-1.5 rounded-full px-3 py-2.5 text-xs font-semibold transition-opacity",
-            ACCENT_PILL,
-            !canGenerate && "cursor-not-allowed opacity-50",
-          )}
+          className="btn btn--primary voiceover-app__generate"
         >
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 fill-current" />}
-          {outOfCredits ? "No generations left" : withGenerationCostLabel("Generate voiceover", generationCost)}
+          {busy ? <span className="spinner" /> : null}
+          {outOfCredits ? "No generations left" : withGenerationCostLabel("Generate", generationCost)}
         </button>
         {outOfCredits ? (
-          <p className="mt-2 text-center text-[10px] text-muted-foreground">
+          <p className="voiceover-app__credits-hint">
             Upgrade your plan or buy extra generations to continue.
           </p>
         ) : null}
       </div>
 
-      {history.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between px-0.5">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              History
-            </p>
-            <button
-              type="button"
-              onClick={() => setHistoryOpen(true)}
-              title="View all generations"
-              aria-label="View all generations"
-              className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-            >
-              <List className="size-3.5" strokeWidth={2} />
-            </button>
-          </div>
-          {history.slice(0, HISTORY_PREVIEW).map((item) => (
-            <HistoryItemCard
-              key={item.id}
-              item={item}
-              placing={placing}
-              onPlace={(row, destination) => void place(row, destination)}
-              onLocalPath={updateLocalPath}
-            />
-          ))}
-        </div>
-      )}
-
       {historyOpen
         ? createPortal(
             <div
-              className="fixed inset-0 z-[1100] flex items-end justify-center bg-background/85 p-2 sm:items-center"
-              onClick={() => setHistoryOpen(false)}
-              role="presentation"
+              className="ai-tools-scope voiceover-app__history-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Voiceover history"
             >
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-label="Voiceover history"
-                className="flex max-h-[min(90vh,640px)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-white/10 bg-card shadow-xl ring-1 ring-inset ring-white/5"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2.5">
-                  <div>
-                    <p className="text-[11px] font-semibold text-foreground">
-                      All generations
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {history.length} saved
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setHistoryOpen(false)}
-                    aria-label="Close"
-                    className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-                  >
-                    <X className="size-3.5" strokeWidth={2} />
-                  </button>
+              <div className="voiceover-app__history-header">
+                <div>
+                  <p className="voiceover-app__history-title">All generations</p>
+                  <p className="voiceover-app__history-count">{history.length} saved</p>
                 </div>
-                <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2.5">
-                  {history.map((item) => (
-                    <HistoryItemCard
-                      key={item.id}
-                      item={item}
-                      placing={placing}
-                      onPlace={(row, destination) => void place(row, destination)}
-                      onLocalPath={updateLocalPath}
-                    />
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen(false)}
+                  aria-label="Close"
+                  className="icon-btn voiceover-app__history-close"
+                >
+                  <X size={14} strokeWidth={2} />
+                </button>
+              </div>
+              <div className="voiceover-app__history-body">
+                {history.map((item) => (
+                  <HistoryItemCard
+                    key={item.id}
+                    item={item}
+                    placing={placing}
+                    onPlace={(row, destination) => void place(row, destination)}
+                    onLocalPath={updateLocalPath}
+                  />
+                ))}
               </div>
             </div>,
             document.body,

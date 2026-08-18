@@ -5,12 +5,72 @@
   min-height: 0;
 }
 
-.captions-tab__list {
+.captions-tab__panel {
   flex: 1;
-  padding: 12px;
+  min-height: 0;
+  margin: 8px 10px 10px;
+  border-radius: var(--radius-xxl);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  overflow: auto;
+}
+
+.captions-tab__list {
+  flex: 1;
+  min-height: 0;
+  // Only vertical padding — horizontal aligns segment cards with `.tabs` width
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--text-faint);
+  }
+}
+
+.captions-tab__transcript-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1px;
+}
+
+.captions-tab__transcript-head .captions-tab__section-label {
+  margin: 0;
+}
+
+.captions-tab .icon-btn.captions-tab__back {
+  flex-shrink: 0;
+  align-self: center;
+  margin: 0 2px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: var(--text-dim);
+
+  &:hover:not(:disabled) {
+    border-radius: 999px;
+    color: var(--text-body);
+    background: rgba(106, 83, 248, 0.12);
+  }
 }
 
 // ───────────────────────── landing (до первой транскрипции, без табов) ─────────────────────────
@@ -27,6 +87,8 @@
 }
 
 .captions-tab__landing-footer {
+  position: relative;
+  z-index: 2;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -37,25 +99,25 @@
   display: flex;
   align-items: center;
   gap: 8px;
-
-  // Beat `.ai-tools-scope .btn--primary` (46px) / `.btn--ghost` (36px) mismatch.
-  .captions-tab__transcribe-btn.btn.btn--primary,
-  .captions-tab__load-btn.btn.btn--ghost {
-    height: 36px;
-    min-height: 36px;
-    max-height: 36px;
-    box-sizing: border-box;
-    padding: 0 14px;
-    font-size: 12px;
-    border-radius: var(--radius-xl);
-  }
 }
 
-.captions-tab__load-btn.btn--ghost {
+.captions-tab__landing-actions .captions-tab__transcribe-btn.btn.btn--primary,
+.captions-tab__landing-actions .captions-tab__load-btn.btn.btn--ghost {
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  box-sizing: border-box;
+  padding: 0 14px;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: var(--radius-xl);
+}
+
+.captions-tab__load-btn.btn.btn--ghost {
   flex-shrink: 0;
 }
 
-.captions-tab__transcribe-btn.btn--primary {
+.captions-tab__transcribe-btn.btn.btn--primary {
   flex: 1;
   min-width: 0;
 }
@@ -92,7 +154,7 @@
 
 .captions-tab__resegment {
   flex-shrink: 0;
-  margin: 0 12px 12px;
+  margin: 0 0 4px;
   padding: 11px 12px;
 }
 
@@ -115,10 +177,11 @@
 .captions-tab__resegment-chevron {
   color: var(--text-dim);
   transition: transform .15s;
+  transform: scaleY(-1);
 }
 
-.captions-tab__resegment-chevron--closed {
-  transform: rotate(180deg);
+.captions-tab__resegment-chevron--open {
+  transform: scaleY(1);
 }
 
 .captions-tab__resegment-modes {
@@ -160,30 +223,4 @@
   height: 36px;
   font-size: 12px;
   border-radius: var(--radius-md);
-}
-
-.captions-tab__transcript-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 9px;
-}
-
-.captions-tab__transcript-head .captions-tab__section-label {
-  margin: 0;
-}
-
-.captions-tab__back {
-  flex-shrink: 0;
-  align-self: center;
-  margin: 0 2px 0 2px;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  color: var(--text-dim);
-
-  &:hover {
-    color: var(--text-body);
-    background: rgba(106, 83, 248, 0.12);
-  }
 }

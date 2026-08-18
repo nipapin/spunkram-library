@@ -8,6 +8,7 @@ import {
 } from "../../components/ProgressDialog";
 import { fs } from "../../lib/cep/node";
 import { csi, reloadJSX } from "../../lib/utils/bolt";
+import { MotionFlow } from "@/sdk";
 import { hostSdk, sdkData } from "@/sdk/host-api";
 import { convertToMp3, detectSpeechStart } from "../../utils/ffmpeg";
 import { getBundledAudioPresetPath } from "../../utils/audioPreset";
@@ -373,6 +374,11 @@ export const CaptionsApp = ({
   };
 
   const runTranscription = async (signal: AbortSignal) => {
+    // Progress first — style download / JSX load can take seconds with no other UI.
+    setProgress({ stage: "rendering" });
+    await MotionFlow.ready();
+    throwIfCancelled(signal);
+
     const user = getUserIdentity();
     const selected = presets.find((p) => p.id === selectedPresetId);
     let activeMogrtPath = mogrtPath;
@@ -400,12 +406,10 @@ export const CaptionsApp = ({
         "This style has no .mogrt file for Premiere Pro. Select a style with Premiere support and try again.",
       );
     }
-
-    setProgress({ stage: "rendering" });
     // Premiere: пользовательский .epr из Settings, иначе бандленный WAV-пресет;
     // AE игнорирует параметр
     const effectivePresetPath = audioPresetPath || getBundledAudioPresetPath() || undefined;
-    const describeRaw = await sdkData(hostSdk().describe(effectivePresetPath));
+    const describeRaw = await sdkData(MotionFlow.describe(effectivePresetPath));
     throwIfCancelled(signal);
     const describeFail = describeRaw as {
       ok?: false;
@@ -482,6 +486,9 @@ export const CaptionsApp = ({
 
       // чиним разорванные ИИ предложения + подрезаем ведущую тишину
       const normalized = clampTranscriptionToSpeechStart(normalize(transcription), speechStart);
+      if (!normalized.words?.chunks?.length && !normalized.chunk?.chunks?.length) {
+        throw new Error("No speech found in the In/Out range. Check the audio and try again.");
+      }
       persistCustomSegments(null);
       persist(normalized);
 
@@ -503,6 +510,12 @@ export const CaptionsApp = ({
       await reloadJSX();
       const createRes = await sdkData(hostSdk().createCaptions(payload));
       throwIfCancelled(signal);
+      if (
+        createRes == null ||
+        (typeof createRes === "object" && (createRes as { created?: number }).created === 0)
+      ) {
+        throw new Error("Could not create captions on the timeline. Select a style and try again.");
+      }
       // evalTS() типизирует createCaptions по пересечению сигнатур ppro.ts/aeft.ts,
       // так что trackIndex/compId выглядят для TS как один фиксированный (не оба
       // опциональных) набор — приводим к реальной форме явно, определяем по хосту
