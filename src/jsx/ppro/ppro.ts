@@ -1,5 +1,5 @@
-﻿export { getSystemFonts } from "../utils/system-fonts";
-export { importMedia, importVoiceoverAudio } from "./ppro-import-media";
+﻿export { importMedia, importVoiceoverAudio } from "./ppro-import-media";
+export { importExternalAsset } from "./ppro-import-external";
 export { applyPackItem } from "./ppro-apply-item";
 import { applyPackItem } from "./ppro-apply-item";
 export {
@@ -47,6 +47,7 @@ import {
 export { helloError, helloStr, helloNum, helloArrayStr, helloObj, helloVoid };
 import { dispatchTS, readJsonUtf8 } from "../utils/utils";
 import { CAPTION_SYSTEM } from "../../shared/caption-system";
+import { captionsBinName, stylesBinName } from "../../shared/shared";
 import {
   applyMogrtStyleProps,
   collectCaptionClips,
@@ -863,7 +864,7 @@ export const applyStyleProject = (payload: ApplyStyleProjectPayload) => {
     ctype: payload.mogrtPath ? "MOGRT" : "PROJECT",
     filePath,
     itemName: payload.styleName,
-    binName: "Spunkram Styles",
+    binName: stylesBinName,
   });
 
   if (!result.applied) return { applied: false, reason: result.reason };

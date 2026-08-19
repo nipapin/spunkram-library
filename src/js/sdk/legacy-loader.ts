@@ -14,7 +14,6 @@ const LEGACY_ORDER = [
   "ae_preset_manager.jsx",
   "ae_text_presets.jsx",
   "pp_composer.jsx",
-  "external_lib_import.jsx",
 ];
 
 export function legacyLoaded(): boolean {
@@ -38,7 +37,6 @@ async function installMfAliases(): Promise<void> {
       if ($._AtomExt_aePresetManager) $._MotionFlow.aePresetManager = $._AtomExt_aePresetManager;
       if ($._AtomExt_aeTextPresets) $._MotionFlow.aeTextPresets = $._AtomExt_aeTextPresets;
       if ($._AtomExt_additionalActions) $._MotionFlow.additional = $._AtomExt_additionalActions;
-      if ($._AtomExt_externalLibAssetImporter) $._MotionFlow.externalLib = $._AtomExt_externalLibAssetImporter;
     })()`,
     true,
   );

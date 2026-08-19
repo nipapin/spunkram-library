@@ -147,11 +147,15 @@ export const MotionFlow = {
   ): Promise<MfResult<unknown>> {
     await ensureHost();
     return wrap(async () => {
-      const method = host === "AE" ? "importToAE" : "importToPR";
-      return evalES(
-        `(function(){ if(!$._AtomExt_externalLibAssetImporter) throw new Error('LEGACY_EXTERNAL_LIB_NOT_LOADED'); return $._AtomExt_externalLibAssetImporter.${method}(${JSON.stringify(typeImportTo)}, ${JSON.stringify(filePath)}); })()`,
-        true,
-      );
+      const payload = { typeImportTo, filePath };
+      const r = await evalTS("importExternalAsset", payload);
+      if (r && typeof r === "object" && (r as { ok?: boolean }).ok === false) {
+        throw new Error(String((r as { reason?: string }).reason || "importExternalAsset failed"));
+      }
+      if (r && typeof r === "object" && "data" in (r as object)) {
+        return (r as { data?: unknown }).data;
+      }
+      return r;
     });
   },
 

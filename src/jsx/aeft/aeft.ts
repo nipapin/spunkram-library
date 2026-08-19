@@ -1,5 +1,5 @@
-﻿export { getSystemFonts } from "../utils/system-fonts";
-export { importMedia, importVoiceoverAudio } from "./aeft-import-media";
+﻿export { importMedia, importVoiceoverAudio } from "./aeft-import-media";
+export { importExternalAsset } from "./aeft-import-external";
 export { applyPackItem } from "./aeft-apply-item";
 import { applyPackItem } from "./aeft-apply-item";
 export {
@@ -55,7 +55,7 @@ export const helloWorld = () => {
   app.project.activeItem;
 };
 
-import { captionsBinName } from "../../shared/shared";
+import { captionsBinName, stylesBinName } from "../../shared/shared";
 import {
   CAPTION_BATCH_COUNT,
   CAPTION_SYSTEM,
@@ -985,7 +985,7 @@ export const applyStyleProject = (payload: ApplyStyleProjectPayload) => {
     ctype: "PROJECT",
     filePath,
     itemName: payload.styleName,
-    binName: "Spunkram Styles",
+    binName: stylesBinName,
   });
 
   if (!result.applied) return { applied: false, reason: result.reason };
