@@ -1,9 +1,15 @@
-﻿var commentFoundData = ["ATOM_CUSTOMIZER_LAYER", "ATOM_TEXT_EDITOR_LAYER", "ATOM_TIMING_CONTROL_LAYER", "ATOM_PLACEHOLDER_LAYER", "ATOM_EXTERNAL_NULL", "ATOM_CUSTOMIZER_COMMENT_MAIN", "ATOM_CUSTOMIZER_COMMENT_TEXT"];
+﻿/**
+ * AE composer — port of legacy `ae_composer.jsx` (phase 7).
+ * @ts-nocheck — ExtendScript parity; split into submodules later if needed.
+ */
+import { arabicEngine } from "./aeft-text-arabic";
+
+var commentFoundData = ["ATOM_CUSTOMIZER_LAYER", "ATOM_TEXT_EDITOR_LAYER", "ATOM_TIMING_CONTROL_LAYER", "ATOM_PLACEHOLDER_LAYER", "ATOM_EXTERNAL_NULL", "ATOM_CUSTOMIZER_COMMENT_MAIN", "ATOM_CUSTOMIZER_COMMENT_TEXT"];
 
 var markerCuePoint = "ATOM_EXTENSION_BY_ANIOM";
 
-var root_folder_name = "Atom";
-var root_folder_comment = "Atom Composer Assets";
+var root_folder_name = "Motionflow";
+var root_folder_comment = "Motionflow Composer Assets";
 
 var count_duplicate_name = 1;
 var repeat_duplicate_name = "";
@@ -33,7 +39,7 @@ var expressionTR_CYCLE_OUT = 'try{loopOut();}catch(e){value;}';
 
 var expressionTR_OFFSET_DURATION = 'try{mTime = marker.key(1).time;kOneTime = key(1).time;kSecTime = key(2).time;a = mTime - inPoint;b = outPoint - mTime;aK = kSecTime - kOneTime;bK = key(numKeys).time - kSecTime;aD = a / aK;bD = b / bK;if (time < mTime) {valueAtTime(kOneTime + (time - inPoint) / aD);}else {valueAtTime(kSecTime + (time - kSecTime) / bD);}}catch(e){value;}';
 
-$._AtomExt_aeComposer = {
+const aeComposer = {
 
 	maskedTransferOnce: function (newValue) {
 		root_folder_name = newValue;
@@ -362,7 +368,7 @@ $._AtomExt_aeComposer = {
 					if ((comp.selectedLayers.length == 0) || !(comp.selectedLayers[0] instanceof TextLayer)) { return "TEXT_LAYER"; }
 
 					//load Additional Libs with scripts and functions
-					var getAdditionalArabicCore = $._AtomExt_additionalActions.arabicEngine;
+					var getAdditionalArabicCore = arabicEngine;
 
 					for (var i = 0; i < comp.selectedLayers.length; i++) {
 						var layer = comp.selectedLayers[i];
@@ -2977,4 +2983,46 @@ function incrementName(string) {
 	}
 }
 
+export const setComposerRootFolder = (name: string) => aeComposer.maskedTransferOnce(name);
+
+export const applyComp = (
+	itemId: string,
+	itemName: string,
+	itemGroup: string,
+	args_object: unknown,
+	extraArguments: unknown,
+	aePath: string,
+	packageName: string,
+	pack_options: unknown,
+) =>
+	aeComposer.applyComp(
+		itemId,
+		itemName,
+		itemGroup,
+		args_object,
+		extraArguments,
+		aePath,
+		packageName,
+		pack_options,
+	);
+
+export const addTextAnimatorComp = (
+	action: string,
+	args_object: unknown,
+	extraArguments: unknown,
+	aePath: string,
+	packageName: string,
+	pack_options: unknown,
+) => aeComposer.addTextAnimatorComp(action, args_object, extraArguments, aePath, packageName, pack_options);
+
+export const addPhotoAnimatorComp = (
+	action: string,
+	args_object: unknown,
+	extraArguments: unknown,
+	aePath: string,
+	packageName: string,
+	pack_options: unknown,
+) => aeComposer.addPhotoAnimatorComp(action, args_object, extraArguments, aePath, packageName, pack_options);
+
+export const aeToolsRun = (type: string) => aeComposer.buttons(type);
 

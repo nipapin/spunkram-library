@@ -10,14 +10,13 @@ Panel / author code
         ▼
 src/js/sdk/MotionFlow.ts     ← public API
         │
-   evalTS / evalES / legacy loader
+   evalTS only
         │
-$[extensionId]  +  src/jsx/legacy/* (Beta port)
+$[extensionId]  host TS (aeft / ppro / shared)
 ```
 
 - **JS SDK**: [`src/js/sdk/`](../src/js/sdk/)
 - **Host TS**: [`src/jsx/aeft/`](../src/jsx/aeft/), [`src/jsx/ppro/`](../src/jsx/ppro/), [`src/jsx/shared/`](../src/jsx/shared/)
-- **Legacy Beta port**: [`src/jsx/legacy/`](../src/jsx/legacy/) (loaded after Bolt `index.js`)
 
 Inventory: [`docs/sdk/INVENTORY.md`](./sdk/INVENTORY.md) · Parity: [`docs/sdk/PARITY.md`](./sdk/PARITY.md) · Author guide: [`docs/sdk/AUTHOR_COOKBOOK.md`](./sdk/AUTHOR_COOKBOOK.md) · Full legacy exit: [`docs/sdk/POLNOE_OTRECHENIE.md`](./sdk/POLNOE_OTRECHENIE.md)
 
@@ -46,8 +45,8 @@ await MotionFlow.loadHostScripts()
 await MotionFlow.bindPack(ctx)
 await MotionFlow.setEngine(engineType)
 await MotionFlow.applyPackItem(payload)       // pack apply entry
-await MotionFlow.packs.copyToAppData(...)     // legacy
-await MotionFlow.packs.deleteFiles(...)       // legacy
+await MotionFlow.packs.copyToAppData(...)
+await MotionFlow.packs.deleteFiles(...)
 await MotionFlow.importExternalAsset(...)
 ```
 
@@ -57,7 +56,7 @@ await MotionFlow.importExternalAsset(...)
 MotionFlow.AE.createComp({ name, width, height, duration?, frameRate? })
 MotionFlow.AE.createText({ text, compId?, fontSize?, ... })
 MotionFlow.AE.addResponsiveBackground({ color?, compId? })
-MotionFlow.AE.applyComp(...)                  // legacy composer
+MotionFlow.AE.applyComp(...)                  // host TS composer
 MotionFlow.AE.addTextAnimator(...)
 MotionFlow.AE.addPhotoAnimator(...)
 MotionFlow.AE.applyPreset(...)

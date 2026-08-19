@@ -2,11 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { ChevronRight, Folder, Layers, Film, Music, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePanelUI } from "@/lib/panel-ui-context";
+import { storageKey } from "@/lib/config/brand";
 import * as panelStore from "@/lib/userdata-store";
 import type { PackTreeIcon, PackTreeNode } from "@/lib/utils/pack-types";
 import "./panel-sidebar.scss";
 
-const SIDEBAR_WIDTH_KEY = "spunkram.sidebarWidth";
+const SIDEBAR_WIDTH_KEY = storageKey("sidebarWidth");
 const SIDEBAR_MIN_WIDTH = 140;
 const SIDEBAR_MAX_WIDTH = 360;
 const SIDEBAR_DEFAULT_WIDTH = 192;

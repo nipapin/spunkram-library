@@ -1,5 +1,5 @@
 /**
- * Pack file manifests (`manifest.json` next to the .spunkram / .atom).
+ * Pack file manifests (`manifest.json` next to the `.spunkram`).
  * Array form matches installed Spunkram packs; object form matches smart_update / R2.
  */
 import { fs, path } from "../cep/node";

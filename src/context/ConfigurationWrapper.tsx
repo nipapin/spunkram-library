@@ -26,7 +26,7 @@ import {
 import type { ControlValues, MogrtDefinition } from "../js/presets";
 import type { GroupingMode } from "../js/utils/transcribe";
 import { csi } from "../js/lib/utils/bolt";
-import { MotionFlow } from "../js/sdk";
+import { Motionflow } from "../js/sdk";
 import * as panelStore from "../js/lib/userdata-store";
 
 export type { StylePreset } from "../js/styles";
@@ -69,6 +69,8 @@ interface IConfigurationValue {
   ensureStyleDownloaded: (styleId: string) => Promise<void>;
   /** Подтянуть definition.json для Styles UI (можно до Transcribe). */
   ensureDefinitionLoaded: (styleId: string) => Promise<MogrtDefinition>;
+  /** Применить values выбранного пресета к caption MOGRT на таймлайне (full push). */
+  applySelectedPresetToHost: () => Promise<void>;
 }
 
 const defaultValue: IConfigurationValue = {
@@ -105,6 +107,7 @@ const defaultValue: IConfigurationValue = {
   refreshStyles: async () => {},
   ensureStyleDownloaded: async () => {},
   ensureDefinitionLoaded: async () => ({ clientControls: [] }),
+  applySelectedPresetToHost: async () => {},
 };
 
 const STORAGE_KEY = "aitools-cep-config";
@@ -305,24 +308,32 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
 
   const applyValuesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const applyInFlight = useRef(false);
-  const pendingStyleApply = useRef<{ styleId: string; values: ControlValues; full: boolean } | null>(
-    null,
-  );
+  const pendingStyleApply = useRef<{
+    styleId: string;
+    values: ControlValues;
+    full: boolean;
+    definition?: MogrtDefinition;
+  } | null>(null);
   const lastPushedProps = useRef<{ styleId: string; props: StylePropPayload[] } | null>(null);
 
   const flushStyleValuesToHost = useCallback(
-    (styleId: string, values: ControlValues, full: boolean) => {
-      const definition = definitions[styleId];
-      if (!definition?.clientControls?.length) return;
+    (
+      styleId: string,
+      values: ControlValues,
+      full: boolean,
+      definitionOverride?: MogrtDefinition,
+    ): Promise<void> => {
+      const definition = definitionOverride ?? definitions[styleId];
+      if (!definition?.clientControls?.length) return Promise.resolve();
       const nextProps = stylePropsFromValues(definition, values);
-      if (!nextProps.length) return;
+      if (!nextProps.length) return Promise.resolve();
 
       const prev = lastPushedProps.current;
       const props =
         full || !prev || prev.styleId !== styleId ? nextProps : diffStyleProps(prev.props, nextProps);
       if (!props.length) {
         lastPushedProps.current = { styleId, props: nextProps };
-        return;
+        return Promise.resolve();
       }
 
       let sequenceId: string | undefined;
@@ -348,8 +359,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
 
       applyInFlight.current = true;
       lastPushedProps.current = { styleId, props: nextProps };
-      const hostApi = MotionFlow.host === "AE" ? MotionFlow.AE : MotionFlow.PPRO;
-      hostApi
+      const hostApi = Motionflow.host === "AE" ? Motionflow.AE : Motionflow.PPRO;
+      return hostApi
         .applyCaptionStyleValues({ props, sequenceId, compId, trackIndex })
         .catch((err) => {
           console.warn("[Styles] applyCaptionStyleValues failed", err);
@@ -359,16 +370,22 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
           const pending = pendingStyleApply.current;
           if (!pending) return;
           pendingStyleApply.current = null;
-          flushStyleValuesToHost(pending.styleId, pending.values, pending.full);
-        });
+          void flushStyleValuesToHost(
+            pending.styleId,
+            pending.values,
+            pending.full,
+            pending.definition,
+          );
+        })
+        .then(() => undefined);
     },
     [definitions],
   );
 
   /** Пушим values в caption-клипы: debounce + один in-flight evalScript, только дельта. */
   const pushStyleValuesToHost = useCallback(
-    (styleId: string, values: ControlValues, opts?: { full?: boolean }) => {
-      const definition = definitions[styleId];
+    (styleId: string, values: ControlValues, opts?: { full?: boolean; definition?: MogrtDefinition }) => {
+      const definition = opts?.definition ?? definitions[styleId];
       if (!definition?.clientControls?.length) return;
       if (applyValuesTimer.current) clearTimeout(applyValuesTimer.current);
       applyValuesTimer.current = setTimeout(() => {
@@ -378,14 +395,39 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
             styleId,
             values,
             full: !!opts?.full || !!prev?.full,
+            definition: opts?.definition ?? prev?.definition,
           };
           return;
         }
-        flushStyleValuesToHost(styleId, values, !!opts?.full);
+        void flushStyleValuesToHost(styleId, values, !!opts?.full, definition);
       }, 40);
     },
     [definitions, flushStyleValuesToHost],
   );
+
+  const applySelectedPresetToHost = useCallback(async (): Promise<void> => {
+    const selected = presets.find((p) => p.id === selectedPresetId);
+    if (!selected) return;
+
+    try {
+      const raw = panelStore.getItem("aitools-cep-caption-meta");
+      if (!raw) return;
+      const meta = JSON.parse(raw) as { hostRef?: unknown };
+      if (!meta.hostRef) return;
+    } catch {
+      return;
+    }
+
+    const definition = await ensureDefinitionLoaded(selected.styleId);
+    if (!definition?.clientControls?.length) return;
+
+    const values = Object.keys(selected.values || {}).length
+      ? selected.values
+      : defaultsFromDefinition(definition);
+
+    if (applyValuesTimer.current) clearTimeout(applyValuesTimer.current);
+    await flushStyleValuesToHost(selected.styleId, values, true, definition);
+  }, [presets, selectedPresetId, ensureDefinitionLoaded, flushStyleValuesToHost]);
 
   /** Выбор в UI + подгрузка definition для Styles. aep/mogrt — на Transcribe. */
   const selectPreset = (id: string) => {
@@ -409,7 +451,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         ? target.values
         : defaultsFromDefinition(definition);
       if (Object.keys(values).length) {
-        pushStyleValuesToHost(target.styleId, values, { full: true });
+        pushStyleValuesToHost(target.styleId, values, { full: true, definition });
       }
     });
   };
@@ -454,6 +496,15 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     };
     setPresets((prev) => [...prev, preset]);
     setSelectedPresetId(id);
+    if (definition?.clientControls?.length) {
+      pushStyleValuesToHost(styleId, values, { full: true, definition });
+    } else if (styleId) {
+      void ensureDefinitionLoaded(styleId).then((def) => {
+        if (def?.clientControls?.length) {
+          pushStyleValuesToHost(styleId, values, { full: true, definition: def });
+        }
+      });
+    }
     return id;
   };
 
@@ -523,6 +574,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         refreshStyles,
         ensureStyleDownloaded,
         ensureDefinitionLoaded,
+        applySelectedPresetToHost,
       }}
     >
       {children}

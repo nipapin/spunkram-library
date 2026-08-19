@@ -13,8 +13,9 @@ import {
   X,
 } from "lucide-react";
 import { createPortal } from "react-dom";
+import { storageKey } from "@/lib/config/brand";
 import { cn } from "@/lib/utils";
-import { MotionFlow } from "@/sdk";
+import { Motionflow } from "@/sdk";
 import { fs } from "@/lib/cep/node";
 import {
   downloadVoiceoverFile,
@@ -34,7 +35,7 @@ import { rangeFillStyle } from "../../utils/rangeFillStyle";
 import { ScrubNumber } from "../../components/ScrubNumber";
 import "./VoiceoverApp.scss";
 
-const HISTORY_STORAGE_KEY = "spunkram.voiceoverHistory";
+const HISTORY_STORAGE_KEY = storageKey("voiceoverHistory");
 const HISTORY_MAX = 30;
 
 const EMOTION_OPTIONS = [
@@ -593,7 +594,7 @@ export const VoiceoverApp = ({
       }
 
       const tryImport = async (path: string) =>
-        MotionFlow.importVoiceoverAudio(path, destination, item.duration ?? 1);
+        Motionflow.importVoiceoverAudio(path, destination, item.duration ?? 1);
 
       let wrapped = await tryImport(filePath);
       let outcome = wrapped.ok

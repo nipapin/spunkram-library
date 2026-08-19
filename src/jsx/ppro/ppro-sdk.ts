@@ -182,21 +182,3 @@ export const importAudio = (payload: {
 };
 
 export { undoGroupStart, undoGroupEnd, undoGroupAbort };
-
-export const legacyPpCall = (
-  method: string,
-  argsJson: string,
-): { ok: boolean; data?: unknown; reason?: string } => {
-  try {
-    // @ts-ignore
-    const ns = typeof $ !== "undefined" ? $._AtomExt_ppComposer : null;
-    if (!ns || typeof ns[method] !== "function") {
-      return { ok: false, reason: "LEGACY_PPRO_NOT_LOADED" };
-    }
-    const args = argsJson ? JSON.parse(argsJson) : [];
-    const data = ns[method].apply(ns, args);
-    return { ok: true, data };
-  } catch (e: any) {
-    return { ok: false, reason: e && e.message ? e.message : String(e) };
-  }
-};

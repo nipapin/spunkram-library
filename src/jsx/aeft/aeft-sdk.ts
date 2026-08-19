@@ -136,22 +136,3 @@ export const addResponsiveBackground = (
     return { ok: false, reason: e && e.message ? e.message : String(e) };
   }
 };
-
-/** Call legacy aeComposer when loaded; otherwise return NOT_LOADED. */
-export const legacyAeCall = (
-  method: string,
-  argsJson: string,
-): { ok: boolean; data?: unknown; reason?: string } => {
-  try {
-    // @ts-ignore ExtendScript global from legacy
-    const ns = typeof $ !== "undefined" ? $._AtomExt_aeComposer : null;
-    if (!ns || typeof ns[method] !== "function") {
-      return { ok: false, reason: "LEGACY_AE_NOT_LOADED" };
-    }
-    const args = argsJson ? JSON.parse(argsJson) : [];
-    const data = ns[method].apply(ns, args);
-    return { ok: true, data };
-  } catch (e: any) {
-    return { ok: false, reason: e && e.message ? e.message : String(e) };
-  }
-};

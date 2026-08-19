@@ -36,35 +36,15 @@ export async function reportClientSession(): Promise<void> {
   };
 
   try {
-    let result = await cepHttpRequest(TELEMETRY_URL, {
+    const result = await cepHttpRequest(TELEMETRY_URL, {
       method: "POST",
       headers,
       body,
       timeoutMs: 10000,
     });
 
-    if (
-      !result.ok &&
-      import.meta.env.DEV &&
-      (result.error === "NO_CONNECTION" || result.status === 0)
-    ) {
-      result = await cepHttpRequest(TELEMETRY_SESSION_ENDPOINT, {
-        method: "POST",
-        headers,
-        body,
-        timeoutMs: 10000,
-      });
-    }
-
     if (result.ok) {
       reportedForUserId = userId;
-    } else if (import.meta.env.DEV) {
-      console.warn(
-        "[telemetry] session report failed",
-        result.status,
-        result.error,
-        (result.text || "").slice(0, 160),
-      );
     }
   } catch {
     /* ignore — analytics must never block auth */

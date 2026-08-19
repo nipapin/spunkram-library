@@ -1,5 +1,5 @@
 /**
- * Shared market / auth helpers (no AtomX runtime).
+ * Shared market / auth helpers.
  */
 import { openLinkInBrowser } from "@/lib/utils/bolt";
 
@@ -9,13 +9,6 @@ export type ApiErrorCode =
   | "NO_SUCCESS_LOAD"
   | "WRONG_WITH_PARAMS"
   | string;
-
-/** @deprecated Prefer MotionflowDevice from auth-context. Kept for fingerprint helpers. */
-export type AuthDevice = {
-  usid: string;
-  ip: string;
-  user_fingerprint: string;
-};
 
 export function authErrorMessage(code: ApiErrorCode | undefined): string {
   switch (code) {
@@ -33,8 +26,6 @@ export function authErrorMessage(code: ApiErrorCode | undefined): string {
       return "Too long no response, try later";
     case "INVALID_AUTH":
       return "Invalid email or token";
-    case "INVALID_USID":
-      return "No token — please relog";
     case "MISSING_PARAMS":
       return "Missing parameters";
     case "LIMIT_USED_PC":
@@ -53,14 +44,6 @@ export function authErrorMessage(code: ApiErrorCode | undefined): string {
 export function openYoutube(videoId: string): void {
   if (!videoId) return;
   openLinkInBrowser(`https://www.youtube.com/watch?v=${videoId}`);
-}
-
-export function normalizeDevices(
-  devices: AuthDevice[] | Record<string, AuthDevice> | undefined,
-): AuthDevice[] {
-  if (!devices) return [];
-  if (Array.isArray(devices)) return devices;
-  return Object.values(devices);
 }
 
 export function parseDeviceFingerprint(raw: string): {

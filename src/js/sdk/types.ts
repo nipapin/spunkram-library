@@ -5,6 +5,8 @@ export type MfResult<T = void> =
 
 export type MfHost = "AE" | "PPRO";
 
+export type ImportDestination = "project" | "timeline";
+
 export type ApplyPackItemPayload = {
   ctype: "PROJECT" | "MOGRT" | "AUDIO" | "FOOTAGE";
   filePath: string;
@@ -13,6 +15,16 @@ export type ApplyPackItemPayload = {
   compName?: string;
   /** Seconds — used by Premiere free-track placement (from pack `duration_ticks`). */
   durationSeconds?: number;
+  /** AE composer context — when set, host uses full `applyComp` pipeline. */
+  composer?: {
+    itemId: string;
+    instanceGroup: string;
+    argsObject: Record<string, unknown>;
+    extraArguments: Record<string, unknown>;
+    templatesDir: string;
+    packName: string;
+    packOptions: Record<string, unknown>;
+  };
 };
 
 export type ApplyPackItemResult =

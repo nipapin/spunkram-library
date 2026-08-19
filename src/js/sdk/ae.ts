@@ -7,6 +7,7 @@ import type {
   ApplyPackItemResult,
   CreateCompOptions,
   CreateTextOptions,
+  ImportDestination,
   MfResult,
   ResponsiveBackgroundOptions,
 } from "./types";
@@ -46,38 +47,28 @@ export const AE = {
   async applyComp(...args: unknown[]): Promise<MfResult<unknown>> {
     return wrap(async () => {
       requireHost("AE");
-      const r = await evalTS("legacyAeCall", "applyComp", JSON.stringify(args));
-      if (!r?.ok) throw new Error(r?.reason || "applyComp failed");
-      return r.data;
+      return evalTS("applyComp", ...(args as [string, ...unknown[]]));
     });
   },
 
   async addTextAnimator(...args: unknown[]): Promise<MfResult<unknown>> {
     return wrap(async () => {
       requireHost("AE");
-      const r = await evalTS("legacyAeCall", "addTextAnimatorComp", JSON.stringify(args));
-      if (!r?.ok) throw new Error(r?.reason || "addTextAnimator failed");
-      return r.data;
+      return evalTS("addTextAnimatorComp", ...(args as [string, ...unknown[]]));
     });
   },
 
   async addPhotoAnimator(...args: unknown[]): Promise<MfResult<unknown>> {
     return wrap(async () => {
       requireHost("AE");
-      const r = await evalTS("legacyAeCall", "addPhotoAnimatorComp", JSON.stringify(args));
-      if (!r?.ok) throw new Error(r?.reason || "addPhotoAnimator failed");
-      return r.data;
+      return evalTS("addPhotoAnimatorComp", ...(args as [string, ...unknown[]]));
     });
   },
 
   async applyPreset(...args: unknown[]): Promise<MfResult<unknown>> {
     return wrap(async () => {
       requireHost("AE");
-      const { evalES } = await import("../lib/utils/bolt");
-      return evalES(
-        `(function(){ if(!$._AtomExt_aePresetManager) throw new Error('LEGACY_PRESET_NOT_LOADED'); return $._AtomExt_aePresetManager.applyPreset.apply($._AtomExt_aePresetManager, ${JSON.stringify(args)}); })()`,
-        true,
-      );
+      return evalTS("applyPreset", ...(args as [string, ...unknown[]]));
     });
   },
 
@@ -85,31 +76,19 @@ export const AE = {
     async apply(...args: unknown[]): Promise<MfResult<unknown>> {
       return wrap(async () => {
         requireHost("AE");
-        const { evalES } = await import("../lib/utils/bolt");
-        return evalES(
-          `(function(){ if(!$._AtomExt_aeTextPresets) throw new Error('LEGACY_TEXT_PRESETS_NOT_LOADED'); return $._AtomExt_aeTextPresets.applyAndReplacePreset.apply($._AtomExt_aeTextPresets, ${JSON.stringify(args)}); })()`,
-          true,
-        );
+        return evalTS("applyTextPresets", ...(args as [string, ...unknown[]]));
       });
     },
     async get(): Promise<MfResult<unknown>> {
       return wrap(async () => {
         requireHost("AE");
-        const { evalES } = await import("../lib/utils/bolt");
-        return evalES(
-          `(function(){ if(!$._AtomExt_aeTextPresets) throw new Error('LEGACY_TEXT_PRESETS_NOT_LOADED'); return $._AtomExt_aeTextPresets.getPreset(); })()`,
-          true,
-        );
+        return evalTS("getTextPresets");
       });
     },
     async remove(...args: unknown[]): Promise<MfResult<unknown>> {
       return wrap(async () => {
         requireHost("AE");
-        const { evalES } = await import("../lib/utils/bolt");
-        return evalES(
-          `(function(){ if(!$._AtomExt_aeTextPresets) throw new Error('LEGACY_TEXT_PRESETS_NOT_LOADED'); return $._AtomExt_aeTextPresets.removePreset.apply($._AtomExt_aeTextPresets, ${JSON.stringify(args)}); })()`,
-          true,
-        );
+        return evalTS("removeTextPresets", ...(args as [string, ...unknown[]]));
       });
     },
   },
@@ -118,9 +97,7 @@ export const AE = {
     async run(type: string): Promise<MfResult<unknown>> {
       return wrap(async () => {
         requireHost("AE");
-        const r = await evalTS("legacyAeCall", "buttons", JSON.stringify([type]));
-        if (!r?.ok) throw new Error(r?.reason || "tools failed");
-        return r.data;
+        return evalTS("aeToolsRun", type);
       });
     },
   },
@@ -179,7 +156,11 @@ export const AE = {
   async importMedia(filePath: string, destination: string, duration: number) {
     return wrap(() => evalTS("importMedia", filePath, destination, duration));
   },
-  async importVoiceoverAudio(filePath: string, destination: string, duration: number) {
+  async importVoiceoverAudio(
+    filePath: string,
+    destination: ImportDestination,
+    duration: number,
+  ) {
     return wrap(() => evalTS("importVoiceoverAudio", filePath, destination, duration));
   },
   async applyPackItem(payload: ApplyPackItemPayload): Promise<MfResult<ApplyPackItemResult>> {

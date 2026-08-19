@@ -1,23 +1,23 @@
 # Beta ExtendScript inventory → MotionFlow SDK
 
-Source: `C:\Users\nipap\AppData\Roaming\Adobe\CEP\extensions\Spunkram Beta\jsx\`  
-Ported copies: [`src/jsx/legacy/`](../../src/jsx/legacy/)
+Source: Spunkram Beta `jsx/` (reference only).  
+Runtime host: [`src/jsx/aeft/`](../src/jsx/aeft/), [`src/jsx/ppro/`](../src/jsx/ppro/), [`src/jsx/shared/`](../src/jsx/shared/) — **no** `src/jsx/legacy/` in repo.
 
 Status legend: **ported** (file in repo) · **wrapped** (SDK method live) · **ts** (rewritten TypeScript host export) · **native-only** · **stub**
 
 ## Files
 
-| Beta file | Size | Namespace / globals | SDK target | Status |
-|---|---|---|---|---|
-| `engine.jsx` | ~25 KB | `$._AtomExt_engine`, `applyItem`, pack FS helpers | `MotionFlow.bindPack`, `setEngine`, `packs.*` | ported + wrapped |
-| `pp_composer.jsx` | ~118 KB | `$._AtomExt_ppComposer`, `$._copyPasteSystem`, `addMOGRT` | `MotionFlow.PPRO.*` | ported + partial wrap/ts |
-| `ae_composer.jsx` | ~98 KB | `$._AtomExt_aeComposer` | `MotionFlow.AE.*` | ported + partial wrap/ts |
-| `ae_preset_manager.jsx` | ~49 KB | `$._AtomExt_aePresetManager` | `MotionFlow.AE.applyPreset`, `AE.tools.*` | ported + wrapped |
-| `ae_text_presets.jsx` | ~26 KB | `$._AtomExt_aeTextPresets` | `MotionFlow.AE.textPresets.*` | ported + wrapped |
-| `additional.jsx` | ~9 KB | `$._AtomExt_additionalActions.arabicEngine` | `MotionFlow.AE.tools.formatArabic` | ported |
-| `external_lib_import.jsx` | ~6 KB | `$._AtomExt_externalLibAssetImporter` | `MotionFlow.importExternalAsset` | ported + wrapped |
-| `undo_groups.jsx` | ~7 KB | `PremiereUndoGroups` / `$.undoGroups` | `MotionFlow.PPRO.undoGroup.*` | ported + ts wrapper |
-| `stockassets.jsx` | ~11 KB | `$["com.spunkramassets.cep"].importMedia` | `MotionFlow.*.importMedia` | superseded by ts `*-import-media.ts` |
+| Beta file | Host module | SDK target | Status |
+|---|---|---|---|
+| `engine.jsx` | `shared/engine.ts`, `shared/fs.ts` | `bindPack`, `setEngine`, `packs.*` | **ts** |
+| `pp_composer.jsx` | `ppro-copy-paste.ts`, `ppro-tools.ts`, `ppro-sdk.ts` | `MotionFlow.PPRO.*` | **ts** |
+| `ae_composer.jsx` | `aeft-composer.ts` | `MotionFlow.AE.applyComp`, animators, tools | **ts** |
+| `ae_preset_manager.jsx` | `aeft-presets.ts` | `MotionFlow.AE.applyPreset` | **ts** (applyPreset only; customizer drop) |
+| `ae_text_presets.jsx` | `aeft-text-presets.ts` | `MotionFlow.AE.textPresets.*` | **ts** |
+| `additional.jsx` | `aeft-text-arabic.ts` | `AE.tools` (fix_arabic_lang) | **ts** |
+| `external_lib_import.jsx` | `*-import-external.ts` | `importExternalAsset` | **ts** |
+| `undo_groups.jsx` | `ppro-undo-group.ts` | `PPRO.undoGroup.*` | **ts** |
+| `stockassets.jsx` | `*-import-media.ts` | `importMedia` | **ts** |
 
 ## Public operations map
 
@@ -40,10 +40,12 @@ Status legend: **ported** (file in repo) · **wrapped** (SDK method live) · **t
 | `createComp` | new thin host | **ts** |
 | `createText` | new thin host | **ts** |
 | `addResponsiveBackground` | new thin host (solid + fit) | **ts** |
-| `addTextAnimator` / `addPhotoAnimator` | `aeComposer.*` | wrapped |
-| `applyPreset` | `aePresetManager.applyPreset` | wrapped |
-| `textPresets.*` | `aeTextPresets.*` | wrapped |
-| `tools.*` | buttons / time-remap / auto-size | wrapped |
+| `addTextAnimator` / `addPhotoAnimator` | `aeft-composer.*` | **ts** |
+| `applyPreset` | `aeft-presets.applyPreset` | **ts** |
+| `textPresets.*` | `aeft-text-presets.*` | **ts** |
+| `tools.*` (AE) | `aeft-composer.aeToolsRun` | **ts** |
+| `tools.*` (PR) | `ppro-tools.pproToolsRun` | **ts** |
+| `applyComp` | `aeft-composer.applyComp` | **ts** |
 | `describe`, captions, markers, styles | existing `aeft.ts` | **ts** + wrapped |
 | `importMedia` / `importVoiceoverAudio` | `aeft-import-media.ts` | **ts** + wrapped |
 | `applyPackItem` | `aeft-apply-item.ts` | **ts** + wrapped |

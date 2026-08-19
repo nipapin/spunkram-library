@@ -127,18 +127,22 @@ function creditsFromStatus(
     subscription_generations_left?: number;
     extra_generations_left?: number;
   },
-  generationLimit: number,
+  generationLimit: number | null,
 ): { monthlyLeft: number; extraLeft: number; used: number } {
   const monthlyLeft =
     typeof status.subscription_generations_left === "number"
       ? status.subscription_generations_left
       : typeof status.remaining === "number"
         ? status.remaining
-        : generationLimit;
+        : generationLimit ?? 0;
   const extraLeft =
     typeof status.extra_generations_left === "number" ? status.extra_generations_left : 0;
   const used =
-    typeof status.used === "number" ? status.used : Math.max(0, generationLimit - monthlyLeft);
+    typeof status.used === "number"
+      ? status.used
+      : generationLimit != null
+        ? Math.max(0, generationLimit - monthlyLeft)
+        : 0;
   return {
     monthlyLeft: Math.max(0, monthlyLeft),
     extraLeft: Math.max(0, extraLeft),
@@ -267,11 +271,14 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
         : "Inactive";
   const displayName = auth.name || auth.email || "Spunkram user";
   const isCancelled = (subscription.status || "").toLowerCase().includes("cancel");
-  const monthlyLeft = credits?.monthlyLeft ?? generationLimit;
+  const monthlyLeft = credits?.monthlyLeft ?? 0;
   const extraLeft = credits?.extraLeft ?? 0;
   const usedCount = credits?.used ?? 0;
+  const limitLabel = generationLimit != null ? String(generationLimit) : "—";
   const monthlyPct =
-    generationLimit > 0 ? Math.min(100, Math.round((monthlyLeft / generationLimit) * 100)) : 0;
+    generationLimit != null && generationLimit > 0
+      ? Math.min(100, Math.round((monthlyLeft / generationLimit) * 100))
+      : 0;
 
   return (
     <div className="account-spunkram">
@@ -380,7 +387,7 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
                   <div>
                     <p className="account-spunkram__price">{monthlyLeft + extraLeft}</p>
                     <p className="account-spunkram__sub">
-                      {monthlyLeft}/{generationLimit} monthly
+                      {monthlyLeft}/{limitLabel} monthly
                       {extraLeft > 0 ? ` · ${extraLeft} extra` : ""}
                     </p>
                     <div className="account-spunkram__track">
@@ -388,7 +395,7 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
                     </div>
                     <div className="account-spunkram__usage">
                       <span>
-                        {usedCount} used of {generationLimit} monthly
+                        {usedCount} used of {limitLabel} monthly
                         {extraLeft > 0 ? ` · ${extraLeft} extra left` : ""}
                       </span>
                     </div>

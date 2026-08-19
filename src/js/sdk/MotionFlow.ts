@@ -2,8 +2,7 @@ import { evalTS, initBolt, reloadJSX } from "../lib/utils/bolt";
 import { version as pkgVersion } from "../../shared/shared";
 import { detectHost } from "./host";
 import { fail, ok, wrap } from "./result";
-import { legacyLoaded, loadLegacyJsx } from "./legacy-loader";
-import type { MfResult, PackBindContext } from "./types";
+import type { ImportDestination, MfResult, PackBindContext } from "./types";
 import { AE } from "./ae";
 import { PPRO } from "./ppro";
 
@@ -34,20 +33,17 @@ export const MotionFlow = {
     await ensureHost();
   },
 
-  /** Load Bolt JSX bundle + Beta legacy composers. Safe to call multiple times. */
-  async loadHostScripts(): Promise<
-    MfResult<{ legacyLoaded: string[]; legacyMissing: string[] }>
-  > {
+  /** Load Bolt JSX bundle. Safe to call multiple times. */
+  async loadHostScripts(): Promise<MfResult<{ ok: true }>> {
     return wrap(async () => {
       if (window.cep) {
         initBolt(false);
         await reloadJSX();
-        const legacy = await loadLegacyJsx();
         hostScriptsReady = true;
-        return { legacyLoaded: legacy.loaded, legacyMissing: legacy.missing };
+        return { ok: true as const };
       }
       hostScriptsReady = false;
-      return { legacyLoaded: [], legacyMissing: [] };
+      return { ok: true as const };
     });
   },
 
@@ -128,7 +124,11 @@ export const MotionFlow = {
     return fail("No host");
   },
 
-  async importVoiceoverAudio(filePath: string, destination: string, duration: number) {
+  async importVoiceoverAudio(
+    filePath: string,
+    destination: ImportDestination,
+    duration: number,
+  ) {
     await ensureHost();
     const host = detectHost();
     if (host === "AE") return AE.importVoiceoverAudio(filePath, destination, duration);
@@ -143,9 +143,6 @@ export const MotionFlow = {
     if (host === "PPRO") return PPRO.applyPackItem(payload);
     return fail("No host");
   },
-
-  /** Debug: whether Beta legacy composers finished loading. */
-  legacyLoaded,
 };
 
 export type { MfResult, PackBindContext };

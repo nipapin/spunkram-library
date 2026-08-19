@@ -63,7 +63,7 @@ function mimeFromExt(filePath: string): string {
 /**
  * Read a local file via CEP Node and expose it as a blob: URL.
  * Native `C:\...` paths are parsed as scheme `c:` → ERR_UNKNOWN_URL_SCHEME.
- * `file://` is often blocked from http://localhost Vite panels.
+ * `file://` is often blocked from the panel's http origin.
  */
 export function pathToObjectUrl(absolutePath: string): string | null {
   if (!absolutePath || !cepFsAvailable()) return null;
@@ -147,7 +147,7 @@ function firstExisting(
 }
 
 /**
- * Whether pack prefers webm/mp4 motion previews (Atom 3+ / modern Spunkram).
+ * Whether pack prefers webm/mp4 motion previews (modern Spunkram packs).
  * `inside_option_sets.use_webm_preview` may be `true` or `"mp4"`.
  */
 export function packPrefersWebmPreview(settings?: PackSettings | null): boolean {

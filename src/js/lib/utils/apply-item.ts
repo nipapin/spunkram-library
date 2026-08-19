@@ -10,7 +10,7 @@
  *   PROJECT (.aep) / FOOTAGE / AUDIO → host applyPackItem
  */
 import { csi } from "./bolt";
-import { MotionFlow } from "@/sdk";
+import { Motionflow } from "@/sdk";
 import { fs, path } from "../cep/node";
 import {
   resolveItemSourceFile,
@@ -22,6 +22,7 @@ import {
   resolveFullProjectAssetsPath,
 } from "./copy-paste-apply";
 import type { PackSettings, PackTreeItem } from "./pack-types";
+import { INSTANCE_GROUP_JOIN_CHAR } from "./pack-types";
 import { reportSupportError } from "@/api/support";
 import { currentPackHost, normalizePackHost } from "./pack-host";
 
@@ -39,6 +40,12 @@ const REASON_MESSAGES: Record<string, string> = {
   PLACE_FAILED: "Imported into the project, but couldn't be placed on the timeline.",
   MOGRT_NOT_SUPPORTED_IN_AE: "This item's format (.mogrt) isn't supported in After Effects.",
   NO_SUPPORT_APP: "This pack doesn't support the current host application.",
+  COMP: "Open a composition in After Effects first, then try again.",
+  LAYER: "Select a layer in the active composition, then try again.",
+  MISSING: "Preset or template file is missing from the pack.",
+  MISSING_PRESETS: "Preset file is missing from the pack.",
+  NO_MATCH: "Could not find a matching item in the project.",
+  TEXT_LAYER: "Select a text layer in the active composition.",
 };
 
 function friendlyReason(reason: string): string {
@@ -148,13 +155,48 @@ export async function applyPackItemToHost(
   const ctype =
     resolved.ctype === "FULL_PROJECT" ? "PROJECT" : resolved.ctype;
 
+  const previewEntry = item.group.preview?.[item.previewKey];
+  const customArgs = (previewEntry?.custom_args as Record<string, unknown>) || {};
+  const composerPayload =
+    appId === "AEFT"
+      ? {
+          itemId: item.id,
+          instanceGroup: item.pathSegments.join(INSTANCE_GROUP_JOIN_CHAR),
+          argsObject: {
+            ...(previewEntry || { name: item.name }),
+            label_color_num:
+              (previewEntry as Record<string, unknown> | undefined)?.label_color_num ?? 2,
+            parent_folder:
+              (previewEntry as Record<string, unknown> | undefined)?.parent_folder ?? false,
+            change_auto_size_composition: customArgs.change_auto_size_composition,
+            change_duplicate_origin_setting: customArgs.change_duplicate_origin_setting,
+            change_use_start_timeline_pointer: customArgs.change_use_start_timeline_pointer,
+            change_layer_index_position: customArgs.change_layer_index_position,
+            is_audio: !!item.group.is_audio,
+            is_footage: !!item.group.is_footage,
+            is_presets: !!item.group.is_presets,
+            individual_comp: !!customArgs.individual_comp,
+            custom_args: customArgs,
+          } as Record<string, unknown>,
+          extraArguments: {
+            filepath: filePath,
+            last_group: item.pathSegments[item.pathSegments.length - 1] || item.name,
+            name: item.name,
+          },
+          templatesDir: resolvePackTemplatesPath(packFilePath, "AEFT"),
+          packName: settings?.main?.name || "Motionflow",
+          packOptions: (settings?.inside_option_sets as Record<string, unknown>) || {},
+        }
+      : undefined;
+
   try {
-    const wrapped = await MotionFlow.applyPackItem({
+    const wrapped = await Motionflow.applyPackItem({
       ctype: ctype as "PROJECT" | "MOGRT" | "AUDIO" | "FOOTAGE",
       filePath,
       itemName: item.name,
       binName: "Spunkram Assets",
       durationSeconds: durationSecondsForItem(item),
+      composer: composerPayload,
     });
 
     if (!wrapped.ok) {

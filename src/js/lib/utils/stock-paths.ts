@@ -10,7 +10,7 @@ import {
   writePrefSettings,
 } from "../api/preferences";
 import { selectFolderAsync } from "./bolt";
-import { MotionFlow } from "@/sdk";
+import { Motionflow } from "@/sdk";
 import { fs, path } from "../cep/node";
 
 export function hasConfiguredAssetsPath(): boolean {
@@ -66,7 +66,7 @@ export async function resolveFootageDownloadDir(): Promise<
   const prefs = readPrefSettings();
 
   if (asBool(prefs.useCurrentProjectLocation)) {
-    const projectDir = await MotionFlow.getProjectFolderPath();
+    const projectDir = await Motionflow.getProjectFolderPath();
     if (!projectDir.ok || !projectDir.data) {
       return {
         ok: false,

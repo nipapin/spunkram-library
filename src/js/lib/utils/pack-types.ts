@@ -1,5 +1,7 @@
-/** Pack file extensions historically used by Atom / Spunkram. */
-export const PACKAGE_FILETYPES = ["spunkram", "atom"] as const;
+import { PACKAGE_FILE_EXTENSIONS } from "../config/brand";
+
+/** Pack file extensions accepted from Motionflow Market. */
+export const PACKAGE_FILETYPES = [...PACKAGE_FILE_EXTENSIONS] as const;
 export type PackageFiletype = (typeof PACKAGE_FILETYPES)[number];
 
 /** Join char for category instance paths (legacy: Typography-@-Basic). */

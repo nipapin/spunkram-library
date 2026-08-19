@@ -1,10 +1,11 @@
 import { csi } from "./bolt";
+import { storageKey } from "../config/brand";
 import type { InstalledPackMeta } from "./pack-types";
 
 /** Catalog / pack software_id codes (not CEP appId). */
 export type PackHostId = "AE" | "PR";
 
-const ACTIVE_PACK_KEY_PREFIX = "spunkram.activePackPath";
+const ACTIVE_PACK_KEY_PREFIX = storageKey("activePackPath");
 /** Pre-host-split key — read only for one-time migration. */
 export const LEGACY_ACTIVE_PACK_STORAGE_KEY = ACTIVE_PACK_KEY_PREFIX;
 

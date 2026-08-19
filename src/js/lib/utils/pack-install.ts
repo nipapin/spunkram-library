@@ -1,5 +1,5 @@
 /**
- * Install a pack from a local file: a raw `.spunkram`/`.atom`, or a `.zip`
+ * Install a pack from a local file: a raw `.motionflow` (or legacy `.spunkram`), or a `.zip`
  * downloaded from Market containing one alongside its preview/template
  * folders. Copies everything into the managed packages root and registers
  * the pack in `preferences.json`, so it shows up immediately in Editing.
@@ -11,6 +11,7 @@ import {
   resolvePreferencesPath,
   savePreferencesFile,
 } from "../api/preferences";
+import { BRAND, packExtensionLabel } from "@/lib/config/brand";
 import { initPackageAsync, parsePackageFileFormat } from "./pack";
 import type { InstalledPackMeta } from "./pack-types";
 import { extractZipToFolder } from "./pack-zip";
@@ -45,7 +46,7 @@ function defaultPackagesInstallRoot(): string {
   const base = prefPath ? path.dirname(prefPath) : "";
   return base
     ? path.join(base, "_ABS")
-    : path.join(os.tmpdir(), "spunkram-library-packages");
+    : path.join(os.tmpdir(), `${BRAND.storagePrefix}library-packages`);
 }
 
 /**
@@ -143,7 +144,7 @@ export type InstallPackResult =
   | { ok: false; message: string };
 
 /**
- * Install a pack given a local file path (`.spunkram`, `.atom`, or a `.zip`
+ * Install a pack given a local file path (`.spunkram`, or a `.zip`
  * bundling one). Copies the pack + its sibling asset/template folders into
  * the managed packages root, then registers it in preferences.json.
  */
@@ -176,7 +177,7 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
     if (sourcePath.toLowerCase().endsWith(".zip")) {
       const stagingDir = path.join(
         os.tmpdir(),
-        `spunkram-install-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+        `${BRAND.storagePrefix}install-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
       );
       const extractStarted = Date.now();
       installLog("extract.begin", { stagingDir });
@@ -189,12 +190,12 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
       const found = findPackFileRecursive(stagingDir);
       if (!found) {
         installLog("extract.no_pack", { stagingDir });
-        return { ok: false, message: "No .spunkram/.atom pack file found inside the ZIP." };
+        return { ok: false, message: `No ${packExtensionLabel()} pack file found inside the ZIP.` };
       }
       packFilePath = found;
       installLog("extract.pack_found", { packFilePath });
     } else if (!parsePackageFileFormat(sourcePath)) {
-      return { ok: false, message: "Pick a .spunkram, .atom, or .zip file." };
+      return { ok: false, message: `Pick a ${packExtensionLabel()}, legacy .spunkram, or .zip file.` };
     }
 
     const pack = await initPackageAsync(packFilePath);

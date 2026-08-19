@@ -2,6 +2,7 @@
 export { importExternalAsset } from "./ppro-import-external";
 export { applyPackItem } from "./ppro-apply-item";
 import { applyPackItem } from "./ppro-apply-item";
+export { pproToolsRun } from "./ppro-tools";
 export {
   bindPack,
   setEngine,
@@ -16,7 +17,6 @@ export {
   undoGroupStart,
   undoGroupEnd,
   undoGroupAbort,
-  legacyPpCall,
 } from "./ppro-sdk";
 export {
   copyPasteGetAppPrefs,
@@ -53,6 +53,14 @@ export const legacyAeCall = (_method: string, _argsJson: string) => ({
   ok: false,
   reason: "PPRO_ONLY_HOST",
 });
+export const applyComp = (..._args: unknown[]) => "PPRO_ONLY_HOST";
+export const addTextAnimatorComp = (..._args: unknown[]) => "PPRO_ONLY_HOST";
+export const addPhotoAnimatorComp = (..._args: unknown[]) => "PPRO_ONLY_HOST";
+export const aeToolsRun = (_type: string) => "PPRO_ONLY_HOST";
+export const applyPreset = (..._args: unknown[]) => "PPRO_ONLY_HOST";
+export const applyTextPresets = (..._args: unknown[]) => "PPRO_ONLY_HOST";
+export const getTextPresets = () => "PPRO_ONLY_HOST";
+export const removeTextPresets = (..._args: unknown[]) => "PPRO_ONLY_HOST";
 import {
   helloVoid,
   helloError,

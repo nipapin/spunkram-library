@@ -2,7 +2,7 @@
  * CEP WebSocket client — auth frame then hello(host); reconnect with backoff.
  * Receives pack lifecycle events + extension.update (new ZXP on CDN).
  */
-import { apiUrl } from "@/api/config";
+import { API_BASE, apiUrl } from "@/api/config";
 import { getSessionToken, handleUnauthorized } from "@/lib/api/session";
 import { currentHostAppId } from "@/lib/utils/apply-item";
 
@@ -40,9 +40,8 @@ function wsUrl(): string {
   const base = apiUrl("/api/cep/ws");
   if (base.startsWith("https://")) return `wss://${base.slice("https://".length)}`;
   if (base.startsWith("http://")) return `ws://${base.slice("http://".length)}`;
-  // relative (vite proxy) — resolve against location
   const origin =
-    typeof window !== "undefined" ? window.location.origin : "http://localhost:4000";
+    typeof window !== "undefined" ? window.location.origin : API_BASE;
   const u = new URL(base, origin);
   u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
   return u.toString();

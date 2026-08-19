@@ -17,7 +17,7 @@ import {
 } from "../presets";
 import { CEP_WRITTEN_SYSTEM_NAMES } from "../../shared/caption-system";
 import { rangeFillStyle } from "../utils/rangeFillStyle";
-import { getSystemFontsList } from "../lib/utils/system-fonts";
+import { getFontCatalog, resolveFontFace, type FontCatalog } from "../lib/utils/system-fonts";
 import { ScrubNumber } from "./ScrubNumber";
 import { ColorField } from "./ColorField";
 import "./PresetFields.scss";
@@ -95,38 +95,81 @@ const FontSelect = ({
   value: string;
   onChange: (next: string) => void;
 }) => {
-  const [fonts, setFonts] = useState<string[] | null>(null);
+  const [catalog, setCatalog] = useState<FontCatalog | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    getSystemFontsList().then((list) => {
-      if (!cancelled) setFonts(list);
+    getFontCatalog().then((next) => {
+      if (!cancelled) setCatalog(next);
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const options = useMemo(() => {
-    if (!fonts) return value ? [value] : [];
-    if (value && !fonts.includes(value)) return [value, ...fonts];
-    return fonts;
-  }, [fonts, value]);
+  const current = useMemo(() => resolveFontFace(catalog, value), [catalog, value]);
+
+  const familyOptions = useMemo(() => {
+    if (!catalog) return current.family ? [current.family] : [];
+    const names = catalog.families.map((f) => f.name);
+    if (current.family && !names.includes(current.family)) return [current.family, ...names];
+    return names;
+  }, [catalog, current.family]);
+
+  const styleOptions = useMemo(() => {
+    if (!catalog) {
+      return current.id ? [{ id: current.id, style: current.style || current.id }] : [];
+    }
+    const group = catalog.families.find((f) => f.name === current.family);
+    const faces = group?.faces ?? [];
+    if (current.id && !faces.some((f) => f.id === current.id)) {
+      return [{ id: current.id, family: current.family, style: current.style || current.id }, ...faces];
+    }
+    return faces;
+  }, [catalog, current.family, current.id, current.style]);
+
+  const onFamilyChange = (family: string) => {
+    if (!catalog) return;
+    const group = catalog.families.find((f) => f.name === family);
+    const next =
+      group?.faces.find((f) => f.style === "Regular")?.id ??
+      group?.faces[0]?.id ??
+      (family === current.family ? current.id : "");
+    if (next) onChange(next);
+  };
+
+  const onStyleChange = (id: string) => {
+    if (id) onChange(id);
+  };
 
   return (
-    <select
-      className="preset-fields__select"
-      value={value}
-      disabled={!fonts}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      {!fonts && <option value={value}>{value || "Loading fonts…"}</option>}
-      {options.map((font) => (
-        <option key={font} value={font}>
-          {font}
-        </option>
-      ))}
-    </select>
+    <div className="preset-fields__font-row">
+      <select
+        className="preset-fields__select preset-fields__select--family"
+        value={current.family}
+        disabled={!catalog}
+        onChange={(e) => onFamilyChange(e.target.value)}
+      >
+        {!catalog && <option value={current.family}>{current.family || "Loading fonts…"}</option>}
+        {familyOptions.map((family) => (
+          <option key={family} value={family}>
+            {family}
+          </option>
+        ))}
+      </select>
+      <select
+        className="preset-fields__select preset-fields__select--style"
+        value={current.id}
+        disabled={!catalog || !styleOptions.length}
+        onChange={(e) => onStyleChange(e.target.value)}
+      >
+        {styleOptions.map((face) => (
+          <option key={face.id} value={face.id}>
+            {face.style}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 };
 
@@ -245,7 +288,7 @@ const ControlField = ({
     if ((CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(label)) return null;
     const text = localizedText(raw);
     return (
-      <div className="preset-fields__param">
+      <div className="preset-fields__param preset-fields__param--font">
         <span className="preset-fields__param-label">{label}</span>
         {isFontControl(control, label) ? (
           <FontSelect

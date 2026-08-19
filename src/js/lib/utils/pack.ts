@@ -1,12 +1,5 @@
-import { fs, os, path } from "../cep/node";
-import {
-  isEncryptedAtomPack,
-  isLegacyJsxbinPack,
-  OLD_ATOM_JSXBIN_PIECE,
-  PD_GLOBAL_SPLIT_ONE,
-  pdRefractoring,
-} from "./pack-decode";
-import { noteLegacyEncryptedPack } from "./pack-legacy-warn";
+import { fs } from "../cep/node";
+import { preferencesJsonPath } from "../config/brand";
 import { resolvePackPreviewsPath } from "./pack-folders";
 import type {
   InstalledPackMeta,
@@ -34,7 +27,7 @@ function cepFsAvailable(): boolean {
 }
 
 /**
- * Check whether filename matches a pack extension (.spunkram / .atom).
+ * Check whether filename matches a Motionflow pack extension (`.motionflow` / legacy `.spunkram`).
  */
 export function parsePackageFileFormat(
   filename: string,
@@ -72,27 +65,25 @@ function looksLikeJsonPack(raw: string): boolean {
   return cleaned.startsWith("{");
 }
 
-function toInitResult(
-  content: PackContent,
-  headerBytes = "",
-  packHash = "",
-): PackInitResult {
+function toInitResult(content: PackContent): PackInitResult {
   return {
     method: "JSON",
     full_content: content,
     settings: content.settings,
     structure: content.structure,
-    header_bytes: headerBytes,
-    pack_hash: packHash,
+    header_bytes: "",
+    pack_hash: "",
   };
 }
 
+function readPackUtf8(data: string | Buffer): string {
+  if (typeof data === "string") return data;
+  if (Buffer.isBuffer(data)) return data.toString("utf8");
+  return String(data);
+}
+
 /**
- * Read and parse a `.spunkram` / `.atom` pack file.
- *
- * Prefers plaintext JSON (Motionflow Market). Soft-legacy: Atom 3.0+ encrypted
- * packs still decode, but callers should surface a reinstall-from-Market hint.
- * Legacy JSXBIN packs return `LEGACY_JSXBIN_PACK`.
+ * Read and parse a plaintext Motionflow pack file (JSON).
  */
 export function initPackage(
   packPath: string,
@@ -109,88 +100,28 @@ export function initPackage(
     return;
   }
 
-  // Prefer buffer so plaintext UTF-8 JSON stays intact; encrypted legacy
-  // packs are still decoded from a latin1/binary view of the same bytes.
   fs.readFile(packPath, (err, data) => {
     if (err || data == null) {
       initCallback(false, "CANT_OPEN");
       return;
     }
 
-    const asUtf8 =
-      typeof data === "string"
-        ? data
-        : Buffer.isBuffer(data)
-          ? data.toString("utf8")
-          : String(data);
-    const asBinary =
-      typeof data === "string"
-        ? data
-        : Buffer.isBuffer(data)
-          ? data.toString("binary")
-          : String(data);
-    const testMode = options?.testMode ?? false;
+    const asUtf8 = readPackUtf8(data);
 
-    if (testMode) {
-      if (
-        asBinary.indexOf(PD_GLOBAL_SPLIT_ONE) !== -1 ||
-        asBinary.indexOf(OLD_ATOM_JSXBIN_PIECE) !== -1
-      ) {
-        initCallback(
-          false,
-          "CORRUPTED_TEST_PACK|Please use an uncompiled package",
-        );
-        return;
-      }
-      try {
-        initCallback(toInitResult(parseJsonPackContent(asUtf8)));
-      } catch (ex) {
-        const message = ex instanceof Error ? ex.message : String(ex);
-        initCallback(false, `CORRUPTED_TEST_PACK|${message}`);
-      }
-      return;
-    }
-
-    // Plaintext Market packs (JSON with settings + content|structure)
-    if (looksLikeJsonPack(asUtf8)) {
-      try {
-        initCallback(toInitResult(parseJsonPackContent(asUtf8)));
-      } catch {
-        initCallback(false, "CORRUPTED_PACK");
-      }
-      return;
-    }
-
-    if (isEncryptedAtomPack(asBinary)) {
-      const packNewEvalObj = pdRefractoring(asBinary);
-      if (!packNewEvalObj) {
-        initCallback(false, "CORRUPTED_PACK");
-        return;
-      }
-      try {
-        const newPackStructure = parseJsonPackContent(packNewEvalObj[2]);
-        noteLegacyEncryptedPack();
-        initCallback(
-          toInitResult(newPackStructure, packNewEvalObj[1], packNewEvalObj[0]),
-        );
-      } catch {
-        initCallback(false, "CORRUPTED_PACK");
-      }
-      return;
-    }
-
-    if (isLegacyJsxbinPack(asBinary)) {
-      // Pre-Atom-3.0 packs are JSXBIN-encoded — need ExtendScript eval, which
-      // isn't available from CEP JS. Surfaced distinctly so the UI can point
-      // users at reinstalling via Market instead of a generic error.
-      initCallback(false, "LEGACY_JSXBIN_PACK");
+    if (!looksLikeJsonPack(asUtf8)) {
+      initCallback(false, "CORRUPTED_PACK");
       return;
     }
 
     try {
       initCallback(toInitResult(parseJsonPackContent(asUtf8)));
-    } catch {
-      initCallback(false, "CORRUPTED_PACK");
+    } catch (ex) {
+      const message = ex instanceof Error ? ex.message : String(ex);
+      if (options?.testMode) {
+        initCallback(false, `CORRUPTED_TEST_PACK|${message}`);
+      } else {
+        initCallback(false, "CORRUPTED_PACK");
+      }
     }
   });
 }
@@ -224,38 +155,21 @@ export function initPackageSync(
     throw new Error("PACK_NOT_FOUND");
   }
 
-  const buf = fs.readFileSync(packPath);
-  const asUtf8 = Buffer.isBuffer(buf) ? buf.toString("utf8") : String(buf);
-  const asBinary = Buffer.isBuffer(buf) ? buf.toString("binary") : String(buf);
-  const testMode = options?.testMode ?? false;
+  const asUtf8 = readPackUtf8(fs.readFileSync(packPath));
 
-  if (testMode) {
-    if (isEncryptedAtomPack(asBinary) || isLegacyJsxbinPack(asBinary)) {
-      throw new Error("CORRUPTED_TEST_PACK|Please use an uncompiled package");
+  if (!looksLikeJsonPack(asUtf8)) {
+    throw new Error("CORRUPTED_PACK");
+  }
+
+  try {
+    return toInitResult(parseJsonPackContent(asUtf8));
+  } catch (ex) {
+    const message = ex instanceof Error ? ex.message : String(ex);
+    if (options?.testMode) {
+      throw new Error(`CORRUPTED_TEST_PACK|${message}`);
     }
-    return toInitResult(parseJsonPackContent(asUtf8));
+    throw new Error("CORRUPTED_PACK");
   }
-
-  if (looksLikeJsonPack(asUtf8)) {
-    return toInitResult(parseJsonPackContent(asUtf8));
-  }
-
-  if (isEncryptedAtomPack(asBinary)) {
-    const packNewEvalObj = pdRefractoring(asBinary);
-    if (!packNewEvalObj) throw new Error("CORRUPTED_PACK");
-    noteLegacyEncryptedPack();
-    return toInitResult(
-      parseJsonPackContent(packNewEvalObj[2]),
-      packNewEvalObj[1],
-      packNewEvalObj[0],
-    );
-  }
-
-  if (isLegacyJsxbinPack(asBinary)) {
-    throw new Error("LEGACY_JSXBIN_PACK");
-  }
-
-  return toInitResult(parseJsonPackContent(asUtf8));
 }
 
 /** Human-friendly message for a {@link PackInitError} code. */
@@ -266,8 +180,6 @@ export function packInitErrorMessage(error: string): string {
       return "The pack file is missing on disk.";
     case "CANT_OPEN":
       return "Couldn't open the pack file.";
-    case "LEGACY_JSXBIN_PACK":
-      return "This pack uses a legacy format that isn't supported here — Remove it and Install again from Market.";
     case "CORRUPTED_PACK":
       return "This pack file looks corrupted. Remove it and Install again from Market if needed.";
     case "CORRUPTED_TEST_PACK":
@@ -277,29 +189,15 @@ export function packInitErrorMessage(error: string): string {
   }
 }
 
-/**
- * Resolve preview-media folder next to the pack file
- * (`Previews` / legacy `Spunkram Preview Assets` / `Atom Preview Assets` / `* Preview Assets`).
- */
+/** Resolve preview-media folder next to the pack file (`Previews`). */
 export function resolvePackAssetsPath(packFilePath: string): string {
   return resolvePackPreviewsPath(packFilePath);
 }
 
-/** Default preferences.json locations used by Spunkram / Atom installs. */
+/** Default `preferences.json` location for Motionflow CEP. */
 export function getPreferencesCandidates(): string[] {
-  if (typeof os?.homedir !== "function" || typeof path?.join !== "function") {
-    return [];
-  }
-  const roaming =
-    os.platform() === "win32"
-      ? path.join(os.homedir(), "AppData", "Roaming")
-      : path.join(os.homedir(), "Library", "Application Support");
-  return [
-    path.join(roaming, "Spunkram", "Spunkram Extension", "preferences.json"),
-    path.join(roaming, "SpunkramTemp", "Spunkram Extension", "preferences.json"),
-    path.join(roaming, "Aniom", "Atom Extension", "preferences.json"),
-    path.join(roaming, "Aniom", "Spunkram Extension", "preferences.json"),
-  ];
+  const prefPath = preferencesJsonPath();
+  return prefPath ? [prefPath] : [];
 }
 
 export function readInstalledPackagesFromPreferences(
@@ -318,7 +216,6 @@ export function readInstalledPackagesFromPreferences(
       if (!raw.trim()) return [];
       const json = JSON.parse(raw) as { packages?: InstalledPackMeta[] };
       // First existing prefs file wins — even when packages is [].
-      // Do not fall through to legacy Aniom/Temp installs after a clear.
       if (Array.isArray(json.packages)) {
         return json.packages;
       }

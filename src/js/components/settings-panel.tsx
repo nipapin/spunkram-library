@@ -343,32 +343,6 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
 
         <section className="mb-3 glass-card rounded-[20px] p-3">
           <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            API Server
-          </h3>
-          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-1 py-1.5 hover:bg-white/[0.03]">
-            <input
-              type="radio"
-              name="defaultApiServer"
-              checked={Number(prefs.defaultApiServer) === 0}
-              onChange={() => patch({ defaultApiServer: 0 })}
-              className="accent-[rgb(var(--primary))]"
-            />
-            <span className="text-xs text-foreground">Main API Server</span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-1 py-1.5 hover:bg-white/[0.03]">
-            <input
-              type="radio"
-              name="defaultApiServer"
-              checked={Number(prefs.defaultApiServer) === 1}
-              onChange={() => patch({ defaultApiServer: 1 })}
-              className="accent-[rgb(var(--primary))]"
-            />
-            <span className="text-xs text-foreground">Proxy Server #1</span>
-          </label>
-        </section>
-
-        <section className="mb-3 glass-card rounded-[20px] p-3">
-          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Render Options
           </h3>
           <ToggleRow

@@ -1,9 +1,5 @@
 /**
  * Motion Flow API — production: https://motionflow.pro
- *
- * In dev (`vite`), requests use a relative path so they hit this
- * dev server's origin and get forwarded by `server.proxy` in
- * `vite.config.ts` (avoids CORS during local panel development).
  */
 export const API_BASE = "https://motionflow.pro";
 

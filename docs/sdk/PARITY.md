@@ -9,12 +9,12 @@
 | Pack apply FULL_PROJECT | native copy/paste | `$._copyPasteSystem` + `copy-paste-apply.ts` | shipped DLL |
 | Pack apply MOGRT (PR) | full `addMOGRT` + relink/fit | `importMGT` | SDK |
 | Pack apply FOOTAGE/AUDIO | import + place | `ppro-apply-item` | SDK |
-| Pack apply AEP (AE) | full composer | simplified `.aep` import | SDK + legacy |
-| AE `.ffx` presets | `ae_preset_manager` | UNSUPPORTED in path resolver | legacy in repo; SDK wrapped |
-| AE text presets | `ae_text_presets` | — | legacy + SDK |
-| Text/photo animator | `ae_composer` | — | legacy + SDK |
-| Customizer | AE+PR | — | legacy + SDK |
-| Undo groups (PR) | `undo_groups.jsx` | — | legacy + SDK |
+| Pack apply AEP (AE) | full composer | `aeft-composer.ts` via `applyPackItem` + composer context | SDK **ts** |
+| AE `.ffx` presets | `aeft-presets.ts` | host TS |
+| AE text presets | `aeft-text-presets.ts` | host TS |
+| Text/photo animator | `aeft-composer.ts` | SDK **ts** |
+| Customizer | AE+PR | — | **drop** |
+| Undo groups (PR) | `ppro-undo-group.ts` | SDK **ts** |
 | `createComp` / `createText` | ad-hoc inside composers | — | **new** TS host methods |
 | Responsive background | not a named export | — | **new** `addResponsiveBackground` |
 | Bolt `hello*` samples | n/a | exported on host | **not** on SDK surface |

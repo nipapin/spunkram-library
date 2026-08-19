@@ -20,15 +20,18 @@ export function AiToolsList({
 }: {
   monthly: number;
   extra: number;
-  monthlyLimit: number;
+  monthlyLimit: number | null;
   isFreeUser?: boolean;
   onOpenTool: (id: string) => void;
   /** @deprecated Local fake extras removed — quota is server-owned. */
   onBuyExtra?: (amount: number) => void;
 }) {
   const totalLeft = monthly + extra;
+  const limitLabel = monthlyLimit != null ? String(monthlyLimit) : "—";
   const monthlyPct =
-    monthlyLimit > 0 ? Math.max(0, Math.min(100, (Math.max(monthly, 0) / monthlyLimit) * 100)) : 0;
+    monthlyLimit != null && monthlyLimit > 0
+      ? Math.max(0, Math.min(100, (Math.max(monthly, 0) / monthlyLimit) * 100))
+      : 0;
 
   return (
     <div className="ai-tools-scope ai-hub">
@@ -53,9 +56,13 @@ export function AiToolsList({
                   className="ai-hub__track"
                   role="progressbar"
                   aria-valuemin={0}
-                  aria-valuemax={monthlyLimit}
+                  aria-valuemax={monthlyLimit ?? undefined}
                   aria-valuenow={monthly}
-                  aria-label={`${monthly} of ${monthlyLimit} monthly generations left`}
+                  aria-label={
+                    monthlyLimit != null
+                      ? `${monthly} of ${monthlyLimit} monthly generations left`
+                      : `${monthly} monthly generations left`
+                  }
                 >
                   {monthlyPct > 0 ? (
                     <div
@@ -69,7 +76,7 @@ export function AiToolsList({
                 <div className="ai-hub__legend">
                   <span className="ai-hub__legend-item">
                     <span className="ai-hub__dot ai-hub__dot--monthly" aria-hidden />
-                    {monthly}/{monthlyLimit} {isFreeUser ? "free plan" : "monthly"}
+                    {monthly}/{limitLabel} {isFreeUser ? "free plan" : "monthly"}
                     {isFreeUser ? "" : " · resets each month"}
                   </span>
                   <div className="ai-hub__legend-right">

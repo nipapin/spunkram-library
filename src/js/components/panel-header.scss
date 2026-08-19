@@ -166,6 +166,13 @@
     background: transparent;
   }
 
+  &__tab--disabled,
+  &__tab--disabled:hover {
+    opacity: 0.38;
+    cursor: not-allowed;
+    color: rgb(var(--ph-muted));
+  }
+
   &__tab-label {
     display: none;
     white-space: nowrap;

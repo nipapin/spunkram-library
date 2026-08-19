@@ -17,11 +17,13 @@ export function PanelHeader({
   onSelect,
   onOpenAccount,
   onOpenSettings,
+  editingDisabled = false,
 }: {
   active: string;
   onSelect: (id: string) => void;
   onOpenAccount: () => void;
   onOpenSettings: () => void;
+  editingDisabled?: boolean;
 }) {
   const { signedIn, subscription } = useAuth();
   const { unreadMarketCount, clearUnread } = useNotifications();
@@ -134,6 +136,7 @@ export function PanelHeader({
         {NAV_ITEMS.map((item, index) => {
           const Icon = item.icon;
           const isActive = active === item.id;
+          const isDisabled = item.id === "editing" && editingDisabled;
           return (
             <button
               key={item.id}
@@ -141,11 +144,25 @@ export function PanelHeader({
               ref={(node) => {
                 tabRefs.current[index] = node;
               }}
-              onClick={() => onSelect(item.id)}
+              onClick={() => {
+                if (isDisabled) return;
+                onSelect(item.id);
+              }}
+              disabled={isDisabled}
               aria-label={item.label}
-              title={item.label}
+              title={
+                isDisabled
+                  ? "Install a pack from Market to enable Editing"
+                  : item.label
+              }
               aria-pressed={isActive}
-              className={isActive ? "panel-header__tab panel-header__tab--active" : "panel-header__tab"}
+              className={
+                isActive
+                  ? "panel-header__tab panel-header__tab--active"
+                  : isDisabled
+                    ? "panel-header__tab panel-header__tab--disabled"
+                    : "panel-header__tab"
+              }
             >
               <Icon className="size-3.5" strokeWidth={2.25} />
               <span className="panel-header__tab-label">{item.label}</span>

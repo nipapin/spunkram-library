@@ -30,7 +30,7 @@ export function AiToolsPanel({
 }: {
   monthly: number;
   extra: number;
-  monthlyLimit: number;
+  monthlyLimit: number | null;
   isFreeUser?: boolean;
   onUse: () => void;
   onBuyExtra?: (amount: number) => void;

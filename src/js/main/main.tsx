@@ -56,15 +56,11 @@ import type { InstalledPackMeta, PackSettings, PackTreeItem, PackTreeNode } from
 import { revokePreviewObjectUrls } from "@/lib/utils/pack-preview";
 import { cn } from "@/lib/utils";
 import * as panelStore from "@/lib/userdata-store";
-import {
-  generationLimitForTier,
-  SPUNKRAM_FREE_TIER,
-  SPUNKRAM_SUBSCRIBED_TIER,
-} from "@/lib/config/entitlements";
+import { storageKey } from "@/lib/config/brand";
 import "./main.scss";
 
-const CATEGORY_BY_PACK_KEY = "spunkram.categoryByPack";
-const GENERATIONS_STORAGE_KEY = "spunkram.generations";
+const CATEGORY_BY_PACK_KEY = storageKey("categoryByPack");
+const GENERATIONS_STORAGE_KEY = storageKey("generations");
 
 function hostActivePackKey(host: PackHostId | null = currentPackHost()): string | null {
   return host ? activePackStorageKey(host) : null;
@@ -145,11 +141,15 @@ function currentMonthKey(): string {
   return `${now.getFullYear()}-${now.getMonth()}`;
 }
 
-function loadGenerationsState(limit: number): GenerationsState {
+function loadGenerationsState(limit: number | null): GenerationsState {
+  const monthKey = currentMonthKey();
+  if (limit == null || limit <= 0) {
+    return { monthly: 0, extra: 0, monthKey, limit: 0 };
+  }
   const fallback: GenerationsState = {
     monthly: limit,
     extra: 0,
-    monthKey: currentMonthKey(),
+    monthKey,
     limit,
   };
   try {
@@ -157,8 +157,7 @@ function loadGenerationsState(limit: number): GenerationsState {
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<GenerationsState>;
     if (parsed.monthKey !== fallback.monthKey) return fallback;
-    const storedLimit =
-      typeof parsed.limit === "number" ? parsed.limit : SPUNKRAM_SUBSCRIBED_TIER.generations;
+    const storedLimit = typeof parsed.limit === "number" ? parsed.limit : limit;
     let monthly = typeof parsed.monthly === "number" ? parsed.monthly : limit;
     // Tier changed (e.g. free → subscribed): top up to the new allotment.
     if (storedLimit !== limit) {
@@ -203,11 +202,18 @@ function PurchaseGateBanner({ onOpenAccount }: { onOpenAccount: () => void }) {
 }
 
 function FreePlanBanner({ onOpenAccount }: { onOpenAccount: () => void }) {
+  const { generationLimit, freePackSlots } = useAuth();
+  const packPart =
+    freePackSlots != null
+      ? `${freePackSlots} free pack${freePackSlots === 1 ? "" : "s"} (coming soon)`
+      : "Free pack slot (coming soon)";
+  const genPart =
+    generationLimit != null ? `${generationLimit} AI generations` : "AI generations included";
+
   return (
     <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-2 text-[11px] text-foreground">
       <span className="flex-1">
-        Free plan: {SPUNKRAM_FREE_TIER.freePackCount} free pack (coming soon) ·{" "}
-        {SPUNKRAM_FREE_TIER.generations} AI generations
+        Free plan: {packPart} · {genPart}
       </span>
       <button
         type="button"
@@ -502,12 +508,11 @@ function AppShell() {
   const [assetsPath, setAssetsPath] = useState("");
   const [packFilePath, setPackFilePath] = useState("");
   const [packSettings, setPackSettings] = useState<PackSettings | null>(null);
-  const [monthlyGens, setMonthlyGens] = useState(() =>
-    loadGenerationsState(generationLimitForTier("free")).monthly,
+  const [hasInstalledPacks, setHasInstalledPacks] = useState(
+    () => readInstallablePackages().length > 0,
   );
-  const [extraGens, setExtraGens] = useState(() =>
-    loadGenerationsState(generationLimitForTier("free")).extra,
-  );
+  const [monthlyGens, setMonthlyGens] = useState(0);
+  const [extraGens, setExtraGens] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [updateZxpUrl, setUpdateZxpUrl] = useState<string | null>(null);
@@ -543,6 +548,7 @@ function AppShell() {
 
   const reloadPackList = useCallback(() => {
     const installed = readInstallablePackages();
+    setHasInstalledPacks(installed.length > 0);
     if (installed.length === 0) {
       setPackError("No installed pack found");
       setPackFilePath("");
@@ -696,12 +702,14 @@ function AppShell() {
   }, [packSettings]);
 
   useEffect(() => {
+    if (generationLimit == null) return;
     const next = loadGenerationsState(generationLimit);
     setMonthlyGens(next.monthly);
     setExtraGens(next.extra);
   }, [generationLimit]);
 
   useEffect(() => {
+    if (generationLimit == null) return;
     saveGenerationsState({
       monthly: monthlyGens,
       extra: extraGens,
@@ -744,12 +752,17 @@ function AppShell() {
   };
 
   function handleNav(id: string) {
+    if (id === "editing" && !hasInstalledPacks) return;
     setSettingsOpen(false);
     setNav(id);
     if (id === "editing") {
       setTutorialsOpen(false);
       setShowFavoritesOnly(false);
     }
+  }
+
+  function defaultWorkspaceNav(): string {
+    return hasInstalledPacks ? "editing" : "market";
   }
 
   function openSettings() {
@@ -794,6 +807,7 @@ function AppShell() {
         onSelect={handleNav}
         onOpenAccount={openAccount}
         onOpenSettings={openSettings}
+        editingDisabled={!hasInstalledPacks}
       />
 
       {showUpdateBanner && updateVersion ? (
@@ -816,18 +830,18 @@ function AppShell() {
           <SettingsPanel
             onBack={() => {
               setSettingsOpen(false);
-              setNav((prev) => (prev === "settings" ? "editing" : prev));
+              setNav((prev) => (prev === "settings" ? defaultWorkspaceNav() : prev));
             }}
           />
         </section>
       ) : nav === "account" ? (
         <section className="min-h-0 flex-1 overflow-hidden">
-          <AccountPanel onBack={() => setNav("editing")} />
+          <AccountPanel onBack={() => setNav(defaultWorkspaceNav())} />
         </section>
       ) : nav === "market" ? (
         <section className="min-h-0 flex-1 overflow-hidden">
           <MarketPanel
-            onBack={() => setNav("editing")}
+            onBack={() => setNav(defaultWorkspaceNav())}
             onOpenLogin={openAccount}
             onPacksChanged={reloadPackList}
             activePackPath={packFilePath}

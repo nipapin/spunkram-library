@@ -9,13 +9,6 @@ import { cepHttpRequest } from "@/lib/api/cep-http";
 import { fs, os, path } from "@/lib/cep/node";
 import { downloadToFile } from "@/utils/download-file";
 
-// Injected by vite.config.ts — true only when CEP_API_MOCKS=true.
-declare const __CEP_API_MOCKS__: boolean | undefined;
-const MOCK_ENABLED =
-  typeof __CEP_API_MOCKS__ === "boolean"
-    ? __CEP_API_MOCKS__
-    : Boolean(import.meta.env.DEV);
-
 export type VoiceoverVoice = {
   id: string;
   name: string;
@@ -57,13 +50,6 @@ const FALLBACK_LANGUAGES: VoiceoverLanguage[] = [
   { id: "Hindi", name: "Hindi" },
 ];
 
-const MOCK_VOICES: VoiceoverVoice[] = [
-  { id: "Friendly_Person", name: "Friendly Person", gender: "female" },
-  { id: "Deep_Voice_Man", name: "Deep Voice Man", gender: "male" },
-  { id: "Calm_Woman", name: "Calm Woman", gender: "female" },
-  { id: "Imposing_Manner", name: "Imposing Manner", gender: "male" },
-];
-
 function authHeaders(): Record<string, string> {
   const user = getUserIdentity();
   const headers: Record<string, string> = {
@@ -100,9 +86,6 @@ export async function fetchVoiceoverCatalog(): Promise<VoiceoverCatalog> {
     } catch {
       // fall through
     }
-  }
-  if (MOCK_ENABLED) {
-    return { voices: MOCK_VOICES, languages: FALLBACK_LANGUAGES };
   }
   return { voices: [], languages: FALLBACK_LANGUAGES };
 }
@@ -149,7 +132,6 @@ export async function generateVoiceover(input: {
     }
   }
 
-  // Never mock a successful generation — quota / auth must come from the server.
   return {
     error:
       result.status === 401

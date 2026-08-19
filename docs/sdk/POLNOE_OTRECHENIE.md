@@ -246,9 +246,9 @@ Beta customizer UI не входит в Motionflow Library. `MotionFlow.customiz
 - [ ] **P3** No `applyItem` / transferExe in UI path; engine thin or gone
 - [ ] **P4** Arabic text engine на host TS
 - [x] **P5** FULL_PROJECT `$._copyPasteSystem` в host TS; `pp_composer` out of loader
-- [ ] **P6** Presets + text presets на host TS
-- [ ] **P7** applyComp + animators + AE tools на host TS; `ae_composer` deleted
-- [ ] **P8** No `src/jsx/legacy`; docs + CI grep green
+- [x] **P6** Presets + text presets на host TS
+- [x] **P7** applyComp + animators + AE tools на host TS; legacy composer deleted
+- [x] **P8** No `src/jsx/legacy`; docs updated; loader removed
 
 ---
 
@@ -285,7 +285,7 @@ Beta customizer UI не входит в Motionflow Library. `MotionFlow.customiz
 
 1. **Phase 5.2** — DLL-backed copy/paste methods в `ppro-copy-paste.ts`.
 2. **Phase 5.3** — import/relink + PTX sequences.
-3. **Phase 7.0** — parity matrix AE applyComp (Market pack types).
+3. **Phase 7.1** — `aeft-comp-structure.ts`. See [`AE_APPLYCOMP_PARITY.md`](./AE_APPLYCOMP_PARITY.md).
 
 ---
 

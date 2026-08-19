@@ -9,7 +9,7 @@ import {
 } from "../../components/ProgressDialog";
 import { fs } from "../../lib/cep/node";
 import { csi, reloadJSX } from "../../lib/utils/bolt";
-import { MotionFlow } from "@/sdk";
+import { Motionflow } from "@/sdk";
 import { hostSdk, sdkData } from "@/sdk/host-api";
 import { convertToMp3, detectSpeechStart } from "../../utils/ffmpeg";
 import { getBundledAudioPresetPath } from "../../utils/audioPreset";
@@ -133,6 +133,7 @@ export const CaptionsApp = ({
     presets,
     selectedPresetId,
     ensureStyleDownloaded,
+    applySelectedPresetToHost,
     updateMode,
     updateLines,
     updateCharacters,
@@ -352,6 +353,13 @@ export const CaptionsApp = ({
       setMeta(nextMeta);
       skipSessionSaveRef.current = true;
       setScreen("editor");
+      if (hostRef) {
+        try {
+          await applySelectedPresetToHost();
+        } catch {
+          // стиль не применился — не блокируем Load
+        }
+      }
     } catch {
       // не isMGT / несколько слоёв / пустой mogrt — тихая ошибка
     } finally {
@@ -381,7 +389,7 @@ export const CaptionsApp = ({
   const runTranscription = async (signal: AbortSignal) => {
     // Progress first — style download / JSX load can take seconds with no other UI.
     setProgress({ stage: "rendering" });
-    await MotionFlow.ready();
+    await Motionflow.ready();
     throwIfCancelled(signal);
 
     const user = getUserIdentity();
@@ -414,7 +422,7 @@ export const CaptionsApp = ({
     // Premiere: пользовательский .epr из Settings, иначе бандленный WAV-пресет;
     // AE игнорирует параметр
     const effectivePresetPath = audioPresetPath || getBundledAudioPresetPath() || undefined;
-    const describeRaw = await sdkData(MotionFlow.describe(effectivePresetPath));
+    const describeRaw = await sdkData(Motionflow.describe(effectivePresetPath));
     throwIfCancelled(signal);
     const describeFail = describeRaw as {
       ok?: false;
@@ -553,6 +561,14 @@ export const CaptionsApp = ({
       skipSessionSaveRef.current = false;
       setScreen("editor");
       persistAppliedConfig({ mode, lines, characters });
+
+      if (hostRef) {
+        try {
+          await applySelectedPresetToHost();
+        } catch {
+          // стиль не применился — captions уже на таймлайне
+        }
+      }
 
       try {
         window.dispatchEvent(new Event("aitools-credits-changed"));

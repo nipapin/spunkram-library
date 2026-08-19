@@ -6,6 +6,7 @@ import type {
   AddMogrtOptions,
   ApplyPackItemPayload,
   ApplyPackItemResult,
+  ImportDestination,
   MfResult,
 } from "./types";
 
@@ -94,9 +95,7 @@ export const PPRO = {
     async run(type: string): Promise<MfResult<unknown>> {
       return wrap(async () => {
         requireHost("PPRO");
-        const r = await evalTS("legacyPpCall", "buttonActions", JSON.stringify([type]));
-        if (!r?.ok) throw new Error(r?.reason || "tools failed");
-        return r.data;
+        return evalTS("pproToolsRun", type);
       });
     },
   },
@@ -155,7 +154,11 @@ export const PPRO = {
   async importMedia(filePath: string, destination: string, duration: number) {
     return wrap(() => evalTS("importMedia", filePath, destination, duration));
   },
-  async importVoiceoverAudio(filePath: string, destination: string, duration: number) {
+  async importVoiceoverAudio(
+    filePath: string,
+    destination: ImportDestination,
+    duration: number,
+  ) {
     return wrap(() => evalTS("importVoiceoverAudio", filePath, destination, duration));
   },
   async applyPackItem(payload: ApplyPackItemPayload): Promise<MfResult<ApplyPackItemResult>> {

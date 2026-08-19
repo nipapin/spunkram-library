@@ -150,14 +150,3 @@ arabicEngine.convertText = function(inTxt){
 //#endregion
 
 export { arabicEngine };
-
-/** Legacy `ae_composer.jsx` bridge until phase 6. */
-try {
-  // @ts-ignore
-  if (typeof $ !== "undefined") {
-    // @ts-ignore
-    $._AtomExt_additionalActions = { arabicEngine };
-  }
-} catch {
-  // ignore
-}

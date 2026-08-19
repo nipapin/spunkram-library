@@ -1,4 +1,4 @@
-/** Video tutorials — Motionflow-only (AtomX vtuts removed). */
+/** Video tutorials — Motionflow catalog. */
 import type { ApiErrorCode } from "./market-api";
 
 /** One tutorials group from the server. */
@@ -15,8 +15,7 @@ export type VideoTutorialGroup = {
 let sessionCache: VideoTutorialGroup[] | null = null;
 
 /**
- * Tutorials catalog. AtomX `vtuts` was removed; until Motionflow ships an
- * equivalent endpoint this returns an empty list (no network call).
+ * Tutorials catalog. Returns an empty list until Motionflow ships an endpoint.
  */
 export async function fetchVideoTutorials(
   _serverIndex = 0,

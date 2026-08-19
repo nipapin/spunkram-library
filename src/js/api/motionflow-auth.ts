@@ -7,17 +7,13 @@
 import { apiUrl } from "./config";
 import { cepHttpRequest } from "@/lib/api/cep-http";
 import { getUserSystemData, getUserSystemPrint } from "@/lib/api/usp";
-import { MASKED } from "@/lib/config/masked";
+import { BRAND } from "@/lib/config/brand";
 import { openLinkInBrowser } from "@/lib/utils/bolt";
 
 const PUBLIC_AUTH_ORIGIN = "https://motionflow.pro";
-/** Site origin for Spunkram marketing pages (pricing, etc.). */
-const SITE_ORIGIN = import.meta.env.DEV
-  ? "http://localhost:3000"
-  : PUBLIC_AUTH_ORIGIN;
 
 function clientQuery(): string {
-  return new URLSearchParams({ client: MASKED.client }).toString();
+  return new URLSearchParams({ client: BRAND.apiClient }).toString();
 }
 
 export const AUTH_ENDPOINTS = {
@@ -25,24 +21,24 @@ export const AUTH_ENDPOINTS = {
   token: "/api/cep/auth/token",
   me: "/api/cep/me",
   revokeDevice: "/api/cep/devices/revoke",
-  subscribe: `${SITE_ORIGIN}/spunkram`,
+  subscribe: `${PUBLIC_AUTH_ORIGIN}/spunkram`,
   manageSubscription: `${PUBLIC_AUTH_ORIGIN}/profile/subscriptions?${clientQuery()}`,
   contact: `${PUBLIC_AUTH_ORIGIN}/spunkram#contact`,
 } as const;
 
 /** Browser confirm page — Spunkram site (login modal → Allow/Deny). */
 export function verificationUrlForCode(code: string, fromApi?: string): string {
-  const params = new URLSearchParams({ code, client: MASKED.client });
+  const params = new URLSearchParams({ code, client: BRAND.apiClient });
   const fallback = `${PUBLIC_AUTH_ORIGIN}/spunkram?${params.toString()}`;
   if (!fromApi) return fallback;
   try {
     const url = new URL(fromApi);
-    if (/^(localhost|127\.0\.0\.1)$/i.test(url.hostname)) return fallback;
+    if (url.origin !== PUBLIC_AUTH_ORIGIN) return fallback;
     // Prefer /spunkram even if an older API still returns /cep/login.
     if (url.pathname.includes("/cep/login")) {
       url.pathname = "/spunkram";
     }
-    if (!url.searchParams.has("client")) url.searchParams.set("client", MASKED.client);
+    if (!url.searchParams.has("client")) url.searchParams.set("client", BRAND.apiClient);
     if (!url.searchParams.has("code")) url.searchParams.set("code", code);
     url.searchParams.delete("author_id");
     url.searchParams.delete("extension");
@@ -104,20 +100,12 @@ export type DeviceAuthStart = {
   verification_url: string;
   interval: number;
   expires_in: number;
-  mock?: boolean;
 };
 
 export type DeviceAuthTokenResult =
   | { status: "pending" }
   | { status: "expired" | "denied"; message?: string }
   | { status: "complete"; token: string; user: MotionflowUser };
-
-declare const __CEP_API_MOCKS__: boolean | undefined;
-const MOCK_ENABLED =
-  typeof __CEP_API_MOCKS__ === "boolean"
-    ? __CEP_API_MOCKS__
-    : Boolean(import.meta.env.DEV);
-const mockPollCounts = new Map<string, number>();
 
 function authHeaders(token?: string): Record<string, string> {
   const headers: Record<string, string> = {
@@ -164,7 +152,7 @@ export async function startDeviceAuth(): Promise<
       body: JSON.stringify({
         usp,
         device,
-        client: MASKED.client,
+        client: BRAND.apiClient,
       }),
     },
   );
@@ -174,31 +162,16 @@ export async function startDeviceAuth(): Promise<
       typeof (data as { device_code?: unknown }).device_code === "string"
         ? (data as { device_code: string }).device_code
         : "";
-    if (!deviceCode && !MOCK_ENABLED) {
+    if (!deviceCode) {
       return { error: "Server response missing device_code" };
     }
     return {
       data: {
         code: data.code,
-        device_code: deviceCode || `mfdev_${"0".repeat(64)}`,
+        device_code: deviceCode,
         verification_url: verificationUrlForCode(data.code, data.verification_url),
         interval: Math.max(1, Number(data.interval) || 3),
         expires_in: Number(data.expires_in) || 300,
-        mock: false,
-      },
-    };
-  }
-
-  if (MOCK_ENABLED && (status === 0 || status === 404 || status >= 500 || error)) {
-    const code = `MF-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-    return {
-      data: {
-        code,
-        device_code: `mfdev_${"a".repeat(64)}`,
-        verification_url: verificationUrlForCode(code),
-        interval: 2,
-        expires_in: 120,
-        mock: true,
       },
     };
   }
@@ -208,24 +181,8 @@ export async function startDeviceAuth(): Promise<
 
 export async function pollDeviceAuth(
   code: string,
-  opts?: { mock?: boolean; device_code?: string },
+  opts?: { device_code?: string },
 ): Promise<DeviceAuthTokenResult> {
-  if (opts?.mock && MOCK_ENABLED) {
-    const n = (mockPollCounts.get(code) || 0) + 1;
-    mockPollCounts.set(code, n);
-    if (n < 2) return { status: "pending" };
-    mockPollCounts.delete(code);
-    return {
-      status: "complete",
-      token: `mock-token-${code}`,
-      user: {
-        id: "mf-mock-user",
-        email: "demo@motionflow.pro",
-        name: "Demo User",
-      },
-    };
-  }
-
   const deviceCode = opts?.device_code?.trim();
   if (!deviceCode) {
     return { status: "expired", message: "Missing device_code" };
@@ -243,17 +200,6 @@ export async function pollDeviceAuth(
   });
 
   if (!data) {
-    if (MOCK_ENABLED && (status === 0 || status === 404 || status >= 500)) {
-      return {
-        status: "complete",
-        token: `mock-token-${code}`,
-        user: {
-          id: "mf-mock-user",
-          email: "demo@motionflow.pro",
-          name: "Demo User",
-        },
-      };
-    }
     return { status: "pending" };
   }
 
@@ -297,7 +243,7 @@ export async function fetchMe(
   token: string,
   opts?: { host?: "AE" | "PR" | null },
 ): Promise<{ data?: MotionflowMe; error?: string }> {
-  const qs = new URLSearchParams({ client: MASKED.client });
+  const qs = new URLSearchParams({ client: BRAND.apiClient });
   if (opts?.host === "AE" || opts?.host === "PR") {
     qs.set("host", opts.host);
   }
@@ -313,43 +259,6 @@ export async function fetchMe(
     return { data: normalizeMePayload(data) };
   }
 
-  if (MOCK_ENABLED && token.startsWith("mock-token-")) {
-    const device = getUserSystemData();
-    return {
-      data: normalizeMePayload({
-        user: {
-          id: "mf-mock-user",
-          email: "demo@motionflow.pro",
-          name: "Demo User",
-        },
-        // Mock free user — platform Motionflow sub must not unlock Spunkram.
-        tier: "free",
-        subscription: {
-          active: false,
-          plan: null,
-          status: null,
-          renews_at: null,
-        },
-        purchases: [],
-        entitlements: {
-          free_pack_slots: 1,
-          ai_generations_limit: 5,
-        },
-        subscribe_url: AUTH_ENDPOINTS.subscribe,
-        manage_subscription_url: AUTH_ENDPOINTS.manageSubscription,
-        devices: [
-          {
-            id: "current",
-            ip: "127.0.0.1",
-            user_fingerprint: JSON.stringify(device),
-            current: true,
-            name: device.user,
-          },
-        ],
-      }),
-    };
-  }
-
   if (status === 401) return { error: "UNAUTHORIZED" };
   return { error: error || "Unable to load profile" };
 }
@@ -358,9 +267,6 @@ export async function revokeMotionflowDevice(
   token: string,
   deviceId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (MOCK_ENABLED && token.startsWith("mock-token-")) {
-    return { ok: true };
-  }
   const { error, status } = await parseJson<{ ok?: boolean }>(
     apiUrl(AUTH_ENDPOINTS.revokeDevice),
     {

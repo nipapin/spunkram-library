@@ -28,32 +28,6 @@ function copyDirRecursive(from: string, to: string): void {
   }
 }
 
-/** Copy Beta legacy JSX into dist/cep/jsx/legacy for runtime $.evalFile. */
-function copyLegacyJsxPlugin(): Plugin {
-  const from = path.resolve(__dirname, "src/jsx/legacy");
-  const to = path.resolve(__dirname, "dist", cepDist, "jsx", "legacy");
-  const copy = () => {
-    if (!fs.existsSync(from)) return;
-    fs.mkdirSync(to, { recursive: true });
-    for (const name of fs.readdirSync(from)) {
-      if (!name.endsWith(".jsx") && !name.endsWith(".txt")) continue;
-      fs.copyFileSync(path.join(from, name), path.join(to, name));
-    }
-  };
-  return {
-    name: "copy-motionflow-legacy-jsx",
-    buildStart() {
-      copy();
-    },
-    writeBundle() {
-      copy();
-    },
-    configureServer() {
-      copy();
-    },
-  };
-}
-
 /**
  * Ensure FULL_PROJECT natives land at extension `bin/win/Motionflow.dll`
  * (same layout as Spunkram Beta). cep.config `copyAssets` alone can miss this
@@ -91,8 +65,6 @@ const devEnv = loadEnv("development", __dirname, "");
 
 // Dev Vite proxy target for /api/* — always https://motionflow.pro unless overridden.
 const apiTarget = devEnv.MOTIONFLOW_API_TARGET?.trim() || "https://motionflow.pro";
-// Client-side auth/voiceover mocks — off by default; enable with CEP_API_MOCKS=true.
-const cepApiMocks = !isPackage && devEnv.CEP_API_MOCKS === "true";
 
 let input: { [key: string]: string } = {};
 cepConfig.panels.map((panel) => {
@@ -117,10 +89,9 @@ if (action) runAction(config, action);
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), cep(config), copyLegacyJsxPlugin(), copyMotionflowBinPlugin()],
+  plugins: [react(), cep(config), copyMotionflowBinPlugin()],
   define: {
     __APP_BRAND__: JSON.stringify("spunkram"),
-    __CEP_API_MOCKS__: JSON.stringify(cepApiMocks),
     // Inline so panel JS never touches bare `process` (CEP CEF / ExtendScript).
     "process.env.ZXP_PACKAGE": JSON.stringify(process.env.ZXP_PACKAGE || ""),
     "process.env.ZIP_PACKAGE": JSON.stringify(process.env.ZIP_PACKAGE || ""),
@@ -134,7 +105,7 @@ export default defineConfig({
   root,
   clearScreen: false,
   server: {
-    // IPv4 loopback — CEP opens http://localhost:4000, and with VPN we prefer
+    // IPv4 loopback — CEP dev panel binds here; with VPN we prefer
     // 127.0.0.1 over ::1. Default Vite bind is [::1] only → ERR_CONNECTION_REFUSED.
     host: "127.0.0.1",
     port: cepConfig.port,

@@ -7,7 +7,6 @@ const DEDUPE_WINDOW_MS = 60_000;
 
 /**
  * Absolute production URL — CEP Node `http` cannot POST relative paths.
- * In Vite DEV we also try the relative path (Vite proxy) if absolute fails.
  */
 const SUPPORT_REPORT_URL = `https://motionflow.pro${SUPPORT_ENDPOINT}`;
 
@@ -194,32 +193,17 @@ async function postReport(payload: ReportPayload): Promise<HttpResult> {
   const headers = authHeaders();
 
   // 1) Absolute → CEP Node https (no CORS)
-  let result = await cepHttpRequest(SUPPORT_REPORT_URL, {
+  const result = await cepHttpRequest(SUPPORT_REPORT_URL, {
     method: "POST",
     headers,
     body,
     timeoutMs: 12000,
   });
 
-  // 2) Dev fallback: relative path through Vite proxy (localhost:4000 → motionflow.pro)
-  if (
-    !result.ok &&
-    import.meta.env.DEV &&
-    (result.error === "NO_CONNECTION" || result.status === 0)
-  ) {
-    result = await cepHttpRequest(SUPPORT_ENDPOINT, {
-      method: "POST",
-      headers,
-      body,
-      timeoutMs: 12000,
-    });
-  }
-
   return result;
 }
 
 function logResult(result: HttpResult): void {
-  // Always log failures — otherwise CEP packaged builds hide the problem.
   if (!result.ok) {
     console.warn(
       "[support] report failed →",
@@ -228,8 +212,6 @@ function logResult(result: HttpResult): void {
       result.error,
       (result.text || "").slice(0, 200),
     );
-  } else if (import.meta.env.DEV) {
-    console.info("[support] report sent →", SUPPORT_REPORT_URL, result.status, result.text?.slice(0, 120));
   }
 }
 
@@ -259,20 +241,6 @@ export function reportError(
     }
 
     if (severity !== "error") {
-      if (import.meta.env.DEV) {
-        const fn = severity === "warning" ? console.warn : console.info;
-        fn(`[support:${severity}] ${actionName}:`, parts.message, extra ?? "");
-      }
-      return Promise.resolve();
-    }
-
-    // Dev panel: never page Telegram — local console only.
-    if (import.meta.env.DEV) {
-      console.warn(
-        `[support:dev] skip Telegram → ${actionName}:`,
-        parts.message,
-        extra ?? "",
-      );
       return Promise.resolve();
     }
 

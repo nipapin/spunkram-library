@@ -4,7 +4,7 @@
  * `GET /api/cep/market?host=` with Bearer; install via authenticated download.
  * @see next-app/CEP_API.md
  */
-import { apiUrl } from "./config";
+import { API_BASE, apiUrl } from "./config";
 import { cepHttpRequest } from "@/lib/api/cep-http";
 import {
   getSessionToken,
@@ -35,9 +35,7 @@ import { version as EXTENSION_VERSION } from "../../shared/shared";
 export const CEP_MARKET_ENDPOINT = "/api/cep/market";
 export const CEP_MARKET_DIFF_ENDPOINT = "/api/cep/market/diff";
 
-const SITE_ORIGIN = import.meta.env.DEV
-  ? "http://localhost:3000"
-  : "https://motionflow.pro";
+const SITE_ORIGIN = API_BASE;
 
 export type CepMarketAction = "install" | "buy" | "get_free" | string;
 
@@ -67,12 +65,6 @@ export type CepMarketPayload = {
   subscribe_url?: string;
   Packages?: CepMarketPackage[];
 };
-
-declare const __CEP_API_MOCKS__: boolean | undefined;
-const MOCK_ENABLED =
-  typeof __CEP_API_MOCKS__ === "boolean"
-    ? __CEP_API_MOCKS__
-    : Boolean(import.meta.env.DEV);
 
 function authHeaders(): Record<string, string> {
   return sessionAuthHeaders();
@@ -214,47 +206,6 @@ export function tagInstalledPackWithMarketId(
   return tagged;
 }
 
-function mockPackages(host: "AE" | "PR"): CepMarketPackage[] {
-  return [
-    {
-      id: "mock-free",
-      name: "Spunkram Free Starter",
-      pack_name: "spunkram-free-starter",
-      author: "Spunkram",
-      version: "1.0.0",
-      primary_type: host,
-      image_url: "https://placehold.co/640x360/1a1a2e/eee?text=Free+Pack",
-      custom_price: 0,
-      owned: false,
-      covered_by_subscription: true,
-      action: "get_free",
-      install_url: null,
-      buy_url: null,
-      details_url: null,
-      min_extension_version: null,
-      min_host_version: null,
-    },
-    {
-      id: "mock-buy",
-      name: "Spunkram Library",
-      pack_name: "spunkram-library",
-      author: "Spunkram",
-      version: "4.0.0",
-      primary_type: host,
-      image_url: "https://placehold.co/640x360/0f3460/eee?text=Library",
-      custom_price: host === "AE" ? 75 : 69,
-      owned: false,
-      covered_by_subscription: false,
-      action: "buy",
-      install_url: null,
-      buy_url: defaultSubscribeUrl(),
-      details_url: null,
-      min_extension_version: null,
-      min_host_version: null,
-    },
-  ];
-}
-
 /**
  * Load author packs from Motionflow `GET /api/cep/market?host=`.
  */
@@ -263,15 +214,6 @@ export async function fetchCepMarket(
 ): Promise<{ data?: CepMarketPayload; error?: string }> {
   const token = getSessionToken();
   if (!token) {
-    if (MOCK_ENABLED) {
-      return {
-        data: {
-          subscription_active: false,
-          subscribe_url: defaultSubscribeUrl(),
-          Packages: mockPackages(host),
-        },
-      };
-    }
     return { error: "UNAUTHORIZED" };
   }
 

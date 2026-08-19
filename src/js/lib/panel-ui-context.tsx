@@ -9,13 +9,14 @@ import {
   type ReactNode,
 } from "react";
 import * as panelStore from "@/lib/userdata-store";
+import { storageKey } from "@/lib/config/brand";
 
 export const THUMB_SIZE_MIN = 1;
 export const THUMB_SIZE_MAX = 5;
 export const THUMB_SIZE_DEFAULT = 3;
 
-const FAVORITES_STORAGE_KEY = "spunkram.favorites";
-const UI_STATE_KEY = "spunkram.uiState";
+const FAVORITES_STORAGE_KEY = storageKey("favorites");
+const UI_STATE_KEY = storageKey("uiState");
 /** Legacy key — migrated into UI_STATE_KEY once. */
 const LEGACY_SHOW_NEW_BADGES_KEY = "spunkram.showNewBadges";
 

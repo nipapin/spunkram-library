@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { fs, path } from "../../lib/cep/node";
-import { MotionFlow } from "@/sdk";
+import { Motionflow } from "@/sdk";
 import { downloadStockAsset } from "@/lib/api/stock-api";
 import { resolveFootageDownloadDir } from "@/lib/utils/stock-paths";
 import { useFiltersContext } from "../context/FiltersContext";
@@ -28,7 +28,7 @@ export function useImportMedia() {
         setProgress(0);
 
         if (fs.existsSync(filePath)) {
-          const res = await MotionFlow.importMedia(
+          const res = await Motionflow.importMedia(
             filePath,
             destination,
             item.duration ?? 5,
@@ -54,7 +54,7 @@ export function useImportMedia() {
 
         if (!downloaded.ok) throw new Error(downloaded.message);
 
-        const res = await MotionFlow.importMedia(
+        const res = await Motionflow.importMedia(
           downloaded.filePath,
           destination,
           item.duration ?? 5,

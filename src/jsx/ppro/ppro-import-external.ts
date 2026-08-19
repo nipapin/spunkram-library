@@ -97,25 +97,3 @@ export const importExternalAsset = (
     return { ok: false, reason: e && e.message ? e.message : String(e) };
   }
 };
-
-/** Legacy `engine.jsx` bridge until engine is removed (phase 3+). */
-function installLegacyBridge(): void {
-  try {
-    // @ts-ignore
-    if (typeof $ === "undefined") return;
-    // @ts-ignore
-    $._AtomExt_externalLibAssetImporter = {
-      maskedTransferOnce: (_newValue: string) => {},
-      importToAE: () => "NO_SUPPORT_APP",
-      importToPR: (typeImportTo: string | number, path: string) => {
-        const r = importExternalAsset({ typeImportTo, filePath: path });
-        if (!r.ok) return r.reason;
-        return r.data;
-      },
-    };
-  } catch {
-    // ignore
-  }
-}
-
-installLegacyBridge();

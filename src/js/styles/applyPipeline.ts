@@ -1,6 +1,6 @@
 import { fs, path } from "../lib/cep/node";
 import { csi } from "../lib/utils/bolt";
-import { MotionFlow } from "@/sdk";
+import { Motionflow } from "@/sdk";
 import { defaultsFromDefinition } from "../presets";
 import type { MogrtDefinition } from "../presets/types";
 import { loadLocalPackage } from "./localStore";
@@ -123,7 +123,7 @@ export const applyPresetProjectInHost = async (
     return { applied: false, reason: "unsupported_host" };
   }
 
-  const hostApi = MotionFlow.host === "AE" ? MotionFlow.AE : MotionFlow.PPRO;
+  const hostApi = Motionflow.host === "AE" ? Motionflow.AE : Motionflow.PPRO;
   const wrapped = await hostApi.applyStyleProject({
     styleId: prepared.preset.styleId,
     styleName: prepared.preset.name,

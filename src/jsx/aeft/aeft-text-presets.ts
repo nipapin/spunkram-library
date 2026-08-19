@@ -1,6 +1,9 @@
-$._AtomExt_aeTextPresets = {
+/**
+ * AE text animator presets — port of legacy `ae_text_presets.jsx`.
+ * @ts-nocheck — legacy encoding/algorithm; keep parity with Beta packs.
+ */
 
-    removePreset: function(select_type, number_preset){
+export const removeTextPresets = function(select_type, number_preset){
 		var comp = app.project.activeItem;
 		if(!(comp) || !(comp instanceof CompItem)){return "COMP";}
 		var layer = comp.selectedLayers[0];
@@ -46,9 +49,9 @@ $._AtomExt_aeTextPresets = {
 			}
 			//CODE END
 		app.endUndoGroup();
-    },
+};
 
-    getPreset: function(){
+export const getTextPresets = function(){
 		var comp = app.project.activeItem;
 		if(!(comp) || !(comp instanceof CompItem)){return "COMP";}
 		var layer = comp.selectedLayers[0];
@@ -57,9 +60,9 @@ $._AtomExt_aeTextPresets = {
 		//getAndRemoveTextPreset(layer);
 		return getAndRemoveMarker(layer);
 
-    },
+};
 
-    applyAndReplacePreset: function(select_type, preset_id, preset_line, use_mix_mode){
+export const applyTextPresets = function(select_type, preset_id, preset_line, use_mix_mode){
 		var comp = app.project.activeItem;
 		if(!(comp) || !(comp instanceof CompItem)){return "COMP";}
 		var layer = comp.selectedLayers[0];
@@ -134,7 +137,6 @@ $._AtomExt_aeTextPresets = {
 			}
 			//CODE END
 		app.endUndoGroup();
-    }
 };
 
 		var dChar = ["@", ":", ",", "*", "|", "#"];

@@ -7,7 +7,8 @@ import {
 } from "../../components/ProgressDialog";
 import { fs } from "../../lib/cep/node";
 import { reloadJSX } from "../../lib/utils/bolt";
-import { MotionFlow } from "@/sdk";
+import { storageKey } from "@/lib/config/brand";
+import { Motionflow } from "@/sdk";
 import { hostSdk, sdkData } from "@/sdk/host-api";
 import { convertToMp3 } from "../../utils/ffmpeg";
 import { getBundledAudioPresetPath } from "../../utils/audioPreset";
@@ -41,7 +42,7 @@ import { useConfiguration } from "../../../context/ConfigurationWrapper";
 
 const TRANSCRIPTION_KEY = "aitools-cep-chapters-transcription";
 const RESULT_KEY = "aitools-cep-chapters-result";
-const HISTORY_KEY = "spunkram.chaptersHistory";
+const HISTORY_KEY = storageKey("chaptersHistory");
 const HISTORY_MAX = 20;
 
 function reportChapterApiError(action: string, e: unknown) {
@@ -292,10 +293,10 @@ export const ChaptersApp = ({
     const user = getUserIdentity();
 
     setProgress({ stage: "rendering" });
-    await MotionFlow.ready();
+    await Motionflow.ready();
     throwIfCancelled(signal);
     const effectivePresetPath = getBundledAudioPresetPath() || undefined;
-    const describeRaw = await sdkData(MotionFlow.describe(effectivePresetPath));
+    const describeRaw = await sdkData(Motionflow.describe(effectivePresetPath));
     throwIfCancelled(signal);
     const describeFail = describeRaw as {
       ok?: false;

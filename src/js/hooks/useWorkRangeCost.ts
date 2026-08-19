@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { MotionFlow, sdkData } from "../sdk";
+import { Motionflow, sdkData } from "../sdk";
 import { durationGenerationsCost } from "../utils/generationCost";
 
 export type WorkRangeProbe = {
@@ -31,7 +31,7 @@ export const useWorkRangeCost = (enabled = true): WorkRangeProbe => {
   const refresh = useCallback(async () => {
     if (!enabled) return;
     try {
-      const raw = await sdkData(MotionFlow.getWorkRange());
+      const raw = await sdkData(Motionflow.getWorkRange());
       const data = raw as WorkRangeOk | WorkRangeFail;
       if (data && typeof data === "object" && "ok" in data && data.ok === false) {
         setProbe({

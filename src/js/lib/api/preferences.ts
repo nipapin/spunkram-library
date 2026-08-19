@@ -1,5 +1,5 @@
-import { fs, os, path } from "@/lib/cep/node";
-import { getPreferencesCandidates } from "@/lib/utils/pack";
+import { fs, path } from "@/lib/cep/node";
+import { preferencesJsonPath } from "@/lib/config/brand";
 
 export type PrefSettings = {
   portablePackageInstallation: number;
@@ -16,17 +16,10 @@ export type PrefSettings = {
   useSystemFonts: number | boolean;
   useGPUSupports: number;
   useContinueAnyway: number;
-  defaultApiServer: number;
   packSortFavorited: number;
   packSortByNames: number;
   packSortApp: string;
   autofillValues: { email: string };
-};
-
-/** Legacy AtomX marketplace auth (unused after Отречение; kept for prefs migration). */
-export type PersonalAuth = {
-  usid?: string;
-  email?: string;
 };
 
 /** Motionflow CEP session (browser device-code login). */
@@ -53,7 +46,6 @@ export type PreferencesFile = {
   /** Legacy / alternate casing seen in some installs. */
   Packages?: unknown[];
   PrefSettings?: Partial<PrefSettings>;
-  personalAuthSystem?: PersonalAuth;
   motionflowAuth?: MotionflowAuth;
   motionflowAccounts?: MotionflowAccountSession[];
   motionflowActiveAccountId?: string;
@@ -80,7 +72,6 @@ export const DEFAULT_PREF_SETTINGS: PrefSettings = {
   useSystemFonts: 0,
   useGPUSupports: 1,
   useContinueAnyway: 1,
-  defaultApiServer: 0,
   packSortFavorited: 0,
   packSortByNames: 0,
   packSortApp: "none",
@@ -91,21 +82,12 @@ function cepFsAvailable(): boolean {
   return typeof fs?.existsSync === "function" && typeof fs?.readFileSync === "function";
 }
 
-/** Prefer an existing prefs file; fall back to primary Spunkram path. */
+/** Prefer an existing prefs file; fall back to primary Motionflow path. */
 export function resolvePreferencesPath(): string {
-  const candidates = getPreferencesCandidates();
-  for (const prefPath of candidates) {
-    if (cepFsAvailable() && fs.existsSync(prefPath)) return prefPath;
-  }
-  if (candidates[0]) return candidates[0];
-  if (typeof os?.homedir !== "function" || typeof path?.join !== "function") {
-    return "";
-  }
-  const roaming =
-    os.platform() === "win32"
-      ? path.join(os.homedir(), "AppData", "Roaming")
-      : path.join(os.homedir(), "Library", "Application Support");
-  return path.join(roaming, "Spunkram", "Spunkram Extension", "preferences.json");
+  const prefPath = preferencesJsonPath();
+  if (prefPath && cepFsAvailable() && fs.existsSync(prefPath)) return prefPath;
+  if (prefPath) return prefPath;
+  return "";
 }
 
 export function loadPreferencesFile(): PreferencesFile {
@@ -114,7 +96,6 @@ export function loadPreferencesFile(): PreferencesFile {
     return {
       packages: [],
       PrefSettings: { ...DEFAULT_PREF_SETTINGS },
-      personalAuthSystem: {},
       motionflowAuth: {},
       motionflowAccounts: [],
     };
@@ -126,7 +107,6 @@ export function loadPreferencesFile(): PreferencesFile {
     return {
       packages: [],
       PrefSettings: { ...DEFAULT_PREF_SETTINGS },
-      personalAuthSystem: {},
       motionflowAuth: {},
       motionflowAccounts: [],
     };
@@ -189,17 +169,6 @@ export function readPrefSettings(): PrefSettings {
 export function writePrefSettings(settings: PrefSettings): boolean {
   const file = loadPreferencesFile();
   file.PrefSettings = settings;
-  return savePreferencesFile(file);
-}
-
-export function readPersonalAuth(): PersonalAuth {
-  const file = loadPreferencesFile();
-  return file.personalAuthSystem ?? {};
-}
-
-export function writePersonalAuth(auth: PersonalAuth): boolean {
-  const file = loadPreferencesFile();
-  file.personalAuthSystem = auth;
   return savePreferencesFile(file);
 }
 

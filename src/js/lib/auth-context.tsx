@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { authErrorMessage, type AuthDevice } from "@/lib/api/market-api";
+import { authErrorMessage } from "@/lib/api/market-api";
 import { onSessionExpired } from "@/lib/api/session";
 import { cepWs } from "@/lib/cep-ws";
 import {
@@ -41,9 +41,10 @@ import { reportSupportError } from "@/api/support";
 import { reportClientSession } from "@/api/telemetry";
 import { currentHostAppId } from "@/lib/utils/apply-item";
 import {
-  generationLimitForTier,
   resolveAccessTier,
-  type SpunkramAccessTier,
+  resolveFreePackSlots,
+  resolveGenerationLimit,
+  type MotionflowAccessTier,
 } from "@/lib/config/entitlements";
 
 type AuthStatus = {
@@ -72,12 +73,14 @@ type AuthContextValue = {
   subscription: AuthStatus;
   /**
    * From server `/me` (fallback: derived from subscription + purchases).
-   * free = no Spunkram sub and no sold-item purchases.
+   * free = no Motionflow sub and no sold-item purchases.
    */
-  accessTier: SpunkramAccessTier;
+  accessTier: MotionflowAccessTier;
   isFreeUser: boolean;
-  /** Monthly AI generation allotment from server entitlements. */
-  generationLimit: number;
+  /** Monthly AI generation allotment from server entitlements (`null` until `/api/cep/me`). */
+  generationLimit: number | null;
+  /** Free pack slots from server entitlements (`null` until `/api/cep/me`). */
+  freePackSlots: number | null;
   market: CepMarketPayload | null;
   marketLoading: boolean;
   marketError: string | null;
@@ -338,17 +341,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: false, message: started.error };
     }
 
-    const { code, device_code, verification_url, interval, expires_in, mock } = started.data;
+    const { code, device_code, verification_url, interval, expires_in } = started.data;
     setLoginCode(code);
     openVerificationUrl(verification_url);
 
     const deadline = Date.now() + expires_in * 1000;
-    const firstDelayMs = mock ? Math.max(1500, interval * 1000) : interval * 1000;
+    const firstDelayMs = interval * 1000;
 
     await new Promise((r) => setTimeout(r, firstDelayMs));
 
     while (!loginAbortRef.current && Date.now() < deadline) {
-      const result = await pollDeviceAuth(code, { mock, device_code });
+      const result = await pollDeviceAuth(code, { device_code });
       if (loginAbortRef.current) break;
 
       if (result.status === "complete") {
@@ -372,7 +375,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoginCode(null);
         await refreshMarket(true);
         return profile.ok
-          ? { ok: true, message: "Signed in to Spunkram" }
+          ? { ok: true, message: "Signed in to Motionflow" }
           : { ok: true, message: profile.message || "Signed in" };
       }
 
@@ -560,11 +563,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [subscription.tier, subscription.subscribed, subscription.purchases.length],
   );
   const isFreeUser = accessTier === "free";
-  const generationLimit = generationLimitForTier(
-    accessTier,
-    subscription.aiGenerationsLimit,
-    subscription.plan,
-  );
+  const generationLimit = resolveGenerationLimit(subscription.aiGenerationsLimit);
+  const freePackSlots = resolveFreePackSlots(subscription.freePackSlots);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -578,6 +578,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       accessTier,
       isFreeUser,
       generationLimit,
+      freePackSlots,
       market,
       marketLoading,
       marketError,
@@ -604,6 +605,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       accessTier,
       isFreeUser,
       generationLimit,
+      freePackSlots,
       market,
       marketLoading,
       marketError,
@@ -630,11 +632,3 @@ export function useAuth(): AuthContextValue {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
-
-export function useApiServerIndex(): number {
-  const { prefs } = useAuth();
-  return Number(prefs.defaultApiServer) === 1 ? 1 : 0;
-}
-
-/** @deprecated AtomX AuthDevice shape — prefer MotionflowDevice */
-export type { AuthDevice };

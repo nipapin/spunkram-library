@@ -1,4 +1,14 @@
 ﻿import "./aeft-text-arabic";
+import "./aeft-text-presets";
+export { applyPreset } from "./aeft-presets";
+export { applyTextPresets, getTextPresets, removeTextPresets } from "./aeft-text-presets";
+export {
+  applyComp,
+  addTextAnimatorComp,
+  addPhotoAnimatorComp,
+  aeToolsRun,
+  setComposerRootFolder,
+} from "./aeft-composer";
 export { importMedia, importVoiceoverAudio } from "./aeft-import-media";
 export { importExternalAsset } from "./aeft-import-external";
 export { applyPackItem } from "./aeft-apply-item";
@@ -13,7 +23,6 @@ export {
   createComp,
   createText,
   addResponsiveBackground,
-  legacyAeCall,
 } from "./aeft-sdk";
 /** PPRO-only stubs so Scripts intersection typing still works for evalTS. */
 export const addMogrt = (_opts: unknown) => ({
@@ -39,6 +48,7 @@ export const legacyPpCall = (_method: string, _argsJson: string) => ({
   ok: false,
   reason: "AE_ONLY_HOST",
 });
+export const pproToolsRun = (_type: string) => "AE_ONLY_HOST";
 const copyPasteStub = () => ({ ok: false as const, reason: "AE_ONLY_HOST" });
 export const copyPasteGetAppPrefs = copyPasteStub;
 export const copyPasteCheckForDuplicatesOfAuthorFolder = copyPasteStub;

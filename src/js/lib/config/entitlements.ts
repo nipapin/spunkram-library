@@ -1,35 +1,17 @@
 /**
- * Spunkram access tiers — values come from GET /api/cep/me (server-owned).
- * Local defaults only apply when the API omits entitlements (mock / legacy).
- *
- * Generations / month:
- * - no subscription → 5
- * - Editor (library) → 10
- * - Editor AI → 100
+ * Motionflow access tiers — numeric limits come from GET /api/cep/me (`entitlements`).
+ * CEP must not hardcode generation or free-pack slot counts (server can change without a release).
  */
-export const SPUNKRAM_FREE_TIER = {
-  generations: 5,
-  freePackCount: 1,
-} as const;
+export type MotionflowAccessTier = "free" | "purchased" | "subscribed";
 
-export const SPUNKRAM_EDITOR_TIER = {
-  generations: 10,
-} as const;
-
-export const SPUNKRAM_EDITOR_AI_TIER = {
-  generations: 100,
-} as const;
-
-/** @deprecated alias — Editor AI quota */
-export const SPUNKRAM_SUBSCRIBED_TIER = SPUNKRAM_EDITOR_AI_TIER;
-
-export type SpunkramAccessTier = "free" | "purchased" | "subscribed";
+/** @deprecated use MotionflowAccessTier */
+export type SpunkramAccessTier = MotionflowAccessTier;
 
 export function resolveAccessTier(opts: {
   tier?: string | null;
   subscribed: boolean;
   purchaseCount: number;
-}): SpunkramAccessTier {
+}): MotionflowAccessTier {
   const t = (opts.tier || "").toLowerCase();
   if (t === "subscribed" || t === "purchased" || t === "free") return t;
   if (opts.subscribed) return "subscribed";
@@ -37,34 +19,18 @@ export function resolveAccessTier(opts: {
   return "free";
 }
 
-/** Infer Editor vs Editor AI from subscription plan label when server limit missing. */
-export function generationLimitFromPlanLabel(plan?: string | null): number | null {
-  if (!plan) return null;
-  const blob = plan.toLowerCase();
-  if (
-    blob.includes("ai_toolkit") ||
-    blob.includes("ai toolkit") ||
-    /editor\s*ai/.test(blob) ||
-    blob.includes("editor+ai")
-  ) {
-    return SPUNKRAM_EDITOR_AI_TIER.generations;
+/** Monthly AI generation cap from `entitlements.ai_generations_limit` only. */
+export function resolveGenerationLimit(serverLimit?: number | null): number | null {
+  if (typeof serverLimit !== "number" || !Number.isFinite(serverLimit) || serverLimit <= 0) {
+    return null;
   }
-  if (blob.includes("library") || /(^|[^a-z])editor([^a-z]|$)/.test(blob)) {
-    return SPUNKRAM_EDITOR_TIER.generations;
-  }
-  return null;
+  return Math.floor(serverLimit);
 }
 
-export function generationLimitForTier(
-  tier: SpunkramAccessTier,
-  serverLimit?: number | null,
-  planLabel?: string | null,
-): number {
-  if (typeof serverLimit === "number" && serverLimit > 0) return serverLimit;
-  if (tier === "subscribed") {
-    return (
-      generationLimitFromPlanLabel(planLabel) ?? SPUNKRAM_EDITOR_AI_TIER.generations
-    );
+/** Free pack install slots from `entitlements.free_pack_slots` only. */
+export function resolveFreePackSlots(serverSlots?: number | null): number | null {
+  if (typeof serverSlots !== "number" || !Number.isFinite(serverSlots) || serverSlots < 0) {
+    return null;
   }
-  return SPUNKRAM_FREE_TIER.generations;
+  return Math.floor(serverSlots);
 }

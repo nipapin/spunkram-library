@@ -1,17 +1,15 @@
 /**
- * Persistent key/value store under Spunkram userdata (AppData / Application Support).
+ * Persistent key/value store under Motionflow userdata (AppData / Application Support).
  * Survives clearing the CEP Chromium localStorage / site data.
  *
- * Path (Windows): %APPDATA%/Spunkram/Spunkram Library/panel-store.json
- * Path (macOS):   ~/Library/Application Support/Spunkram/Spunkram Library/panel-store.json
- *
- * Outside CEP (Vite browser preview) falls back to localStorage.
- * On first CEP load, matching localStorage keys are migrated once into the file.
+ * Path (Windows): %APPDATA%/Motionflow/Motionflow Library/panel-store.json
+ * Path (macOS):   ~/Library/Application Support/Motionflow/Motionflow Library/panel-store.json
  */
-import { fs, os, path } from "@/lib/cep/node";
+import { fs, path } from "@/lib/cep/node";
+import { panelUserDataDir, storageKey } from "@/lib/config/brand";
 
 const STORE_VERSION = 1;
-const MIGRATED_FLAG = "__ls_migrated_v1__";
+const MIGRATED_FLAG = storageKey("__ls_migrated_v1__");
 
 type StoreFile = {
   version: number;
@@ -36,16 +34,9 @@ function hasLocalStorage(): boolean {
   }
 }
 
-/** Directory for Spunkram Library panel persistence. */
+/** Directory for Motionflow Library panel persistence. */
 export function getPanelUserDataDir(): string {
-  if (typeof os?.homedir !== "function" || typeof path?.join !== "function") {
-    return "";
-  }
-  const roaming =
-    os.platform() === "win32"
-      ? path.join(os.homedir(), "AppData", "Roaming")
-      : path.join(os.homedir(), "Library", "Application Support");
-  return path.join(roaming, "Spunkram", "Spunkram Library");
+  return panelUserDataDir();
 }
 
 export function getPanelStorePath(): string {
@@ -92,6 +83,7 @@ function writeStoreFile(filePath: string, store: StoreFile): boolean {
 
 function shouldMigrateKey(key: string): boolean {
   return (
+    key.startsWith("motionflow") ||
     key.startsWith("spunkram") ||
     key.startsWith("spunkram-library") ||
     key.startsWith("aitools-cep") ||
@@ -130,7 +122,6 @@ function ensureCache(): StoreFile {
     return cache;
   }
 
-  // Browser / no Node fs — memory mirror of localStorage
   cache = emptyStore();
   if (hasLocalStorage()) {
     try {
@@ -154,7 +145,6 @@ function persist(): void {
     writeStoreFile(filePath, cache);
     return;
   }
-  // Preview fallback: keep localStorage in sync so refresh works without CEP.
   if (!hasLocalStorage()) return;
   try {
     for (const [key, value] of Object.entries(cache.values)) {
@@ -166,7 +156,6 @@ function persist(): void {
   }
 }
 
-/** Read a string value (same contract as localStorage.getItem). */
 export function getItem(key: string): string | null {
   const store = ensureCache();
   if (Object.prototype.hasOwnProperty.call(store.values, key)) {
@@ -175,14 +164,12 @@ export function getItem(key: string): string | null {
   return null;
 }
 
-/** Write a string value (same contract as localStorage.setItem). */
 export function setItem(key: string, value: string): void {
   const store = ensureCache();
   store.values[key] = String(value);
   persist();
 }
 
-/** Remove a key (same contract as localStorage.removeItem). */
 export function removeItem(key: string): void {
   const store = ensureCache();
   if (!Object.prototype.hasOwnProperty.call(store.values, key)) return;
@@ -211,7 +198,6 @@ export function setJSON(key: string, value: unknown): void {
   setItem(key, JSON.stringify(value));
 }
 
-/** Force re-read from disk on next access (tests / rare reloads). */
 export function resetPanelStoreCache(): void {
   cache = null;
 }
