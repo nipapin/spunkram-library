@@ -2,8 +2,9 @@
  * Premiere FULL_PROJECT apply via `$._copyPasteSystem` + Motionflow.dll.
  * Port of Spunkram Beta `js/features/apply-item.js` → `customChain`.
  */
-import { csi, evalES } from "@/lib/utils/bolt";
+import { csi, evalES, evalTS } from "@/lib/utils/bolt";
 import { fs, os, path, zlib } from "@/lib/cep/node";
+import { BRAND } from "@/lib/config/brand";
 import { loadLegacyJsx, legacyLoaded } from "@/sdk/legacy-loader";
 
 export { resolveFullProjectAssetsPath } from "./pack-folders";
@@ -45,6 +46,19 @@ async function cps(script: string): Promise<string> {
   return evalES(script, true);
 }
 
+async function undoGroupStart(): Promise<boolean> {
+  const r = await evalTS("undoGroupStart");
+  return r?.ok === true;
+}
+
+async function undoGroupEnd(): Promise<void> {
+  await evalTS("undoGroupEnd");
+}
+
+async function undoGroupAbort(): Promise<void> {
+  await evalTS("undoGroupAbort");
+}
+
 async function ensureLegacy(): Promise<void> {
   if (!legacyLoaded()) {
     await loadLegacyJsx();
@@ -55,10 +69,10 @@ function extensionPath(): string {
   return csi.getSystemPath("extension");
 }
 
-/** USER_DATA/Adobe/Common/Spunkram/ — PTX seed destination (Beta parity). */
+/** USER_DATA/Adobe/Common/Motionflow/ — PTX seed destination. */
 function getPtxFolder(): string {
   const userData = csi.getSystemPath("userData");
-  const folder = path.join(userData, "Adobe", "Common", "Spunkram");
+  const folder = path.join(userData, "Adobe", "Common", BRAND.adobeCommonFolder);
   try {
     if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
   } catch {
@@ -67,7 +81,7 @@ function getPtxFolder(): string {
   return folder;
 }
 
-/** Copy template/colormatte seeds from extension bin → Common/Spunkram once. */
+/** Copy template/colormatte seeds from extension bin → Common/Motionflow once. */
 function ensurePtxSeeds(): void {
   const dest = getPtxFolder();
   const srcBin = path.join(extensionPath(), "bin");
@@ -281,8 +295,7 @@ export async function applyFullProjectViaCopyPaste(
 
     await cps(`$._copyPasteSystem.executeCommand("cmd.edit.copy")`);
 
-    const startResult = await cps(`PremiereUndoGroups.start()`);
-    undoStarted = startResult === "OK";
+    undoStarted = await undoGroupStart();
 
     const detouchRaw = await cps(
       `$._copyPasteSystem.prepareToPastePreset(${esQuote(sequenceID)})`,
@@ -296,7 +309,7 @@ export async function applyFullProjectViaCopyPaste(
         removeAudio,
       });
     } catch {
-      if (undoStarted) await cps(`PremiereUndoGroups.abort()`);
+      if (undoStarted) await undoGroupAbort();
       return { ok: false, message: `prepareToPastePreset failed: ${detouchRaw}` };
     }
 
@@ -305,7 +318,7 @@ export async function applyFullProjectViaCopyPaste(
     await cps(`$._copyPasteSystem.detouchPreset(${detouchArgs})`);
 
     if (undoStarted) {
-      await cps(`PremiereUndoGroups.end()`);
+      await undoGroupEnd();
       undoStarted = false;
     }
 
@@ -313,7 +326,7 @@ export async function applyFullProjectViaCopyPaste(
   } catch (err) {
     if (undoStarted) {
       try {
-        await cps(`PremiereUndoGroups.abort()`);
+        await undoGroupAbort();
       } catch {
         /* ignore */
       }

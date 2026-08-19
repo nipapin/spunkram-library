@@ -14,10 +14,7 @@ const LEGACY_ORDER = [
   "ae_preset_manager.jsx",
   "ae_text_presets.jsx",
   "pp_composer.jsx",
-  "undo_groups.jsx",
   "external_lib_import.jsx",
-  // stockassets.jsx intentionally last / optional — TS importMedia supersedes
-  "stockassets.jsx",
 ];
 
 export function legacyLoaded(): boolean {
@@ -42,7 +39,6 @@ async function installMfAliases(): Promise<void> {
       if ($._AtomExt_aeTextPresets) $._MotionFlow.aeTextPresets = $._AtomExt_aeTextPresets;
       if ($._AtomExt_additionalActions) $._MotionFlow.additional = $._AtomExt_additionalActions;
       if ($._AtomExt_externalLibAssetImporter) $._MotionFlow.externalLib = $._AtomExt_externalLibAssetImporter;
-      if (typeof PremiereUndoGroups !== 'undefined') $._MotionFlow.PremiereUndoGroups = PremiereUndoGroups;
     })()`,
     true,
   );

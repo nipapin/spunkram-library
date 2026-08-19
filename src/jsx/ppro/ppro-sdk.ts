@@ -19,6 +19,7 @@ import {
   deletePackageFiles,
   type PackCopyTransfer,
 } from "../shared/fs";
+import { undoGroupAbort, undoGroupEnd, undoGroupStart } from "./ppro-undo-group";
 
 export { bindPack, setEngine, getPackContext, getEngine };
 export type { PackBindContext };
@@ -180,48 +181,7 @@ export const importAudio = (payload: {
   }
 };
 
-/** Thin undo-group bridge — prefers legacy PremiereUndoGroups when loaded. */
-export const undoGroupStart = (): { ok: boolean; status: string } => {
-  try {
-    // @ts-ignore
-    if (typeof PremiereUndoGroups !== "undefined" && PremiereUndoGroups.start) {
-      // @ts-ignore
-      const status = PremiereUndoGroups.start();
-      return { ok: status === "OK", status: String(status) };
-    }
-    return { ok: false, status: "LEGACY_UNDO_NOT_LOADED" };
-  } catch (e: any) {
-    return { ok: false, status: e && e.message ? e.message : String(e) };
-  }
-};
-
-export const undoGroupEnd = (): { ok: boolean; status: string } => {
-  try {
-    // @ts-ignore
-    if (typeof PremiereUndoGroups !== "undefined" && PremiereUndoGroups.end) {
-      // @ts-ignore
-      const status = PremiereUndoGroups.end();
-      return { ok: status === "OK", status: String(status) };
-    }
-    return { ok: false, status: "LEGACY_UNDO_NOT_LOADED" };
-  } catch (e: any) {
-    return { ok: false, status: e && e.message ? e.message : String(e) };
-  }
-};
-
-export const undoGroupAbort = (): { ok: boolean; status: string } => {
-  try {
-    // @ts-ignore
-    if (typeof PremiereUndoGroups !== "undefined" && PremiereUndoGroups.abort) {
-      // @ts-ignore
-      const status = PremiereUndoGroups.abort();
-      return { ok: status === "OK", status: String(status) };
-    }
-    return { ok: false, status: "LEGACY_UNDO_NOT_LOADED" };
-  } catch (e: any) {
-    return { ok: false, status: e && e.message ? e.message : String(e) };
-  }
-};
+export { undoGroupStart, undoGroupEnd, undoGroupAbort };
 
 export const legacyPpCall = (
   method: string,
