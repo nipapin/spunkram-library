@@ -53,50 +53,12 @@ export const MotionFlow = {
 
   async bindPack(ctx: PackBindContext): Promise<MfResult<{ ok: true }>> {
     await ensureHost();
-    return wrap(async () => {
-      const r = await evalTS("bindPack", ctx);
-      // Also sync legacy engine when present
-      try {
-        await evalES(
-          `(function(){ if(typeof transferExeSwitchTrigger==='function'){ transferExeSwitchTrigger(${JSON.stringify(ctx)}); } return true; })()`,
-          true,
-        );
-      } catch {
-        // legacy optional
-      }
-      return r;
-    });
+    return wrap(async () => evalTS("bindPack", ctx));
   },
 
   async setEngine(engineType: string): Promise<MfResult<{ ok: true; engine: string }>> {
     await ensureHost();
-    return wrap(async () => {
-      const r = await evalTS("setEngine", engineType);
-      try {
-        await evalES(
-          `(function(){ if(typeof transferExeEngineSwitchTrigger==='function'){ transferExeEngineSwitchTrigger(${JSON.stringify({ engine: engineType })}); } return true; })()`,
-          true,
-        );
-      } catch {
-        // optional
-      }
-      return r;
-    });
-  },
-
-  /**
-   * Legacy global applyItem when composers are loaded.
-   * Prefer applyPackItem / PPRO.addMogrt for new code.
-   */
-  async applyItem(...args: unknown[]): Promise<MfResult<unknown>> {
-    await ensureHost();
-    return wrap(async () => {
-      const res = await evalES(
-        `(function(){ if(typeof applyItem!=='function') throw new Error('LEGACY_APPLYITEM_NOT_LOADED'); return applyItem.apply(null, ${JSON.stringify(args)}); })()`,
-        true,
-      );
-      return res;
-    });
+    return wrap(async () => evalTS("setEngine", engineType));
   },
 
   customize: {
