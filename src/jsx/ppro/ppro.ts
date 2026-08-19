@@ -18,6 +18,15 @@ export {
   undoGroupAbort,
   legacyPpCall,
 } from "./ppro-sdk";
+export {
+  copyPasteGetAppPrefs,
+  copyPasteCheckForDuplicatesOfAuthorFolder,
+  copyPasteGetMetadata,
+  copyPasteIsSelectedItemExists,
+  copyPasteGetSelectedItem,
+  copyPasteIsResolutionExists,
+  copyPasteCreateStructure,
+} from "./ppro-copy-paste";
 /** AE-only stubs so Scripts intersection typing still works for evalTS. */
 export const createComp = (_opts: unknown) => ({
   ok: false as const,

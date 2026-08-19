@@ -4,8 +4,10 @@
  */
 import { csi, evalES, evalTS } from "@/lib/utils/bolt";
 import { fs, os, path, zlib } from "@/lib/cep/node";
-import { BRAND } from "@/lib/config/brand";
 import { loadLegacyJsx, legacyLoaded } from "@/sdk/legacy-loader";
+
+/** `%USER_DATA%/Adobe/Common/{folder}/` — PTX seed destination (legacy parity). */
+const PTX_COMMON_FOLDER = "Motionflow";
 
 export { resolveFullProjectAssetsPath } from "./pack-folders";
 
@@ -72,7 +74,7 @@ function extensionPath(): string {
 /** USER_DATA/Adobe/Common/Motionflow/ — PTX seed destination. */
 function getPtxFolder(): string {
   const userData = csi.getSystemPath("userData");
-  const folder = path.join(userData, "Adobe", "Common", BRAND.adobeCommonFolder);
+  const folder = path.join(userData, "Adobe", "Common", PTX_COMMON_FOLDER);
   try {
     if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
   } catch {
@@ -131,12 +133,10 @@ function gzipFileSync(inputPath: string, outputPath: string): void {
 }
 
 async function extractPremiereVersion(): Promise<string> {
-  const prefsRaw = await cps(`$._copyPasteSystem.getAppPrefs()`);
   try {
-    const prefs = JSON.parse(prefsRaw) as { version?: string };
-    const major = Number(prefs.version);
+    const prefs = await evalTS("copyPasteGetAppPrefs");
+    const major = Number((prefs as { version?: string })?.version);
     if (!Number.isFinite(major)) return 'Version="32"';
-    // Beta: Version = Premiere major + 17 (project XML schema quirk)
     return `Version="${major + 17}"`;
   } catch {
     return 'Version="32"';
@@ -209,19 +209,15 @@ export async function applyFullProjectViaCopyPaste(
       "/",
     );
 
-    await cps(`$._copyPasteSystem.checkForDuplicatesOfAuthorFolder()`);
+    await evalTS("copyPasteCheckForDuplicatesOfAuthorFolder");
 
-    // Bin tree for this pack item
-    const groupsJson = JSON.stringify(args.groups || []);
-    await cps(
-      `$._copyPasteSystem.createStructure(${esQuote(args.packName)}, ${groupsJson})`,
-    );
+    await evalTS("copyPasteCreateStructure", {
+      packName: args.packName,
+      groups: args.groups || [],
+    });
 
-    const existsRaw = await cps(
-      `$._copyPasteSystem.isSelectedItemExists(${esQuote(args.presetName)})`,
-    );
-    const alreadyImported =
-      existsRaw === "true" || existsRaw.trim().toLowerCase() === "true";
+    const existsResult = await evalTS("copyPasteIsSelectedItemExists", args.presetName);
+    const alreadyImported = existsResult?.exists === true;
     if (!alreadyImported) {
       // Windows ExtendScript prefers forward slashes
       const projectEs = args.projectPath.replace(/\\/g, "/");
@@ -245,20 +241,18 @@ export async function applyFullProjectViaCopyPaste(
       return { ok: false, message: `Motionflow library failed to load: ${libRaw}` };
     }
 
-    const metadataRaw = await cps(`$._copyPasteSystem.getMetadata()`);
-    if (!metadataRaw || metadataRaw === "null") {
+    const metadata = await evalTS("copyPasteGetMetadata");
+    if (!metadata?.ok) {
       return { ok: false, message: "Open a sequence in Premiere Pro first." };
     }
-    const metadata = JSON.parse(metadataRaw) as {
+    const { sequenceID, resolution } = metadata as {
       sequenceID: string;
       resolution: [number, number];
     };
-    const { sequenceID, resolution } = metadata;
 
-    const presetSequenceID = await cps(
-      `$._copyPasteSystem.getSelectedItem(${esQuote(args.presetName)})`,
-    );
-    if (!presetSequenceID || presetSequenceID === "null") {
+    const presetResult = await evalTS("copyPasteGetSelectedItem", args.presetName);
+    const presetSequenceID = presetResult?.sequenceID;
+    if (!presetSequenceID) {
       return {
         ok: false,
         message: `Could not find sequence "${args.presetName}" after importing the project.`,
@@ -275,10 +269,8 @@ export async function applyFullProjectViaCopyPaste(
     }
 
     const resKey = `${resolution[0]}x${resolution[1]}`;
-    const resExistsRaw = await cps(
-      `$._copyPasteSystem.isResolutionExists(${esQuote(resKey)})`,
-    );
-    const resExists = resExistsRaw === "true";
+    const resExistsResult = await evalTS("copyPasteIsResolutionExists", resKey);
+    const resExists = resExistsResult?.exists === true;
     if (!resExists) {
       const versionTag = await extractPremiereVersion();
       await preparePtxProject("template", resolution, versionTag);

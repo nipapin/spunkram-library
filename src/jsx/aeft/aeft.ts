@@ -39,6 +39,14 @@ export const legacyPpCall = (_method: string, _argsJson: string) => ({
   ok: false,
   reason: "AE_ONLY_HOST",
 });
+const copyPasteStub = () => ({ ok: false as const, reason: "AE_ONLY_HOST" });
+export const copyPasteGetAppPrefs = copyPasteStub;
+export const copyPasteCheckForDuplicatesOfAuthorFolder = copyPasteStub;
+export const copyPasteGetMetadata = copyPasteStub;
+export const copyPasteIsSelectedItemExists = (_presetName: string) => copyPasteStub();
+export const copyPasteGetSelectedItem = (_presetName: string) => copyPasteStub();
+export const copyPasteIsResolutionExists = (_resolution: string) => copyPasteStub();
+export const copyPasteCreateStructure = (_payload: unknown) => copyPasteStub();
 import {
   helloArrayStr,
   helloError,
