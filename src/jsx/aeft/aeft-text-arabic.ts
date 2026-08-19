@@ -1,3 +1,7 @@
+/**
+ * Arabic text shaping for AE composer — port of legacy `additional.jsx`.
+ * @ts-nocheck — legacy algorithm; replace when ae_composer is ported (phase 6).
+ */
 
 //#region ADDITIONAL PART OF SCRIPTS
 var arabicEngine = new Object();
@@ -145,12 +149,15 @@ arabicEngine.convertText = function(inTxt){
 
 //#endregion
 
+export { arabicEngine };
 
-
-
-
-/* CONNECT TO GLOBAL VAR */
-
-$._AtomExt_additionalActions = {};
-// $._AtomExt_additionalActions.arabicEngine = arabicEngine;
-$._AtomExt_additionalActions.arabicEngine = arabicEngine;
+/** Legacy `ae_composer.jsx` bridge until phase 6. */
+try {
+  // @ts-ignore
+  if (typeof $ !== "undefined") {
+    // @ts-ignore
+    $._AtomExt_additionalActions = { arabicEngine };
+  }
+} catch {
+  // ignore
+}

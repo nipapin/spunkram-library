@@ -9,7 +9,6 @@ let loaded = false;
 
 const LEGACY_ORDER = [
   "engine.jsx",
-  "additional.jsx",
   "ae_composer.jsx",
   "ae_preset_manager.jsx",
   "ae_text_presets.jsx",
@@ -36,7 +35,6 @@ async function installMfAliases(): Promise<void> {
       if ($._AtomExt_ppComposer) $._MotionFlow.ppComposer = $._AtomExt_ppComposer;
       if ($._AtomExt_aePresetManager) $._MotionFlow.aePresetManager = $._AtomExt_aePresetManager;
       if ($._AtomExt_aeTextPresets) $._MotionFlow.aeTextPresets = $._AtomExt_aeTextPresets;
-      if ($._AtomExt_additionalActions) $._MotionFlow.additional = $._AtomExt_additionalActions;
     })()`,
     true,
   );
