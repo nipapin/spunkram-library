@@ -26,6 +26,15 @@ export {
   copyPasteGetSelectedItem,
   copyPasteIsResolutionExists,
   copyPasteCreateStructure,
+  copyPasteInitializeLibrary,
+  copyPasteExecuteCommand,
+  copyPasteImportSelectedItem,
+  copyPasteResolveMissingFootages,
+  copyPasteImportAdjustmentSequence,
+  copyPasteImportColorMatteSequence,
+  copyPasteCollectClipsPreset,
+  copyPastePrepareToPastePreset,
+  copyPasteDetouchPreset,
 } from "./ppro-copy-paste";
 /** AE-only stubs so Scripts intersection typing still works for evalTS. */
 export const createComp = (_opts: unknown) => ({

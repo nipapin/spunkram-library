@@ -162,20 +162,16 @@ Beta customizer UI не входит в Motionflow Library. `MotionFlow.customiz
 
 ---
 
-### Фаза 5 — Premiere FULL_PROJECT (critical path) — **partial**
+### Фаза 5 — Premiere FULL_PROJECT ✅
 
-`pp_composer.jsx` (~118 KB) = **`$._copyPasteSystem`** + mogrt/relink leftovers (customizer — drop).
+`pp_composer.jsx` removed from loader; `$._copyPasteSystem` lives in `ppro-copy-paste.ts`.
 
-Инвентарь: [`COPY_PASTE_API.md`](./COPY_PASTE_API.md).
+| # | Работа | Статус |
+|---|--------|--------|
+| 5.1 ✅ | Non-DLL helpers | done |
+| 5.2–5.4 ✅ | DLL + import/relink + `copy-paste-apply.ts` evalTS-only | done |
 
-| # | Работа | Примечание |
-|---|--------|------------|
-| 5.1 ✅ | Non-DLL helpers в `ppro-copy-paste.ts` | 7/16 calls на `evalTS` |
-| 5.2 | DLL path: `initializeLibrary`, `executeCommand`, `prepareToPastePreset`, `detouchPreset` | host TS |
-| 5.3 | Import/relink + PTX sequences | host TS |
-| 5.4 | `copy-paste-apply.ts` только `evalTS`; delete `pp_composer.jsx` | — |
-
-**Exit:** FULL_PROJECT работает; `legacyPpCall` не нужен для PR apply. Native `Motionflow.dll` **остаётся**.
+**Exit:** FULL_PROJECT работает без `pp_composer.jsx` в runtime. Native `Motionflow.dll` **остаётся**.
 
 ---
 
@@ -249,7 +245,7 @@ Beta customizer UI не входит в Motionflow Library. `MotionFlow.customiz
 - [ ] **P2** `external_lib_import` removed; importExternalAsset = TS
 - [ ] **P3** No `applyItem` / transferExe in UI path; engine thin or gone
 - [ ] **P4** Arabic text engine на host TS
-- [ ] **P5** FULL_PROJECT `$._copyPasteSystem` в host TS; `pp_composer` deleted
+- [x] **P5** FULL_PROJECT `$._copyPasteSystem` в host TS; `pp_composer` out of loader
 - [ ] **P6** Presets + text presets на host TS
 - [ ] **P7** applyComp + animators + AE tools на host TS; `ae_composer` deleted
 - [ ] **P8** No `src/jsx/legacy`; docs + CI grep green

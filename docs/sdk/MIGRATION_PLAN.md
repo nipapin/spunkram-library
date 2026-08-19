@@ -9,8 +9,8 @@
 
 | Метрика | Значение |
 |---------|----------|
-| Legacy JSX в `src/jsx/legacy/` | **5 файлов** (~285 KB): `engine`, `ae_composer`, `ae_preset_manager`, `ae_text_presets`, `pp_composer` |
-| Прогресс «Полного отречения» | **~35–40%** (фазы 1–4 done, 5 partial) |
+| Legacy JSX в `src/jsx/legacy/` | **4 файла** (~166 KB): `engine`, `ae_composer`, `ae_preset_manager`, `ae_text_presets` |
+| Прогресс «Полного отречения» | **~45–50%** (фазы 1–5 done) |
 
 ### Уже на TS (legacy не нужен в runtime)
 
@@ -20,7 +20,7 @@
 - PR undo groups (`ppro-undo-group.ts`)
 - External asset import (`*-import-external.ts`)
 - Arabic text engine (`aeft-text-arabic.ts`)
-- FULL_PROJECT helpers (partial — [`COPY_PASTE_API.md`](./COPY_PASTE_API.md))
+- FULL_PROJECT copy/paste (`ppro-copy-paste.ts` + `copy-paste-apply.ts`)
 
 ### Dropped (не переносим)
 
@@ -33,7 +33,7 @@
 
 | Файл | KB | Блокирует |
 |------|-----|-----------|
-| `pp_composer.jsx` | ~119 | FULL_PROJECT remainder, PR tools |
+| `pp_composer.jsx` | ~119 | ~~FULL_PROJECT~~ **drop from loader**; PR tools still in file (unused) |
 | `ae_composer.jsx` | ~96 | AE applyComp, animators, tools |
 | `ae_preset_manager.jsx` | ~48 | `.ffx` presets |
 | `ae_text_presets.jsx` | ~26 | text presets |
@@ -45,7 +45,7 @@
 |--------|-------------|
 | `footage-grid` → `apply-item.ts` | TS `applyPackItem` / `copy-paste-apply` (FULL_PROJECT) |
 | `MotionFlow.loadHostScripts` | весь `LEGACY_ORDER` |
-| `copy-paste-apply.ts` | `evalTS` (partial) + `$._copyPasteSystem.*` (legacy) |
+| `copy-paste-apply.ts` | `evalTS` only (`ppro-copy-paste.ts`) |
 | SDK `AE.applyComp`, animators, tools | `legacyAeCall` |
 | SDK `PPRO.tools` | `legacyPpCall` |
 
@@ -120,7 +120,7 @@ src/bin/ (Motionflow.dll — native, не JSX)
 |--------|-----|--------|--------|
 | `customizer` / `setCustomizeChanges` | — | — | **drop** |
 | `buttonActions` | `PPRO.tools.run` | `ppro-tools.ts` | todo |
-| `$._copyPasteSystem.*` | FULL_PROJECT | `ppro-copy-paste.ts` + один `applyFullProject` export | partial |
+| `$._copyPasteSystem.*` | FULL_PROJECT | `ppro-copy-paste.ts` | **done** |
 | `addMOGRT` (full) | `PPRO.addMogrt` | `ppro-sdk.ts` | **done** (упрощённый путь) |
 | drag/drop / doubleClick apply | → `applyPackItem` | уже через TS / apply-item | partial |
 
@@ -149,16 +149,14 @@ src/bin/ (Motionflow.dll — native, не JSX)
 
 Beta customizer UI не входит в Motionflow Library. `MotionFlow.customize.*` удалён из SDK. Legacy `customizeHandler` в `engine.jsx` уйдёт вместе с composers.
 
-### Фаза 5 — FULL_PROJECT (2–3 недели, critical path) — **partial**
+### Фаза 5 — FULL_PROJECT ✅
 
 Инвентарь: [`COPY_PASTE_API.md`](./COPY_PASTE_API.md).
 
 | PR | Задачи | Exit |
 |----|--------|------|
-| **5.1** ✅ | Inventory + non-DLL methods в `ppro-copy-paste.ts` | 7/16 calls на `evalTS` |
-| **5.2** | DLL path: `initializeLibrary`, `executeCommand`, `prepareToPastePreset`, `detouchPreset` | host TS |
-| **5.3** | Import/relink: `importSelectedItem`, `resolveMissingFootages`, PTX sequences | host TS |
-| **5.4** | `copy-paste-apply.ts` только `evalTS`; delete `pp_composer.jsx` | PR composer gone |
+| **5.1** ✅ | Non-DLL helpers в `ppro-copy-paste.ts` | 7/16 calls на `evalTS` |
+| **5.2–5.4** ✅ | DLL + import/relink + `copy-paste-apply.ts` только `evalTS`; `pp_composer.jsx` out of loader | FULL_PROJECT без legacy composer |
 
 ### Фаза 6 — AE presets (1–2 недели)
 
@@ -236,9 +234,8 @@ Critical path: **5 (FULL_PROJECT) → 7 (AE applyComp)**.
 
 ## 8. Немедленные next steps
 
-1. **Phase 5.2** — DLL-backed copy/paste methods в `ppro-copy-paste.ts`.
-2. **Phase 5.3** — import/relink + PTX sequences.
-3. **Phase 7.0** — parity matrix AE applyComp (Market pack types).
+1. **Phase 6.1** — `aeft-presets.ts`: `applyPreset`.
+2. **Phase 7.0** — parity matrix AE applyComp (Market pack types).
 
 ---
 

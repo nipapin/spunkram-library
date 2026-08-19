@@ -12,7 +12,6 @@ const LEGACY_ORDER = [
   "ae_composer.jsx",
   "ae_preset_manager.jsx",
   "ae_text_presets.jsx",
-  "pp_composer.jsx",
 ];
 
 export function legacyLoaded(): boolean {

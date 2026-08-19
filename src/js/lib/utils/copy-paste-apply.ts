@@ -1,10 +1,10 @@
 /**
- * Premiere FULL_PROJECT apply via `$._copyPasteSystem` + Motionflow.dll.
+ * Premiere FULL_PROJECT apply via host TS copy/paste + Motionflow.dll.
  * Port of Spunkram Beta `js/features/apply-item.js` → `customChain`.
  */
-import { csi, evalES, evalTS } from "@/lib/utils/bolt";
+import { csi, evalTS } from "@/lib/utils/bolt";
 import { fs, os, path, zlib } from "@/lib/cep/node";
-import { loadLegacyJsx, legacyLoaded } from "@/sdk/legacy-loader";
+import { MotionFlow } from "@/sdk";
 
 /** `%USER_DATA%/Adobe/Common/{folder}/` — PTX seed destination (legacy parity). */
 const PTX_COMMON_FOLDER = "Motionflow";
@@ -38,16 +38,6 @@ function isWin(): boolean {
   }
 }
 
-/** Escape a value for embedding inside an ExtendScript double-quoted string. */
-function esQuote(value: string): string {
-  return JSON.stringify(value);
-}
-
-async function cps(script: string): Promise<string> {
-  // Global — `$._copyPasteSystem` lives outside Bolt host namespace.
-  return evalES(script, true);
-}
-
 async function undoGroupStart(): Promise<boolean> {
   const r = await evalTS("undoGroupStart");
   return r?.ok === true;
@@ -59,12 +49,6 @@ async function undoGroupEnd(): Promise<void> {
 
 async function undoGroupAbort(): Promise<void> {
   await evalTS("undoGroupAbort");
-}
-
-async function ensureLegacy(): Promise<void> {
-  if (!legacyLoaded()) {
-    await loadLegacyJsx();
-  }
 }
 
 function extensionPath(): string {
@@ -119,7 +103,6 @@ export async function ensureMotionflowBridgePlugins(): Promise<void> {
   ];
   const missing = pairs.filter(([src, dest]) => fs.existsSync(src) && !fs.existsSync(dest));
   if (!missing.length) return;
-  // Soft skip — user may install manually; apply still attempts initializeLibrary.
   console.warn(
     "[FULL_PROJECT] Premiere Motionflow bridge plugins missing. Copy from extension bin/win into Adobe Common Plug-ins if paste fails:",
     missing.map(([, d]) => d),
@@ -183,7 +166,7 @@ async function preparePtxProject(
 export async function applyFullProjectViaCopyPaste(
   args: FullProjectApplyArgs,
 ): Promise<FullProjectApplyResult> {
-  await ensureLegacy();
+  await MotionFlow.ready();
   ensurePtxSeeds();
   await ensureMotionflowBridgePlugins();
 
@@ -203,7 +186,6 @@ export async function applyFullProjectViaCopyPaste(
   try {
     const removeAudio = args.keepAudio === false;
     const ptxFolder = getPtxFolder().replace(/\\/g, "/");
-    // ExtendScript File paths — keep trailing slash like Beta
     const ptxPathEs = (ptxFolder.endsWith("/") ? ptxFolder : ptxFolder + "/").replace(
       /\\/g,
       "/",
@@ -219,26 +201,18 @@ export async function applyFullProjectViaCopyPaste(
     const existsResult = await evalTS("copyPasteIsSelectedItemExists", args.presetName);
     const alreadyImported = existsResult?.exists === true;
     if (!alreadyImported) {
-      // Windows ExtendScript prefers forward slashes
       const projectEs = args.projectPath.replace(/\\/g, "/");
-      await cps(`$._copyPasteSystem.importSelectedItem(${esQuote(projectEs)})`);
+      await evalTS("copyPasteImportSelectedItem", projectEs);
     }
 
     const libraryBasePath = extensionPath().replace(/\\/g, "/");
     const platform = isWin() ? "win" : "mac";
-    const libRaw = await cps(
-      `$._copyPasteSystem.initializeLibrary(${esQuote(libraryBasePath)}, ${esQuote(platform)})`,
-    );
-    try {
-      const lib = JSON.parse(libRaw) as { ready?: boolean; error?: string };
-      if (!lib.ready) {
-        return {
-          ok: false,
-          message: `Motionflow library failed to load: ${lib.error || libRaw}`,
-        };
-      }
-    } catch {
-      return { ok: false, message: `Motionflow library failed to load: ${libRaw}` };
+    const lib = await evalTS("copyPasteInitializeLibrary", libraryBasePath, platform);
+    if (!lib?.ready) {
+      return {
+        ok: false,
+        message: `Motionflow library failed to load: ${(lib as { error?: string })?.error || "unknown"}`,
+      };
     }
 
     const metadata = await evalTS("copyPasteGetMetadata");
@@ -259,13 +233,9 @@ export async function applyFullProjectViaCopyPaste(
       };
     }
 
-    // Relink offline media from pack `_Assets`. Use native OS separators —
-    // Premiere changeMediaPath breaks on mixed `/` + `\` paths (Beta kept `\`).
     const assetsNative = args.assetsPath ? path.normalize(args.assetsPath) : "";
     if (assetsNative) {
-      await cps(
-        `$._copyPasteSystem.resolveMissingFootages(${esQuote(assetsNative)}, ${esQuote(args.presetName)})`,
-      );
+      await evalTS("copyPasteResolveMissingFootages", assetsNative, args.presetName);
     }
 
     const resKey = `${resolution[0]}x${resolution[1]}`;
@@ -277,37 +247,37 @@ export async function applyFullProjectViaCopyPaste(
       await preparePtxProject("colormatte", resolution, versionTag);
     }
 
-    await cps(
-      `$._copyPasteSystem.importAdjustmentSequence(${esQuote(ptxPathEs)}, ${esQuote(resKey)})`,
-    );
-    await cps(
-      `$._copyPasteSystem.importColorMatteSequence(${esQuote(ptxPathEs)}, ${esQuote(resKey)})`,
-    );
-    await cps(`$._copyPasteSystem.collectClipsPreset(${esQuote(String(presetSequenceID))})`);
+    const adjResult = await evalTS("copyPasteImportAdjustmentSequence", ptxPathEs, resKey);
+    if (adjResult && "ok" in adjResult && adjResult.ok === false) {
+      return { ok: false, message: `importAdjustmentSequence: ${adjResult.error}` };
+    }
+    const cmResult = await evalTS("copyPasteImportColorMatteSequence", ptxPathEs, resKey);
+    if (cmResult && "ok" in cmResult && cmResult.ok === false) {
+      return { ok: false, message: `importColorMatteSequence: ${cmResult.error}` };
+    }
 
-    await cps(`$._copyPasteSystem.executeCommand("cmd.edit.copy")`);
+    await evalTS("copyPasteCollectClipsPreset", String(presetSequenceID));
+    await evalTS("copyPasteExecuteCommand", "cmd.edit.copy");
 
     undoStarted = await undoGroupStart();
 
-    const detouchRaw = await cps(
-      `$._copyPasteSystem.prepareToPastePreset(${esQuote(sequenceID)})`,
-    );
-    let detouchArgs: string;
-    try {
-      const parsed = JSON.parse(detouchRaw) as Record<string, unknown>;
-      detouchArgs = JSON.stringify({
-        ...parsed,
-        resolution: resKey,
-        removeAudio,
-      });
-    } catch {
+    const prepareResult = await evalTS("copyPastePrepareToPastePreset", sequenceID);
+    if (!prepareResult?.ok) {
       if (undoStarted) await undoGroupAbort();
-      return { ok: false, message: `prepareToPastePreset failed: ${detouchRaw}` };
+      return {
+        ok: false,
+        message: `prepareToPastePreset failed: ${(prepareResult as { error?: string })?.error || "unknown"}`,
+      };
     }
 
-    await cps(`$._copyPasteSystem.executeCommand("cmd.edit.paste")`);
-    await cps(`$._copyPasteSystem.executeCommand("cmd.clip.group")`);
-    await cps(`$._copyPasteSystem.detouchPreset(${detouchArgs})`);
+    await evalTS("copyPasteExecuteCommand", "cmd.edit.paste");
+    await evalTS("copyPasteExecuteCommand", "cmd.clip.group");
+    await evalTS("copyPasteDetouchPreset", {
+      tracks: prepareResult.tracks,
+      savePlayerPosition: prepareResult.savePlayerPosition,
+      resolution: resKey,
+      removeAudio,
+    });
 
     if (undoStarted) {
       await undoGroupEnd();

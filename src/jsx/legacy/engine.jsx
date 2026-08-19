@@ -145,7 +145,9 @@ function createImageHeaderFromBytes(path) {
 function maskedTransferApp(newAppName) {
 	// alert(newAppName);
 	$._AtomExt_aeComposer.maskedTransferOnce(newAppName);
-	$._AtomExt_ppComposer.maskedTransferOnce(newAppName);
+	if ($._AtomExt_ppComposer && $._AtomExt_ppComposer.maskedTransferOnce) {
+		$._AtomExt_ppComposer.maskedTransferOnce(newAppName);
+	}
 }
 
 /**

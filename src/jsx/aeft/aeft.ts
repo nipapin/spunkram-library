@@ -47,6 +47,16 @@ export const copyPasteIsSelectedItemExists = (_presetName: string) => copyPasteS
 export const copyPasteGetSelectedItem = (_presetName: string) => copyPasteStub();
 export const copyPasteIsResolutionExists = (_resolution: string) => copyPasteStub();
 export const copyPasteCreateStructure = (_payload: unknown) => copyPasteStub();
+export const copyPasteInitializeLibrary = (_base: string, _platform: string) => copyPasteStub();
+export const copyPasteExecuteCommand = (_command: string) => copyPasteStub();
+export const copyPasteImportSelectedItem = (_projectPath: string) => copyPasteStub();
+export const copyPasteResolveMissingFootages = (_assets: string, _preset: string) =>
+  copyPasteStub();
+export const copyPasteImportAdjustmentSequence = (_ptx: string, _res: string) => copyPasteStub();
+export const copyPasteImportColorMatteSequence = (_ptx: string, _res: string) => copyPasteStub();
+export const copyPasteCollectClipsPreset = (_id: string) => copyPasteStub();
+export const copyPastePrepareToPastePreset = (_id: string) => copyPasteStub();
+export const copyPasteDetouchPreset = (_args: unknown) => copyPasteStub();
 import {
   helloArrayStr,
   helloError,

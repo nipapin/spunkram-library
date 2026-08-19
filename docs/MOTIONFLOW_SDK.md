@@ -87,7 +87,7 @@ MotionFlow.PPRO.applyPackItem(payload)
 
 1. **New UI features only through SDK** — no new `evalTS` in `src/js/main`, components, or apps.
 2. SDK does **not** own AtomX crypto decode long-term; plaintext Market packs are the hot path. Soft-legacy decode remains for already-installed encrypted packs (see Операция «Отречение»).
-3. `FULL_PROJECT` uses `$._copyPasteSystem` + shipped `Motionflow.dll` (`applyFullProjectViaCopyPaste`).
+3. `FULL_PROJECT` uses host `copyPaste*` exports + shipped `Motionflow.dll` (`applyFullProjectViaCopyPaste`).
 4. Prefer `MotionFlow.AE` / `MotionFlow.PPRO` over host-agnostic guesses; use `MotionFlow.host` to branch UI.
 
 ## Import

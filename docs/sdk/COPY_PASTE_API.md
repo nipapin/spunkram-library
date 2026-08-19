@@ -1,13 +1,13 @@
-# FULL_PROJECT — `$._copyPasteSystem` inventory
+# FULL_PROJECT — copy/paste host API inventory
 
 Used by [`copy-paste-apply.ts`](../../src/js/lib/utils/copy-paste-apply.ts).  
-Target host module: [`ppro-copy-paste.ts`](../../src/jsx/ppro/ppro-copy-paste.ts).
+Host module: [`ppro-copy-paste.ts`](../../src/jsx/ppro/ppro-copy-paste.ts).
 
-Native **`Motionflow.dll`** is not reimplemented — only TS orchestration moves off `pp_composer.jsx`.
+Native **`Motionflow.dll`** is not reimplemented — only TS orchestration moved off `pp_composer.jsx`.
 
-## Port status
+## Port status — **done**
 
-| Method | DLL? | Host TS export | Status |
+| Legacy method | DLL? | Host TS export | Status |
 |--------|------|----------------|--------|
 | `getAppPrefs` | no | `copyPasteGetAppPrefs` | **done** |
 | `checkForDuplicatesOfAuthorFolder` | no | `copyPasteCheckForDuplicatesOfAuthorFolder` | **done** |
@@ -16,23 +16,14 @@ Native **`Motionflow.dll`** is not reimplemented — only TS orchestration moves
 | `isSelectedItemExists` | no | `copyPasteIsSelectedItemExists` | **done** |
 | `getSelectedItem` | no | `copyPasteGetSelectedItem` | **done** |
 | `isResolutionExists` | no | `copyPasteIsResolutionExists` | **done** |
-| `importSelectedItem` | no | — | legacy |
-| `initializeLibrary` | **yes** | — | legacy |
-| `executeCommand` | **yes** | — | legacy |
-| `collectClipsPreset` | QE | — | legacy |
-| `importAdjustmentSequence` | no | — | legacy |
-| `importColorMatteSequence` | no | — | legacy |
-| `prepareToPastePreset` | **yes** | — | legacy |
-| `detouchPreset` | **yes** | — | legacy |
-| `resolveMissingFootages` | no | — | legacy |
+| `importSelectedItem` | no | `copyPasteImportSelectedItem` | **done** |
+| `initializeLibrary` | **yes** | `copyPasteInitializeLibrary` | **done** |
+| `executeCommand` | **yes** | `copyPasteExecuteCommand` | **done** |
+| `collectClipsPreset` | QE | `copyPasteCollectClipsPreset` | **done** |
+| `importAdjustmentSequence` | no | `copyPasteImportAdjustmentSequence` | **done** |
+| `importColorMatteSequence` | no | `copyPasteImportColorMatteSequence` | **done** |
+| `prepareToPastePreset` | **yes** | `copyPastePrepareToPastePreset` | **done** |
+| `detouchPreset` | **yes** | `copyPasteDetouchPreset` | **done** |
+| `resolveMissingFootages` | no | `copyPasteResolveMissingFootages` | **done** |
 
-## Still via `evalES` → `$._copyPasteSystem` (phase 5 remainder)
-
-- `importSelectedItem`
-- `initializeLibrary` / `executeCommand`
-- `collectClipsPreset`
-- `importAdjustmentSequence` / `importColorMatteSequence`
-- `prepareToPastePreset` / `detouchPreset`
-- `resolveMissingFootages`
-
-**Exit phase 5:** all rows **done** in `ppro-copy-paste.ts`; `copy-paste-apply.ts` uses only `evalTS`; `pp_composer.jsx` removed from loader.
+**Exit phase 5:** all rows **done**; `copy-paste-apply.ts` uses only `evalTS`; `pp_composer.jsx` removed from loader.
