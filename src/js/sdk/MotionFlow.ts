@@ -1,4 +1,4 @@
-import { evalES, evalTS, initBolt, reloadJSX } from "../lib/utils/bolt";
+import { evalTS, initBolt, reloadJSX } from "../lib/utils/bolt";
 import { version as pkgVersion } from "../../shared/shared";
 import { detectHost } from "./host";
 import { fail, ok, wrap } from "./result";
@@ -61,23 +61,6 @@ export const MotionFlow = {
     return wrap(async () => evalTS("setEngine", engineType));
   },
 
-  customize: {
-    async get(...args: unknown[]): Promise<MfResult<unknown>> {
-      await ensureHost();
-      const host = detectHost();
-      if (host === "AE") return AE.customize.get(...args);
-      if (host === "PPRO") return PPRO.customize.get(...args);
-      return fail("No host");
-    },
-    async set(...args: unknown[]): Promise<MfResult<unknown>> {
-      await ensureHost();
-      const host = detectHost();
-      if (host === "AE") return AE.customize.edit(...args);
-      if (host === "PPRO") return PPRO.customize.set(...args);
-      return fail("No host");
-    },
-  },
-
   packs: {
     async copyToAppData(transfer: {
       source: { pack: string; assets: string; templates: string };
@@ -89,16 +72,6 @@ export const MotionFlow = {
     async deleteFiles(packDir: string): Promise<MfResult<boolean>> {
       await ensureHost();
       return wrap(() => evalTS("mfDeletePackage", packDir));
-    },
-    /** @deprecated Legacy JSXBIN pack loader */
-    async runJsxbin(path: string): Promise<MfResult<unknown>> {
-      await ensureHost();
-      return wrap(async () =>
-        evalES(
-          `(function(){ if(typeof runPackageJSXBIN!=='function') throw new Error('LEGACY_JSXBIN_NOT_LOADED'); return runPackageJSXBIN(${JSON.stringify(path)}); })()`,
-          true,
-        ),
-      );
     },
   },
 

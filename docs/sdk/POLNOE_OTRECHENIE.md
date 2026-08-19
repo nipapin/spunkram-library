@@ -21,7 +21,7 @@
 1. Папки `src/jsx/legacy/` нет; vite-плагин `copy-motionflow-legacy-jsx` удалён.
 2. В `src/` нет `$._AtomExt_`, `legacyAeCall`, `legacyPpCall`, `loadLegacyJsx`, `transferExeSwitchTrigger`, `runPackageJSXBIN`.
 3. Все операции из [`INVENTORY.md`](./INVENTORY.md) со статусом **ts** или **native-only** (не **wrapped** legacy).
-4. QA AE + PR: Market install → apply (AEP / MOGRT / FULL_PROJECT / footage) → customizer → presets / animators → captions / styles.
+4. QA AE + PR: Market install → apply (AEP / MOGRT / FULL_PROJECT / footage) → presets / animators → captions / styles.
 5. `evalTS(` только в `src/js/sdk/` и `bolt.ts` (правило cookbook).
 
 ---
@@ -50,13 +50,12 @@ UI / authors
 ```text
 MotionFlow.loadHostScripts()          // только Bolt index.js
 MotionFlow.bindPack / setEngine
-MotionFlow.applyPackItem              // единственный apply entry (deprecate applyItem)
-MotionFlow.customize.get|set
-MotionFlow.packs.copyToAppData|deleteFiles   // TS already; drop runJsxbin
+MotionFlow.applyPackItem              // единственный apply entry
+MotionFlow.packs.copyToAppData|deleteFiles
 MotionFlow.importExternalAsset        // → AE/PPRO.importMedia primitives
 
 MotionFlow.AE.*   // create*, applyComp*, animators, presets, tools, captions…
-MotionFlow.PPRO.* // mogrt, import*, undoGroup, customize, tools, FULL_PROJECT primitives…
+MotionFlow.PPRO.* // mogrt, import*, undoGroup, tools, FULL_PROJECT primitives…
 ```
 
 ---
@@ -69,22 +68,21 @@ flowchart TD
   P1[P1 Dead code + undo groups pure TS]
   P2[P2 External import + packs FS]
   P3[P3 Engine globals → bindPack only]
-  P4[P4 Customizer AE/PR atomic]
-  P5[P5 AE presets + text presets]
-  P6[P6 AE applyComp / animators]
-  P7[P7 FULL_PROJECT: copyPasteSystem → host modules]
+  P4[P4 Arabic text engine]
+  P5[P5 FULL_PROJECT: copyPasteSystem → host TS]
+  P6[P6 AE presets + text presets]
+  P7[P7 AE applyComp / animators]
   P8[P8 Delete legacy folder + rename cleanup]
   P0 --> P1 --> P2 --> P3
   P3 --> P4
   P3 --> P5
-  P4 --> P6
-  P5 --> P6
-  P3 --> P7
-  P6 --> P8
+  P3 --> P6
+  P6 --> P7
+  P5 --> P8
   P7 --> P8
 ```
 
-Нельзя начинать с удаления `pp_composer.jsx` / `ae_composer.jsx`: на них сидят apply, customizer и `$._copyPasteSystem`.
+Нельзя начинать с удаления `pp_composer.jsx` / `ae_composer.jsx`: на них сидят apply и `$._copyPasteSystem`. Customizer UI — **drop**, не блокирует порядок.
 
 ---
 
@@ -142,54 +140,57 @@ flowchart TD
 | 3.3 | Перенести оставшиеся engine-хелперы, нужные composers, во временный `src/jsx/shared/` **или** оставить до фаз 4–7 как last legacy file | — |
 | 3.4 | Удалить `runPackageJSXBIN` path | фаза 0 |
 
-**Стратегия:** `engine.jsx` удаляется **последним среди мелких** или вместе с composers, если applyComp всё ещё зовёт его globals. Не удалять раньше customizer/applyComp.
+**Стратегия:** `engine.jsx` удаляется **последним среди мелких** или вместе с composers, если applyComp всё ещё зовёт его globals.
 
 **Exit:** UI не вызывает `applyItem` / transferExe*; engine либо thin stub, либо gone.
 
 ---
 
-### Фаза 4 — Customizer → атомарный API
-
-Сейчас: `AE.customize.*` / `PPRO.customize.*` → `legacyAeCall` / `legacyPpCall` → огромные composers.
-
-Целевой атомарный контракт (черновик):
-
-```ts
-// read
-MotionFlow.customize.describeSelection(): MfResult<CustomizerSnapshot>
-// write
-MotionFlow.customize.setEffectParam(args)
-MotionFlow.customize.setText(args)
-MotionFlow.customize.setPseudoProp(args)
-```
+### Фаза 4 — Arabic text engine ✅
 
 | # | Работа | Хост |
 |---|--------|------|
-| 4.1 | Спека `CustomizerSnapshot` (effects, texts, ranges, hide lists) — паритет с текущим JSON из Beta | shared types |
-| 4.2 | AE: port `customizer` / `editCustomizer` кусками из `ae_composer.jsx` | `aeft-customize.ts` |
-| 4.3 | PR: port `customizer` / `setCustomizeChanges` из `pp_composer.jsx` | `ppro-customize.ts` |
-| 4.4 | SDK: убрать `legacy*Call` для customize | `ae.ts` / `ppro.ts` |
-| 4.5 | Panel customizer UI smoke | — |
+| 4.1 | Port `additional.jsx` → `aeft-text-arabic.ts` | `aeft-text-arabic.ts` |
 
-**Exit:** customizer работает без composers; composers ещё могут оставаться ради applyComp / copyPaste.
+**Exit:** `additional.jsx` out of loader; Arabic tools via host TS bridge.
 
 ---
 
-### Фаза 5 — AE presets + text presets + arabic
+### ~~Customizer~~ — **drop**
+
+Beta customizer UI не входит в Motionflow Library. `MotionFlow.customize.*` удалён из SDK. Legacy `customizeHandler` уйдёт вместе с composers.
+
+---
+
+### Фаза 5 — Premiere FULL_PROJECT (critical path) — **partial**
+
+`pp_composer.jsx` (~118 KB) = **`$._copyPasteSystem`** + mogrt/relink leftovers (customizer — drop).
+
+Инвентарь: [`COPY_PASTE_API.md`](./COPY_PASTE_API.md).
+
+| # | Работа | Примечание |
+|---|--------|------------|
+| 5.1 ✅ | Non-DLL helpers в `ppro-copy-paste.ts` | 7/16 calls на `evalTS` |
+| 5.2 | DLL path: `initializeLibrary`, `executeCommand`, `prepareToPastePreset`, `detouchPreset` | host TS |
+| 5.3 | Import/relink + PTX sequences | host TS |
+| 5.4 | `copy-paste-apply.ts` только `evalTS`; delete `pp_composer.jsx` | — |
+
+**Exit:** FULL_PROJECT работает; `legacyPpCall` не нужен для PR apply. Native `Motionflow.dll` **остаётся**.
+
+---
+
+### Фаза 6 — AE presets + text presets
 
 | Файл | SDK | Новый host |
 |------|-----|------------|
-| `ae_preset_manager.jsx` | `AE.applyPreset`, tools через preset manager | `aeft-presets.ts` |
+| `ae_preset_manager.jsx` | `AE.applyPreset` | `aeft-presets.ts` |
 | `ae_text_presets.jsx` | `AE.textPresets.*` | `aeft-text-presets.ts` |
-| `additional.jsx` (arabic) | `AE.tools.formatArabic` (если есть) / tools | `aeft-text-arabic.ts` |
 
-Портировать **по публичным методам**, не «файл целиком в один TS». Внутренние хелперы — private в том же модуле.
-
-**Exit:** три файла убраны из `LEGACY_ORDER`; `evalES` с `$._AtomExt_aePresetManager` / `aeTextPresets` нет.
+**Exit:** два файла убраны из `LEGACY_ORDER`; нет `evalES` с `$._AtomExt_aePresetManager` / `aeTextPresets`.
 
 ---
 
-### Фаза 6 — AE applyComp + text/photo animators
+### Фаза 7 — AE applyComp + text/photo animators
 
 Самый тяжёлый AE-кусок (`ae_composer.jsx` ~98 KB).
 
@@ -212,24 +213,6 @@ MotionFlow.customize.setPseudoProp(args)
 4. Удалить `ae_composer.jsx` из loader.
 
 **Exit:** AE pack apply + animators без legacy; `legacyAeCall` мёртв.
-
----
-
-### Фаза 7 — Premiere FULL_PROJECT + остатки pp_composer
-
-`pp_composer.jsx` (~118 KB) = customizer (уже в фазе 4) + **`$._copyPasteSystem`** + mogrt/relink leftovers.
-
-| # | Работа | Примечание |
-|---|--------|------------|
-| 7.1 | Вынести `$._copyPasteSystem` API в `ppro-copy-paste.ts` (те же методы, что зовёт `copy-paste-apply.ts`) | native DLL остаётся — это **не** legacy JSX, а shipped bin |
-| 7.2 | `copy-paste-apply.ts` → только `evalTS` примитивов / один `applyFullProject` host op | без `cps(\`$._copyPasteSystem...\`)` строк |
-| 7.3 | Любые ещё живые `buttonActions` / track helpers | `ppro-tools.ts` |
-| 7.4 | Убедиться: MOGRT/FOOTAGE/AUDIO не ходят в pp_composer | уже `ppro-apply-item.ts` |
-| 7.5 | Удалить `pp_composer.jsx` | — |
-
-**Exit:** FULL_PROJECT работает; `legacyPpCall` / `loadLegacyJsx` не нужны для PR.
-
-Native `src/bin/win/Motionflow.dll` (+ Mac bundle) **остаётся** — это не Beta JSX. Документировать как `MotionFlow.PPRO.nativeCopyPaste` dependency.
 
 ---
 
@@ -265,10 +248,10 @@ Native `src/bin/win/Motionflow.dll` (+ Mac bundle) **остаётся** — эт
 - [ ] **P1** `stockassets` + `undo_groups` removed from loader
 - [ ] **P2** `external_lib_import` removed; importExternalAsset = TS
 - [ ] **P3** No `applyItem` / transferExe in UI path; engine thin or gone
-- [ ] **P4** Customizer AE+PR на host TS
-- [ ] **P5** Presets + text presets + arabic на host TS
-- [ ] **P6** applyComp + animators + AE tools на host TS; `ae_composer` deleted
-- [ ] **P7** `$._copyPasteSystem` в host TS; `pp_composer` deleted
+- [ ] **P4** Arabic text engine на host TS
+- [ ] **P5** FULL_PROJECT `$._copyPasteSystem` в host TS; `pp_composer` deleted
+- [ ] **P6** Presets + text presets на host TS
+- [ ] **P7** applyComp + animators + AE tools на host TS; `ae_composer` deleted
 - [ ] **P8** No `src/jsx/legacy`; docs + CI grep green
 
 ---
@@ -279,10 +262,10 @@ Native `src/bin/win/Motionflow.dll` (+ Mac bundle) **остаётся** — эт
 |------|-----------|----------|
 | 0–2 | S | дни |
 | 3 | M | около недели |
-| 4 | L | weeks (два host) |
-| 5 | M–L | weeks |
-| 6 | XL | largest AE effort |
-| 7 | XL | largest PR effort + native |
+| 4 | S | done (arabic) |
+| 5 | XL | largest PR effort + native |
+| 6 | M–L | weeks |
+| 7 | XL | largest AE effort |
 | 8 | S | дни после зелёного QA |
 
 Итого реалистично: **несколько итераций релизов**, не один big-bang. FULL_PROJECT и AE applyComp — критический путь.
@@ -295,7 +278,6 @@ Native `src/bin/win/Motionflow.dll` (+ Mac bundle) **остаётся** — эт
 |------|-----------|
 | Тихий регресс expression retarget / folder layout в AE | Fixture packs + side-by-side compare с Beta |
 | FULL_PROJECT зависит от DLL + plug-ins | Не «переписывать native»; только JSX→TS обёртку |
-| Customizer JSON shape сломает UI | Зафиксировать snapshot schema до порта; adapter если нужно |
 | Слишком крупный PR | Жёстко: один legacy file / один atom per PR |
 | Желание «просто удалить legacy» | Блокировать merge без exit criteria фазы |
 
@@ -303,11 +285,11 @@ Native `src/bin/win/Motionflow.dll` (+ Mac bundle) **остаётся** — эт
 
 ## 9. Немедленные next steps (старт плана)
 
-1. Закрыть **P0** QA plaintext + ticket на hard-remove decrypt.
-2. PR **P1.1**: убрать `stockassets.jsx` из loader и репо.
-3. PR **P1.2–1.3**: pure TS undo groups + перевести `copy-paste-apply` на `evalTS` undo.
-4. Завести в `INVENTORY.md` колонку **Port target file** для каждой legacy-операции (таблица фаз 4–7).
-5. Не начинать P6/P7, пока P4 customizer snapshot spec не согласован с UI.
+**Исполняемый roadmap с PR-нарезкой и матрицей переноса:** [`MIGRATION_PLAN.md`](./MIGRATION_PLAN.md).
+
+1. **Phase 5.2** — DLL-backed copy/paste methods в `ppro-copy-paste.ts`.
+2. **Phase 5.3** — import/relink + PTX sequences.
+3. **Phase 7.0** — parity matrix AE applyComp (Market pack types).
 
 ---
 

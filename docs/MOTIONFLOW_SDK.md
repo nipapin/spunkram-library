@@ -45,9 +45,7 @@ await MotionFlow.loadHostScripts()
 ```ts
 await MotionFlow.bindPack(ctx)
 await MotionFlow.setEngine(engineType)
-await MotionFlow.applyItem(payload)           // pack apply (decrypt stays in JS)
-await MotionFlow.customize.get(...)
-await MotionFlow.customize.set(...)
+await MotionFlow.applyPackItem(payload)       // pack apply entry
 await MotionFlow.packs.copyToAppData(...)     // legacy
 await MotionFlow.packs.deleteFiles(...)       // legacy
 await MotionFlow.importExternalAsset(...)
@@ -64,7 +62,6 @@ MotionFlow.AE.addTextAnimator(...)
 MotionFlow.AE.addPhotoAnimator(...)
 MotionFlow.AE.applyPreset(...)
 MotionFlow.AE.textPresets.apply / get / remove
-MotionFlow.AE.customize.*
 MotionFlow.AE.tools.*
 MotionFlow.AE.describe(audioPresetPath?)
 MotionFlow.AE.addMarkers({ markers })
@@ -80,7 +77,6 @@ MotionFlow.AE.applyPackItem(payload)
 MotionFlow.PPRO.addMogrt({ filePath, itemName?, trackIndex? })
 MotionFlow.PPRO.importSequence / importProject / importFootage / importAudio
 MotionFlow.PPRO.undoGroup.start / end / abort
-MotionFlow.PPRO.customize.*
 MotionFlow.PPRO.tools.*
 MotionFlow.PPRO.describe / markSilences / addMarkers / captions… / styles…
 MotionFlow.PPRO.importMedia / importVoiceoverAudio

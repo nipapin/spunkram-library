@@ -1,23 +1,16 @@
 /** Host-facing MotionFlow API for the current Adobe app. */
-import { MotionFlow } from "@/sdk";
-import { AE } from "@/sdk/ae";
-import { PPRO } from "@/sdk/ppro";
+import { MotionFlow } from "./MotionFlow";
+import type { MfResult } from "./types";
 
-export type HostSdk = typeof AE | typeof PPRO;
-
-export function hostSdk(): HostSdk {
+export function hostSdk() {
   return MotionFlow.host === "AE" ? MotionFlow.AE : MotionFlow.PPRO;
 }
 
-/** Unwrap MfResult or throw. */
-export async function sdkData<T>(promise: Promise<import("@/sdk").MfResult<T>>): Promise<T> {
-  const res = await promise;
-  if (!res.ok) {
-    const msg =
-      res.error && res.error !== "null" && res.error !== "undefined"
-        ? res.error
-        : "Host script failed";
-    throw new Error(msg);
+export async function sdkData<T>(result: Promise<MfResult<T>>): Promise<T | null> {
+  const r = await result;
+  if (!r.ok) {
+    console.warn("[MotionFlow SDK]", r.error);
+    return null;
   }
-  return res.data;
+  return r.data;
 }

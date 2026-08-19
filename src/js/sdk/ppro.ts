@@ -90,25 +90,6 @@ export const PPRO = {
     },
   },
 
-  customize: {
-    async get(insidePackOptions?: unknown): Promise<MfResult<unknown>> {
-      return wrap(async () => {
-        requireHost("PPRO");
-        const r = await evalTS("legacyPpCall", "customizer", JSON.stringify([insidePackOptions]));
-        if (!r?.ok) throw new Error(r?.reason || "customize get failed");
-        return r.data;
-      });
-    },
-    async set(...args: unknown[]): Promise<MfResult<unknown>> {
-      return wrap(async () => {
-        requireHost("PPRO");
-        const r = await evalTS("legacyPpCall", "setCustomizeChanges", JSON.stringify(args));
-        if (!r?.ok) throw new Error(r?.reason || "customize set failed");
-        return r.data;
-      });
-    },
-  },
-
   tools: {
     async run(type: string): Promise<MfResult<unknown>> {
       return wrap(async () => {
@@ -161,9 +142,6 @@ export const PPRO = {
   },
   async loadCaptionsFromTimeline() {
     return wrap(() => evalTS("loadCaptionsFromTimeline"));
-  },
-  async getSystemFonts() {
-    return wrap(() => evalTS("getSystemFonts"));
   },
   async saveSessionData(payload: unknown) {
     return wrap(() => evalTS("saveSessionData", payload as any));

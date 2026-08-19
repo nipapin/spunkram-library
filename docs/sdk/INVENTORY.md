@@ -9,7 +9,7 @@ Status legend: **ported** (file in repo) · **wrapped** (SDK method live) · **t
 
 | Beta file | Size | Namespace / globals | SDK target | Status |
 |---|---|---|---|---|
-| `engine.jsx` | ~25 KB | `$._AtomExt_engine`, `applyItem`, `customizeHandler`, pack FS helpers | `MotionFlow.bindPack`, `setEngine`, `applyItem`, `customize`, `packs.*` | ported + wrapped |
+| `engine.jsx` | ~25 KB | `$._AtomExt_engine`, `applyItem`, pack FS helpers | `MotionFlow.bindPack`, `setEngine`, `packs.*` | ported + wrapped |
 | `pp_composer.jsx` | ~118 KB | `$._AtomExt_ppComposer`, `$._copyPasteSystem`, `addMOGRT` | `MotionFlow.PPRO.*` | ported + partial wrap/ts |
 | `ae_composer.jsx` | ~98 KB | `$._AtomExt_aeComposer` | `MotionFlow.AE.*` | ported + partial wrap/ts |
 | `ae_preset_manager.jsx` | ~49 KB | `$._AtomExt_aePresetManager` | `MotionFlow.AE.applyPreset`, `AE.tools.*` | ported + wrapped |
@@ -28,9 +28,9 @@ Status legend: **ported** (file in repo) · **wrapped** (SDK method live) · **t
 | Load host scripts | `evalFile` / `evalFiles` | `MotionFlow.loadHostScripts` (Bolt + legacy) |
 | Bind pack context | `transferExeSwitchTrigger` | `MotionFlow.bindPack` |
 | Switch engine | `transferExeEngineSwitchTrigger` | `MotionFlow.setEngine` |
-| Apply pack item | `applyItem(...)` | `MotionFlow.applyItem` / host `applyPackItem` |
-| Customizer | `customizeHandler` | `MotionFlow.customize.get/set` |
-| Pack FS | `copyPackageToAppData`, `deletePackageFiles`, `runPackageJSXBIN` | `MotionFlow.packs.*` (legacy) |
+| Apply pack item | `applyItem(...)` | `MotionFlow.applyPackItem` |
+| Customizer | `customizeHandler` | **drop** (Beta-only, not in Library) |
+| Pack FS | `copyPackageToAppData`, `deletePackageFiles` | `MotionFlow.packs.*` |
 
 ### MotionFlow.AE
 
@@ -43,7 +43,6 @@ Status legend: **ported** (file in repo) · **wrapped** (SDK method live) · **t
 | `addTextAnimator` / `addPhotoAnimator` | `aeComposer.*` | wrapped |
 | `applyPreset` | `aePresetManager.applyPreset` | wrapped |
 | `textPresets.*` | `aeTextPresets.*` | wrapped |
-| `customize.*` | `aeComposer.customizer` / edit* | wrapped |
 | `tools.*` | buttons / time-remap / auto-size | wrapped |
 | `describe`, captions, markers, styles | existing `aeft.ts` | **ts** + wrapped |
 | `importMedia` / `importVoiceoverAudio` | `aeft-import-media.ts` | **ts** + wrapped |
@@ -56,8 +55,7 @@ Status legend: **ported** (file in repo) · **wrapped** (SDK method live) · **t
 | `addMogrt` | `addMOGRT` / current `importMGT` | **ts** (+ legacy path via applyItem) |
 | `importSequence` / `importProject` | PROJECT ctype | **ts** / wrapped |
 | `importFootage` / `importAudio` | FOOTAGE / AUDIO | **ts** |
-| `customize.*` | `ppComposer.customizer` | wrapped |
-| `undoGroup.*` | `PremiereUndoGroups` | **ts** + legacy |
+| `undoGroup.*` | `PremiereUndoGroups` | **ts** |
 | `tools.*` | `buttonActions` / resize | wrapped |
 | Captions / chapters / styles | existing `ppro.ts` | **ts** + wrapped |
 | `FULL_PROJECT` / `$._copyPasteSystem` | native DLL + `copy-paste-apply.ts` | **shipped** (`src/bin/win/Motionflow.dll`) |
