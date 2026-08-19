@@ -1,4 +1,5 @@
-﻿export { importMedia, importVoiceoverAudio } from "./aeft-import-media";
+﻿import "./aeft-text-arabic";
+export { importMedia, importVoiceoverAudio } from "./aeft-import-media";
 export { importExternalAsset } from "./aeft-import-external";
 export { applyPackItem } from "./aeft-apply-item";
 import { applyPackItem } from "./aeft-apply-item";
