@@ -12,12 +12,18 @@ import {
   savePreferencesFile,
 } from "../api/preferences";
 import { BRAND, packExtensionLabel } from "@/lib/config/brand";
-import { initPackageAsync, parsePackageFileFormat } from "./pack";
+import { initPackageAsync, initPackageSync, parsePackageFileFormat } from "./pack";
 import type { InstalledPackMeta } from "./pack-types";
 import { extractZipToFolder } from "./pack-zip";
 import { installPackFonts } from "./pack-fonts";
 import { reportSupportError, reportSupportInfo } from "@/api/support";
 import { currentPackHost, normalizePackHost, type PackHostId } from "./pack-host";
+import {
+  buildPackEntitlementContext,
+  findMarketItemForPack,
+  isPackEntitled,
+  type PackEntitlementContext,
+} from "./pack-entitlement";
 
 function cepFsAvailable(): boolean {
   return typeof fs?.existsSync === "function";
@@ -84,6 +90,216 @@ export function hasConfiguredPackagesInstallPath(): boolean {
   } catch {
     return false;
   }
+}
+
+/** Panel listens to refresh Editing after a packages-folder rescan. */
+export const PACKAGES_RESCAN_EVENT = "spunkram:packages-rescan";
+
+export type ScanPacksResult = {
+  found: number;
+  added: number;
+  updated: number;
+  skipped: number;
+  /** Found on disk but account is not entitled to use. */
+  rejected: number;
+  /** Removed from preferences (was registered, no longer entitled). */
+  removed: number;
+  errors: string[];
+};
+
+const PACK_HOST_DIRS = ["AE", "PR"] as const;
+const LEGACY_PACKS_SUBDIR = "_ABS";
+const PACK_SCAN_MAX_DEPTH = 8;
+
+function normalizePackPath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+function collectPackFiles(dir: string, depth: number, out: Set<string>): void {
+  if (depth > PACK_SCAN_MAX_DEPTH || !cepFsAvailable() || !fs.existsSync(dir)) return;
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isFile() && parsePackageFileFormat(entry.name)) {
+      out.add(path.normalize(full));
+    } else if (entry.isDirectory()) {
+      collectPackFiles(full, depth + 1, out);
+    }
+  }
+}
+
+function collectPackFilesAtRoot(customRoot: string): string[] {
+  const root = path.normalize(customRoot.trim());
+  const found = new Set<string>();
+  if (!root) return [];
+
+  for (const host of PACK_HOST_DIRS) {
+    collectPackFiles(path.join(root, host), 0, found);
+    collectPackFiles(path.join(root, LEGACY_PACKS_SUBDIR, host), 0, found);
+  }
+  return [...found];
+}
+
+function metaFromPackFile(packFilePath: string): InstalledPackMeta | null {
+  try {
+    const pack = initPackageSync(packFilePath);
+    const { main } = pack.settings;
+    return {
+      name: main.name || path.basename(packFilePath),
+      author: main.cc_author_username || "Unknown",
+      version: main.version || "1.0",
+      path: packFilePath,
+      appID: main.software_id,
+      appVersion: main.software_version,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function upsertInstalledPackMeta(
+  packages: InstalledPackMeta[],
+  meta: InstalledPackMeta,
+): "added" | "updated" | "unchanged" {
+  const normPath = normalizePackPath(meta.path);
+  const byPath = packages.findIndex((p) => p.path && normalizePackPath(p.path) === normPath);
+  if (byPath >= 0) {
+    const prev = packages[byPath];
+    const changed =
+      prev.name !== meta.name ||
+      prev.version !== meta.version ||
+      prev.author !== meta.author ||
+      prev.appID !== meta.appID ||
+      prev.appVersion !== meta.appVersion;
+    packages[byPath] = { ...prev, ...meta };
+    return changed ? "updated" : "unchanged";
+  }
+
+  const metaHost = normalizePackHost(meta.appID);
+  const byName = packages.findIndex(
+    (p) =>
+      p.name === meta.name &&
+      metaHost &&
+      normalizePackHost(p.appID || p.load) === metaHost,
+  );
+  if (byName >= 0) {
+    packages[byName] = { ...packages[byName], ...meta };
+    return "updated";
+  }
+
+  packages.push(meta);
+  return "added";
+}
+
+function removeInstalledPackAtPath(
+  packages: InstalledPackMeta[],
+  packPath: string,
+): boolean {
+  const normPath = normalizePackPath(packPath);
+  const idx = packages.findIndex(
+    (p) => p.path && normalizePackPath(p.path) === normPath,
+  );
+  if (idx < 0) return false;
+  packages.splice(idx, 1);
+  return true;
+}
+
+/**
+ * Scan `<root>/AE`, `<root>/PR` (and legacy `<root>/_ABS/...`) for pack files
+ * and register entitled packs in `preferences.json` without re-downloading.
+ *
+ * When `ctx` is missing or the user is not signed in, nothing is registered.
+ */
+export function scanAndRegisterPacksAtRoot(
+  customRoot: string,
+  ctx: PackEntitlementContext | null | undefined,
+): ScanPacksResult {
+  const result: ScanPacksResult = {
+    found: 0,
+    added: 0,
+    updated: 0,
+    skipped: 0,
+    rejected: 0,
+    removed: 0,
+    errors: [],
+  };
+
+  const paths = collectPackFilesAtRoot(customRoot);
+  if (paths.length === 0) return result;
+
+  const prefs = loadPreferencesFile();
+  const packages = Array.isArray(prefs.packages)
+    ? [...(prefs.packages as InstalledPackMeta[])]
+    : [];
+
+  let prefsChanged = false;
+
+  for (const packPath of paths) {
+    result.found += 1;
+    const meta = metaFromPackFile(packPath);
+    if (!meta) {
+      result.skipped += 1;
+      result.errors.push(path.basename(packPath));
+      continue;
+    }
+
+    if (!isPackEntitled(meta, ctx)) {
+      result.rejected += 1;
+      if (removeInstalledPackAtPath(packages, packPath)) {
+        result.removed += 1;
+        prefsChanged = true;
+      }
+      continue;
+    }
+
+    const marketItem = ctx ? findMarketItemForPack(meta, ctx.catalog) : undefined;
+    const metaToSave =
+      marketItem != null ? { ...meta, marketId: String(marketItem.id) } : meta;
+
+    const action = upsertInstalledPackMeta(packages, metaToSave);
+    if (action === "added") result.added += 1;
+    else if (action === "updated") result.updated += 1;
+    if (action !== "unchanged") prefsChanged = true;
+  }
+
+  if (ctx?.signedIn) {
+    for (let i = packages.length - 1; i >= 0; i--) {
+      if (!isPackEntitled(packages[i], ctx)) {
+        packages.splice(i, 1);
+        result.removed += 1;
+        prefsChanged = true;
+      }
+    }
+  }
+
+  if (prefsChanged) {
+    prefs.packages = packages;
+    savePreferencesFile(prefs);
+    installLog("scan.registered", {
+      root: customRoot,
+      found: result.found,
+      added: result.added,
+      updated: result.updated,
+      skipped: result.skipped,
+      rejected: result.rejected,
+      removed: result.removed,
+    });
+  }
+
+  return result;
+}
+
+export type { PackEntitlementContext };
+export { buildPackEntitlementContext, isPackEntitled };
+
+export function notifyPackagesRescan(result?: ScanPacksResult): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(PACKAGES_RESCAN_EVENT, { detail: result }));
 }
 
 function findPackFileRecursive(dir: string, depth = 0): string | null {
@@ -262,9 +478,7 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
 
     const prefs = loadPreferencesFile();
     const packages = Array.isArray(prefs.packages) ? [...(prefs.packages as InstalledPackMeta[])] : [];
-    const existingIndex = packages.findIndex((p) => p.name === meta.name && p.appID === meta.appID);
-    if (existingIndex >= 0) packages[existingIndex] = meta;
-    else packages.push(meta);
+    upsertInstalledPackMeta(packages, meta);
     prefs.packages = packages;
     savePreferencesFile(prefs);
 

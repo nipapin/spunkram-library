@@ -31,6 +31,15 @@ import {
   writeLocalPackManifest,
 } from "@/lib/utils/pack-manifest";
 import { version as EXTENSION_VERSION } from "../../shared/shared";
+import type { MotionflowPurchase } from "@/api/motionflow-auth";
+import {
+  buildPackEntitlementContext,
+  installedPackMatchesMarketItem,
+  type PackEntitlementContext,
+} from "@/lib/utils/pack-entitlement";
+
+export { installedPackMatchesMarketItem };
+export type { PackEntitlementContext };
 
 export const CEP_MARKET_ENDPOINT = "/api/cep/market";
 export const CEP_MARKET_DIFF_ENDPOINT = "/api/cep/market/diff";
@@ -138,51 +147,43 @@ function normalizePackage(raw: CepMarketPackage): CepMarketPackage {
   };
 }
 
-/** Collapse "Wedding Pack" / "Wedding Package for Premiere Pro" → "wedding". */
-function normalizePackLabel(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/for\s+(premiere\s*pro|after\s*effects)/g, " ")
-    .replace(/\b(packages?|packs?)\b/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-/** Match a local install to a market catalog row (marketId, then name + host). */
-export function installedPackMatchesMarketItem(
-  meta: InstalledPackMeta,
-  item: CepMarketPackage,
-): boolean {
-  if (meta.marketId != null && String(meta.marketId) === String(item.id)) {
-    return true;
+/** Load AE + PR catalog rows for disk scan entitlement checks. */
+export async function fetchCombinedMarketCatalog(): Promise<{
+  catalog: CepMarketPackage[];
+  subscriptionActive: boolean;
+  error?: string;
+}> {
+  const token = getSessionToken();
+  if (!token) {
+    return { catalog: [], subscriptionActive: false, error: "UNAUTHORIZED" };
   }
 
-  const metaApp = normalizePackHost(meta.appID || meta.load || "");
-  const itemApp = normalizePackHost(item.primary_type || "");
-  if (metaApp && itemApp && metaApp !== itemApp) return false;
+  const [ae, pr] = await Promise.all([fetchCepMarket("AE"), fetchCepMarket("PR")]);
+  if (ae.error === "UNAUTHORIZED" || pr.error === "UNAUTHORIZED") {
+    return { catalog: [], subscriptionActive: false, error: "UNAUTHORIZED" };
+  }
 
-  const installedName = (meta.name || "").trim().toLowerCase();
-  if (!installedName) return false;
-  const catalogNames = [item.pack_name, item.name]
-    .map((n) => (n || "").trim().toLowerCase())
-    .filter(Boolean);
-  if (catalogNames.includes(installedName)) return true;
+  const catalog = [...(ae.data?.Packages ?? []), ...(pr.data?.Packages ?? [])];
+  const subscriptionActive = Boolean(
+    ae.data?.subscription_active || pr.data?.subscription_active,
+  );
+  return { catalog, subscriptionActive };
+}
 
-  const installedNorm = normalizePackLabel(meta.name || "");
-  if (!installedNorm) return false;
-  return catalogNames.some((n) => {
-    const catalogNorm = normalizePackLabel(n);
-    if (!catalogNorm) return false;
-    return (
-      catalogNorm === installedNorm ||
-      catalogNorm.includes(installedNorm) ||
-      installedNorm.includes(catalogNorm)
-    );
+/** Entitlement snapshot for disk scan (AE + PR catalog, subscription, purchases). */
+export async function resolvePackEntitlementContextForScan(opts: {
+  signedIn: boolean;
+  purchases: MotionflowPurchase[];
+}): Promise<PackEntitlementContext> {
+  const { catalog, subscriptionActive, error } = await fetchCombinedMarketCatalog();
+  return buildPackEntitlementContext({
+    signedIn: opts.signedIn && error !== "UNAUTHORIZED",
+    subscriptionActive,
+    purchases: opts.purchases,
+    catalog,
   });
 }
 
-/** Persist market catalog id onto an installed prefs entry (and return updated meta). */
 export function tagInstalledPackWithMarketId(
   meta: InstalledPackMeta,
   marketId: string | number,

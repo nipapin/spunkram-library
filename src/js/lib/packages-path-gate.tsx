@@ -13,8 +13,13 @@ import {
 } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { readPrefSettings } from "@/lib/api/preferences";
+import { resolvePackEntitlementContextForScan } from "@/api/cep-market";
 import { selectFolder } from "@/lib/utils/bolt";
-import { hasConfiguredPackagesInstallPath } from "@/lib/utils/pack-install";
+import {
+  hasConfiguredPackagesInstallPath,
+  notifyPackagesRescan,
+  scanAndRegisterPacksAtRoot,
+} from "@/lib/utils/pack-install";
 import { cn } from "@/lib/utils";
 
 const ACCENT_PILL = "pill-brand";
@@ -27,7 +32,7 @@ type PackagesPathGateValue = {
 const PackagesPathGateContext = createContext<PackagesPathGateValue | null>(null);
 
 export function PackagesPathGateProvider({ children }: { children: ReactNode }) {
-  const { prefs, updatePrefs } = useAuth();
+  const { prefs, updatePrefs, signedIn, subscription } = useAuth();
   const [open, setOpen] = useState(false);
   const waiterRef = useRef<{ resolve: (ok: boolean) => void } | null>(null);
 
@@ -64,14 +69,32 @@ export function PackagesPathGateProvider({ children }: { children: ReactNode }) 
       "Select packages folder",
       (folder) => {
         if (!folder) return;
-        updatePrefs({
-          absCustomAbsolutePath: folder,
-          useCustomPathBySubscription: 1,
-        });
-        finish(true);
+        void (async () => {
+          updatePrefs({
+            absCustomAbsolutePath: folder,
+            useCustomPathBySubscription: 1,
+          });
+          const entitlement = signedIn
+            ? await resolvePackEntitlementContextForScan({
+                signedIn: true,
+                purchases: subscription.purchases,
+              })
+            : null;
+          const scan = scanAndRegisterPacksAtRoot(folder, entitlement);
+          if (scan.added > 0 || scan.updated > 0 || scan.removed > 0) {
+            notifyPackagesRescan(scan);
+          }
+          finish(true);
+        })();
       },
     );
-  }, [finish, prefs.absCustomAbsolutePath, updatePrefs]);
+  }, [
+    finish,
+    prefs.absCustomAbsolutePath,
+    signedIn,
+    subscription.purchases,
+    updatePrefs,
+  ]);
 
   const value = useMemo(
     () => ({ ensurePackagesPath }),
@@ -97,8 +120,9 @@ export function PackagesPathGateProvider({ children }: { children: ReactNode }) 
             </h3>
             <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
               Before installing a pack, pick where Spunkram should store packs.
-              They are saved under AE/ or PR/ inside this folder. You can change it
-              later in Settings.
+              They are saved under AE/ or PR/ inside this folder. Existing packs
+              in that folder are detected automatically. You can change it later
+              in Settings.
             </p>
             <div className="mt-3 flex gap-2">
               <button

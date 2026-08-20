@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
+import { resolvePackEntitlementContextForScan } from "@/api/cep-market";
 import {
   asBool,
   clearInstalledPackagesInPreferences,
@@ -18,7 +19,11 @@ import {
   type PrefSettings,
 } from "@/lib/api/preferences";
 import { selectFolder } from "@/lib/utils/bolt";
-import { resolvePackagesInstallRoot } from "@/lib/utils/pack-install";
+import {
+  notifyPackagesRescan,
+  resolvePackagesInstallRoot,
+  scanAndRegisterPacksAtRoot,
+} from "@/lib/utils/pack-install";
 import { EXTENSION_VERSION } from "@/lib/config/masked";
 import {
   fetchSpunkramVersions,
@@ -139,7 +144,7 @@ function ConfirmDialog({
 }
 
 export function SettingsPanel({ onBack }: { onBack: () => void }) {
-  const { prefs, setPrefs, auth } = useAuth();
+  const { prefs, setPrefs, auth, signedIn, subscription } = useAuth();
   const [confirm, setConfirm] = useState<"reset" | "remove" | null>(null);
   const [busy, setBusy] = useState(false);
   const isAdmin = isReleaseAdminEmail(auth.email);
@@ -153,6 +158,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
   const [installBusy, setInstallBusy] = useState(false);
   const [installProgress, setInstallProgress] = useState<string | undefined>();
   const [installError, setInstallError] = useState<string | null>(null);
+  const [packagesScanMsg, setPackagesScanMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -227,11 +233,38 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
     selectFolder(
       prefs.absCustomAbsolutePath || resolvePackagesInstallRoot(null) || "",
       "Select packages folder",
-      (folder) =>
-        patch({
-          absCustomAbsolutePath: folder,
-          useCustomPathBySubscription: 1,
-        }),
+      (folder) => {
+        if (!folder) return;
+        void (async () => {
+          patch({
+            absCustomAbsolutePath: folder,
+            useCustomPathBySubscription: 1,
+          });
+          const entitlement = signedIn
+            ? await resolvePackEntitlementContextForScan({
+                signedIn: true,
+                purchases: subscription.purchases,
+              })
+            : null;
+          const scan = scanAndRegisterPacksAtRoot(folder, entitlement);
+          if (scan.found === 0) {
+            setPackagesScanMsg("Folder saved. No pack files found under AE/ or PR/ yet.");
+          } else if (scan.rejected > 0 && scan.added + scan.updated === 0) {
+            setPackagesScanMsg(
+              `Found ${scan.found} pack(s), but none are licensed to your account.`,
+            );
+          } else if (scan.added + scan.updated > 0) {
+            const rejectedNote =
+              scan.rejected > 0 ? ` ${scan.rejected} skipped (not licensed).` : "";
+            setPackagesScanMsg(
+              `Found ${scan.found} pack(s): ${scan.added} registered, ${scan.updated} updated.${rejectedNote}`,
+            );
+            notifyPackagesRescan(scan);
+          } else {
+            setPackagesScanMsg(`Found ${scan.found} pack(s) — already registered.`);
+          }
+        })();
+      },
     );
   }
 
@@ -307,12 +340,16 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
 
           <div className="mb-1 text-xs text-foreground">Packages path</div>
           <p className="mb-1 text-[10px] text-muted-foreground">
-            Packs install under AE/ or PR/ inside this folder. Asked on install if empty.
+            Packs install under AE/ or PR/ inside this folder. Existing packs there
+            are imported automatically when you pick or change this path.
           </p>
           <PathBrowse
             value={prefs.absCustomAbsolutePath || ""}
             onBrowse={browsePackages}
           />
+          {packagesScanMsg ? (
+            <p className="mt-1.5 text-[10px] text-primary">{packagesScanMsg}</p>
+          ) : null}
           {(prefs.absCustomAbsolutePath || "").trim() ? (
             <p className="mt-1.5 break-all text-[10px] text-muted-foreground">
               Installs go to {resolvePackagesInstallRoot(null)}

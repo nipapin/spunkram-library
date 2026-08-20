@@ -28,13 +28,22 @@ import {
   finalizePendingNativeUpdate,
 } from "@/utils/extension-update";
 import { ensureFfmpeg } from "@/utils/ffmpeg";
-import { openMarketUrl } from "@/api/cep-market";
+import { openMarketUrl, resolvePackEntitlementContextForScan } from "@/api/cep-market";
 import { version as LOCAL_VERSION } from "../../shared/shared";
 import {
+  readInstallablePackages,
   loadInstalledPack,
   packInitErrorMessage,
-  readInstallablePackages,
 } from "@/lib/utils/pack";
+import {
+  PACKAGES_RESCAN_EVENT,
+  scanAndRegisterPacksAtRoot,
+} from "@/lib/utils/pack-install";
+import {
+  buildPackEntitlementContext,
+  isPackEntitled,
+} from "@/lib/utils/pack-entitlement";
+import { readPrefSettings } from "@/lib/api/preferences";
 import {
   activePackStorageKey,
   currentPackHost,
@@ -407,7 +416,36 @@ function EditingWorkspace({
   onOpenAccount: () => void;
 }) {
   const { showFavoritesOnly, favoriteIds, focusMode } = usePanelUI();
-  const { accessTier, isFreeUser } = useAuth();
+  const { signedIn, subscription, market } = useAuth();
+
+  const entitlementCtx = useMemo(
+    () =>
+      buildPackEntitlementContext({
+        signedIn,
+        subscriptionActive: subscription.subscribed,
+        purchases: subscription.purchases,
+        catalog: market?.Packages ?? [],
+      }),
+    [signedIn, subscription.subscribed, subscription.purchases, market?.Packages],
+  );
+
+  const activePackMeta = useMemo((): InstalledPackMeta | null => {
+    if (!packSettings?.main.name || !packFilePath) return null;
+    return {
+      name: packSettings.main.name,
+      author: packSettings.main.cc_author_username || "Unknown",
+      version: packSettings.main.version || "1.0",
+      path: packFilePath,
+      appID: packSettings.main.software_id,
+      appVersion: packSettings.main.software_version,
+    };
+  }, [packSettings, packFilePath]);
+
+  const canApply = useMemo(
+    () => activePackMeta != null && isPackEntitled(activePackMeta, entitlementCtx),
+    [activePackMeta, entitlementCtx],
+  );
+  const packRequiresPurchase = !!packSettings?.main.required_purchase_code;
 
   const sections: PackContentSection[] = useMemo(() => {
     if (!tree.length) return [];
@@ -431,12 +469,7 @@ function EditingWorkspace({
     return filterContentSections(collectContentSections(node), "");
   }, [tree, category, query, showFavoritesOnly, favoriteIds]);
 
-  // Subscribers unlock everything; purchasers unlock paid content they own.
-  // Free users may use non–purchase-gated packs (the dedicated free pack ships later).
-  const unlocked = accessTier === "subscribed" || accessTier === "purchased";
-  const packRequiresPurchase = !!packSettings?.main.required_purchase_code;
-  const freePackUnlocked = isFreeUser && !packRequiresPurchase;
-  const canApply = unlocked || freePackUnlocked;
+  // Subscribers / owned / purchased packs only — verified against market + /me.
   const isLocked = useCallback(
     (item: PackTreeItem) => !canApply && (packRequiresPurchase || !!item.group.premium),
     [canApply, packRequiresPurchase],
@@ -444,10 +477,10 @@ function EditingWorkspace({
 
   return (
     <>
-      {isFreeUser && <FreePlanBanner onOpenAccount={onOpenAccount} />}
-      {packRequiresPurchase && !unlocked && (
+      {!canApply && signedIn && packRequiresPurchase && (
         <PurchaseGateBanner onOpenAccount={onOpenAccount} />
       )}
+      {!canApply && !signedIn && <FreePlanBanner onOpenAccount={onOpenAccount} />}
       <PanelToolbar
         tutorialsOpen={tutorialsOpen}
         onToggleTutorials={() => setTutorialsOpen(!tutorialsOpen)}
@@ -493,7 +526,7 @@ function EditingWorkspace({
 }
 
 function AppShell() {
-  const { signedIn, authReady, generationLimit, isFreeUser, refreshMarket } =
+  const { signedIn, authReady, generationLimit, isFreeUser, refreshMarket, subscription } =
     useAuth();
   const { setShowFavoritesOnly, showStatus } = usePanelUI();
   const { onExtensionUpdateHint } = useNotifications();
@@ -546,7 +579,18 @@ function AppShell() {
     persistCategoryForPack(packFilePath, category);
   }, [packFilePath, category]);
 
-  const reloadPackList = useCallback(() => {
+  const reloadPackList = useCallback(async () => {
+    const custom = (readPrefSettings().absCustomAbsolutePath || "").trim();
+    if (custom) {
+      const entitlement = signedIn
+        ? await resolvePackEntitlementContextForScan({
+            signedIn: true,
+            purchases: subscription.purchases,
+          })
+        : null;
+      scanAndRegisterPacksAtRoot(custom, entitlement);
+    }
+
     const installed = readInstallablePackages();
     setHasInstalledPacks(installed.length > 0);
     if (installed.length === 0) {
@@ -565,12 +609,25 @@ function AppShell() {
       ? installed.find((p) => p.path === preferredPath)
       : undefined;
     applyPack(preferred ?? installed[0]);
-  }, [applyPack]);
+  }, [applyPack, signedIn, subscription.purchases]);
 
   useEffect(() => {
-    reloadPackList();
+    void reloadPackList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    void reloadPackList();
+  }, [authReady, signedIn, subscription.purchases, reloadPackList]);
+
+  useEffect(() => {
+    const onRescan = () => {
+      void reloadPackList();
+    };
+    window.addEventListener(PACKAGES_RESCAN_EVENT, onRescan);
+    return () => window.removeEventListener(PACKAGES_RESCAN_EVENT, onRescan);
+  }, [reloadPackList]);
 
   // Prefetch market catalog once signed in (Market tab / notifications).
   useEffect(() => {
