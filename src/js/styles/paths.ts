@@ -1,4 +1,4 @@
-import { fs, os, path } from "../lib/cep/node";
+import { cepProcessEnv, fs, os, path } from "../lib/cep/node";
 
 const isCep = () => typeof window !== "undefined" && typeof (window as Window & { cep?: unknown }).cep !== "undefined";
 
@@ -10,19 +10,10 @@ export const getStylesRoot = (): string | null => {
     const base =
       platform === "darwin"
         ? path.join(os.homedir(), "Library", "Application Support")
-        : processEnvAppData() || path.join(os.homedir(), "AppData", "Roaming");
+        : cepProcessEnv().APPDATA || path.join(os.homedir(), "AppData", "Roaming");
     return path.join(base, "spunkram-library");
   } catch {
     return null;
-  }
-};
-
-const processEnvAppData = (): string => {
-  try {
-    return (window as Window & { cep_node?: { process?: { env?: Record<string, string> } } }).cep_node?.process?.env
-      ?.APPDATA || "";
-  } catch {
-    return "";
   }
 };
 

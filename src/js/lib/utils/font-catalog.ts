@@ -1,4 +1,4 @@
-import { child_process, fs, os, path } from "@/lib/cep/node";
+import { child_process, cepProcessEnv, fs, os, path } from "@/lib/cep/node";
 
 /** PostScript name stored in MOGRT Caption Font control. */
 export type FontFace = {
@@ -148,7 +148,7 @@ const collectFontFiles = (): string[] => {
 
   if (os.platform() === "win32") {
     dirs.push(path.join(os.homedir(), "AppData", "Local", "Microsoft", "Windows", "Fonts"));
-    dirs.push(path.join(process.env.WINDIR || "C:\\Windows", "Fonts"));
+    dirs.push(path.join(cepProcessEnv().WINDIR || "C:\\Windows", "Fonts"));
     collectWindowsRegistryFontFiles(files);
   } else {
     dirs.push(path.join(os.homedir(), "Library", "Fonts"));
@@ -180,7 +180,7 @@ const collectWindowsRegistryFontFiles = (files: Set<string>) => {
         encoding: "utf8",
       })
       .toString();
-    const fontsDir = path.join(process.env.WINDIR || "C:\\Windows", "Fonts");
+    const fontsDir = path.join(cepProcessEnv().WINDIR || "C:\\Windows", "Fonts");
     for (const line of out.split(/\r?\n/)) {
       const match = line.match(/REG_SZ\s+(.+?)\s*$/);
       if (!match) continue;

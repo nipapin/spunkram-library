@@ -85,3 +85,15 @@ export const vm = (
 export const zlib = (
   typeof window.cep !== "undefined" ? require("zlib") : {}
 ) as typeof import("zlib");
+
+/** Node `process.env` exposed by CEP — never use bare global `process` in panel code. */
+export function cepProcessEnv(): Record<string, string> {
+  try {
+    const env = (
+      window as Window & { cep_node?: { process?: { env?: Record<string, string> } } }
+    ).cep_node?.process?.env;
+    return env && typeof env === "object" ? env : {};
+  } catch {
+    return {};
+  }
+}

@@ -1,4 +1,4 @@
-import { child_process, fs, os, path } from "../lib/cep/node";
+import { cepProcessEnv, child_process, fs, os, path } from "../lib/cep/node";
 import { downloadToFile } from "./download-file";
 
 /** Public CDN URLs — no auth. Mirrors next-app R2 keys under public/downloads/ffmpeg/. */
@@ -31,8 +31,7 @@ export function getFfmpegBinDir(): string {
     );
   }
   const appData =
-    (typeof process !== "undefined" && process.env?.APPDATA) ||
-    path.join(os.homedir(), "AppData", "Roaming");
+    cepProcessEnv().APPDATA || path.join(os.homedir(), "AppData", "Roaming");
   return path.join(appData, "Spunkram", "bin", "win");
 }
 

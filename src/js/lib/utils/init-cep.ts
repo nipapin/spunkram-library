@@ -62,7 +62,13 @@ const buildContextMenu = () => {
         checkable: false,
         id: "c-1",
         callback: () => {
-          process.abort();
+          try {
+            (
+              window as Window & { cep_node?: { process?: { abort?: () => void } } }
+            ).cep_node?.process?.abort?.();
+          } catch {
+            location.reload();
+          }
         },
       },
     ],
