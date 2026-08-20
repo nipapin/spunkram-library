@@ -54,6 +54,19 @@ function copyMotionflowBinPlugin(): Plugin {
   };
 }
 
+/** ZXP must not ship `.debug` — CEP would load the panel from localhost instead of bundled assets. */
+function stripCepDebugForZxpPlugin(): Plugin {
+  return {
+    name: "strip-cep-debug-for-zxp",
+    enforce: "pre",
+    writeBundle() {
+      if (!isPackage) return;
+      const debugFile = path.resolve(__dirname, "dist", cepDist, ".debug");
+      if (fs.existsSync(debugFile)) fs.unlinkSync(debugFile);
+    },
+  };
+}
+
 const debugReact = process.env.DEBUG_REACT === "true";
 const isProduction = process.env.NODE_ENV === "production";
 const isMetaPackage = process.env.ZIP_PACKAGE === "true";
@@ -89,7 +102,7 @@ if (action) runAction(config, action);
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), cep(config), copyMotionflowBinPlugin()],
+  plugins: [react(), cep(config), stripCepDebugForZxpPlugin(), copyMotionflowBinPlugin()],
   define: {
     __APP_BRAND__: JSON.stringify("spunkram"),
     // Inline so panel JS never touches bare `process` (CEP CEF / ExtendScript).
