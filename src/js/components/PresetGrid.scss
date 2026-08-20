@@ -83,7 +83,7 @@ button.preset-grid__tag-chip {
   color: #c8cad6;
   background: rgba(124, 77, 255, 0.14);
   box-shadow: none;
-  transition: background 200ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease;
+  transition: background 200ms ease, border-color 200ms ease, border-width 200ms ease, padding 200ms ease, color 200ms ease, box-shadow 200ms ease;
 }
 
 .ai-tools-scope button.preset-grid__tag-chip:hover:not(.preset-grid__tag-chip--active),
@@ -95,7 +95,8 @@ button.preset-grid__tag-chip:hover:not(.preset-grid__tag-chip--active) {
 
 .ai-tools-scope button.preset-grid__tag-chip--active,
 button.preset-grid__tag-chip--active {
-  border-color: transparent;
+  border-width: 0;
+  padding: 9px 15px;
   color: #ffffff;
   background: var(--accent-gradient);
   box-shadow:

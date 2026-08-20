@@ -898,7 +898,6 @@ function AppShell() {
       ) : nav === "market" ? (
         <section className="min-h-0 flex-1 overflow-hidden">
           <MarketPanel
-            onBack={() => setNav(defaultWorkspaceNav())}
             onOpenLogin={openAccount}
             onPacksChanged={reloadPackList}
             activePackPath={packFilePath}

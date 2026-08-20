@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ExternalLink, Loader2, Play, RotateCcw, Trash2, X } from "lucide-react";
+import { ExternalLink, Loader2, Play, RotateCcw, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { openMarketUrl, type CepMarketPackage, installedPackMatchesMarketItem, installedPackNeedsUpdate } from "@/api/cep-market";
@@ -200,6 +200,8 @@ function MarketCard({
   const jobFailed = job && (job.status === "error" || job.status === "cancelled");
   const wipePct = jobBusy && job ? jobWipeProgress(job) : 0;
   const colorRevealRight = 100 - wipePct;
+  const showInstallWipe =
+    Boolean(jobBusy) && (action.type === "install" || action.type === "update");
 
   function runAction(type: string) {
     if (type === "switch" && installedMeta) {
@@ -314,25 +316,38 @@ function MarketCard({
 
         {showSubHint && <p className="text-[10px] leading-snug text-muted-foreground">Available free with Spunkram subscription</p>}
 
-        <div className={cn("flex gap-1", jobBusy && "grayscale")}>
+        <div className="flex gap-1">
           <button
             type="button"
             disabled={action.disabled || Boolean(jobBusy)}
             onClick={() => runAction(action.type)}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-[10px] font-semibold transition-colors",
-              action.type === "active"
-                ? "cursor-not-allowed border border-white/10 bg-secondary/70 text-muted-foreground"
-                : action.disabled
-                  ? "cursor-not-allowed border border-white/10 bg-secondary/50 text-muted-foreground"
-                  : ACCENT_PILL,
+              "relative flex flex-1 items-center justify-center overflow-hidden rounded-full px-2 py-1.5 text-[10px] font-semibold transition-colors",
+              showInstallWipe
+                ? "border-0 bg-secondary/70 text-white"
+                : action.type === "active"
+                  ? "cursor-not-allowed border border-white/10 bg-secondary/70 text-muted-foreground"
+                  : action.disabled
+                    ? "cursor-not-allowed border border-white/10 bg-secondary/50 text-muted-foreground"
+                    : ACCENT_PILL,
             )}
           >
-            {jobBusy && (action.type === "install" || action.type === "update")
-              ? action.type === "update"
-                ? "Updating…"
-                : "Installing…"
-              : action.label}
+            {showInstallWipe && (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 left-0 rounded-none pill-brand transition-[width] duration-200"
+                style={{ width: `${wipePct}%` }}
+              />
+            )}
+            <span className="relative z-10">
+              {showInstallWipe
+                ? job
+                  ? jobStatusLabel(job)
+                  : action.type === "update"
+                    ? "Updating…"
+                    : "Installing…"
+                : action.label}
+            </span>
           </button>
 
           <button
@@ -364,14 +379,12 @@ function MarketCard({
 }
 
 export function MarketPanel({
-  onBack,
   onPacksChanged,
   onSelectPack,
   activePackPath,
 }: {
-  onBack: () => void;
-  onOpenLogin?: () => void;
   onPacksChanged?: () => void;
+  onOpenLogin?: () => void;
   onSelectPack?: (meta: InstalledPackMeta) => void;
   activePackPath?: string;
 }) {
@@ -504,25 +517,6 @@ export function MarketPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mx-2.5 mt-2 flex flex-wrap items-center gap-2 rounded-2xl px-2.5 py-1.5 glass-bar">
-        <button
-          type="button"
-          onClick={onBack}
-          className="mr-auto flex items-center gap-1 rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-[rgb(14,12,26)]"
-        >
-          <ArrowLeft className="size-3.5" />
-          Back
-        </button>
-        <button
-          type="button"
-          onClick={() => openMotionflowSubscribe()}
-          className="flex items-center justify-center gap-1.5 rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 px-2.5 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:border-[#7c4dff]/40"
-        >
-          <ExternalLink className="size-3" />
-          Web store
-        </button>
-      </div>
-
       {!subscriptionActive && (
         <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-[16px] border border-[#7c4dff]/30 bg-[#7c4dff]/10 px-2.5 py-2 text-[11px] text-foreground">
           <span className="flex-1">
@@ -591,6 +585,17 @@ export function MarketPanel({
             })}
           </div>
         )}
+      </div>
+
+      <div className="shrink-0 px-2.5 pb-2.5 pt-1">
+        <button
+          type="button"
+          onClick={() => openMotionflowSubscribe()}
+          className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 text-xs font-medium text-foreground transition-colors hover:border-[#7c4dff]/40 hover:bg-[rgb(14,12,26)]"
+        >
+          <ExternalLink className="size-3.5" />
+          Web store
+        </button>
       </div>
     </div>
   );
