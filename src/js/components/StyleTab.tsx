@@ -3,6 +3,7 @@ import { useConfiguration, isPresetDirty, isPresetValuesDirty } from "../../cont
 import type { StylePreset } from "../styles";
 import { useStyleUndo } from "../hooks/useStyleUndo";
 import { PresetFields } from "./PresetFields";
+import { friendlyErrorMessage } from "../utils/user-error";
 import "./StyleTab.scss";
 
 const EMPTY_PRESET: StylePreset = {
@@ -47,7 +48,7 @@ export const StyleTab = () => {
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setDefinitionError(e instanceof Error ? e.message : String(e));
+        setDefinitionError(friendlyErrorMessage(e));
       })
       .finally(() => {
         if (!cancelled) setLoadingDefinition(false);

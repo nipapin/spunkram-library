@@ -1,4 +1,5 @@
 import { fs, path } from "../cep/node";
+import { packItemIsAudio } from "./pack-apply-paths";
 import { resolveItemAssetSegments } from "./pack-tree";
 import type { PackSettings, PackTreeItem } from "./pack-types";
 
@@ -55,6 +56,20 @@ function mimeFromExt(filePath: string): string {
       return "video/webm";
     case ".mp4":
       return "video/mp4";
+    case ".wav":
+      return "audio/wav";
+    case ".mp3":
+      return "audio/mpeg";
+    case ".ogg":
+      return "audio/ogg";
+    case ".m4a":
+    case ".aac":
+      return "audio/mp4";
+    case ".aif":
+    case ".aiff":
+      return "audio/aiff";
+    case ".flac":
+      return "audio/flac";
     default:
       return "application/octet-stream";
   }
@@ -203,7 +218,7 @@ export function resolveItemPreviewMedia(
     ? (objectUrlCache.get(posterPath) ?? null)
     : null;
 
-  if (isStaticFootage || item.group.is_audio) {
+  if (isStaticFootage || packItemIsAudio(item)) {
     return { posterUrl, posterPath, motion: null };
   }
 
@@ -218,6 +233,40 @@ export function resolveItemPreviewMedia(
     : null;
 
   return { posterUrl, posterPath, motion };
+}
+
+let sfxAudio: HTMLAudioElement | null = null;
+let sfxOwnerId: string | null = null;
+
+/** Play one SFX preview at a time (hover). Replaces any currently playing card. */
+export function playSfxPreview(ownerId: string, objectUrl: string): void {
+  if (!ownerId || !objectUrl || typeof Audio === "undefined") return;
+  if (!sfxAudio) {
+    sfxAudio = new Audio();
+    sfxAudio.loop = true;
+    sfxAudio.preload = "auto";
+  }
+  sfxOwnerId = ownerId;
+  if (sfxAudio.src !== objectUrl) sfxAudio.src = objectUrl;
+  try {
+    sfxAudio.currentTime = 0;
+  } catch {
+    // ignore seek errors before metadata
+  }
+  void sfxAudio.play().catch(() => {});
+}
+
+/** Stop hover SFX. Pass `ownerId` to only stop if that card still owns playback. */
+export function stopSfxPreview(ownerId?: string): void {
+  if (ownerId && sfxOwnerId !== ownerId) return;
+  if (!sfxAudio) return;
+  sfxAudio.pause();
+  try {
+    sfxAudio.currentTime = 0;
+  } catch {
+    // ignore
+  }
+  sfxOwnerId = null;
 }
 
 export function resolveItemsPreviewMedia(

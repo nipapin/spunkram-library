@@ -66,6 +66,7 @@ import { revokePreviewObjectUrls } from "@/lib/utils/pack-preview";
 import { cn } from "@/lib/utils";
 import * as panelStore from "@/lib/userdata-store";
 import { storageKey } from "@/lib/config/brand";
+import { friendlyErrorMessage } from "@/utils/user-error";
 import "./main.scss";
 
 const CATEGORY_BY_PACK_KEY = storageKey("categoryByPack");
@@ -736,7 +737,7 @@ function AppShell() {
     } catch (err) {
       setUpdateBusy(false);
       setUpdateProgress(undefined);
-      setUpdateError(err instanceof Error ? err.message : String(err));
+      setUpdateError(friendlyErrorMessage(err));
     }
   }, [updateZxpUrl, updateVersion, updateBusy, showStatus]);
 

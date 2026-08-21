@@ -49,6 +49,14 @@ const HISTORY_MAX = 20;
 function reportChapterApiError(action: string, e: unknown) {
   const status = e instanceof ChapterApiError ? e.status : undefined;
   const code = e instanceof ChapterApiError ? e.code : undefined;
+  if (status != null && status >= 400 && status < 500) return;
+  if (
+    code === "UNAUTHORIZED" ||
+    code === "GENERATION_LIMIT_REACHED" ||
+    code === "SUBSCRIPTION_REQUIRED"
+  ) {
+    return;
+  }
   reportSupportError(action, e, {
     ...(status != null ? { http_status: status } : {}),
     ...(code ? { api_code: code } : {}),

@@ -17,6 +17,7 @@ import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 import * as panelStore from "@/lib/userdata-store";
 import { useDownloadManager, type DownloadJob } from "@/lib/download-manager-context";
 import { usePackagesPathGate } from "@/lib/packages-path-gate";
+import { friendlyErrorMessage } from "@/utils/user-error";
 
 const ACCENT_PILL = "pill-brand";
 
@@ -96,7 +97,7 @@ function jobStatusLabel(job: DownloadJob): string {
     case "done":
       return "Installed";
     case "error":
-      return job.error || "Failed";
+      return friendlyErrorMessage(job.error || "Failed");
     case "cancelled":
       return "Cancelled";
     default:
@@ -309,7 +310,7 @@ function MarketCard({
         </div>
 
         {jobFailed && job && (
-          <p className="truncate text-[10px] text-destructive" title={job.error}>
+          <p className="truncate text-[10px] text-destructive" title={job.error ? friendlyErrorMessage(job.error) : undefined}>
             {jobStatusLabel(job)}
           </p>
         )}

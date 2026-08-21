@@ -18,6 +18,8 @@ import { handleUnauthorized } from "@/lib/api/session";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { readInstallablePackages } from "@/lib/utils/pack";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
+import { friendlyErrorMessage } from "@/utils/user-error";
+import { reportSupportError } from "@/api/support";
 
 export type DownloadJobStatus =
   | "queued"
@@ -189,13 +191,19 @@ export function DownloadManagerProvider({
         updateJob(nextId, { status: "cancelled" });
       } else if (!result.ok) {
         if (result.code === "UNAUTHORIZED") handleUnauthorized();
+        const message = friendlyErrorMessage(result.message);
         updateJob(nextId, {
           status: "error",
-          error: result.message,
+          error: message,
           progress: 0,
           hasCache: Boolean(result.cachedZipPath) || hasCachedPackZip(jobSnap.pack),
         });
-        showStatus(result.message, "error", 6000);
+        showStatus(message, "error", 6000);
+        reportSupportError("pack.download", result.message, {
+          error_code: result.code || null,
+          pack_id: String(jobSnap.pack.id),
+          pack_name: jobSnap.pack.name,
+        });
       } else {
         updateJob(nextId, {
           status: "done",
@@ -224,13 +232,17 @@ export function DownloadManagerProvider({
       if (cancelledRef.current.has(nextId)) {
         updateJob(nextId, { status: "cancelled" });
       } else {
-        const message = e instanceof Error ? e.message : String(e);
+        const message = friendlyErrorMessage(e);
         updateJob(nextId, {
           status: "error",
           error: message,
           hasCache: hasCachedPackZip(jobSnap.pack),
         });
         showStatus(message, "error", 6000);
+        reportSupportError("pack.download", e, {
+          pack_id: String(jobSnap.pack.id),
+          pack_name: jobSnap.pack.name,
+        });
       }
     } finally {
       readyHandlers.current.delete(nextId);

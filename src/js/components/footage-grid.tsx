@@ -1,15 +1,18 @@
 import { applyPackItemToHost } from "@/lib/utils/apply-item";
+import { packItemIsAudio, resolveItemAudioFile } from "@/lib/utils/pack-apply-paths";
 import {
   loadPreviewObjectUrl,
   packPrefersWebmPreview,
+  playSfxPreview,
   resolveItemPreviewMedia,
   revokePreviewObjectUrls,
+  stopSfxPreview,
 } from "@/lib/utils/pack-preview";
 import { resolvePreviewAspectRatio, type PackContentSection } from "@/lib/utils/pack-tree";
 import type { PackSettings, PackTreeItem } from "@/lib/utils/pack-types";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { cn } from "@/lib/utils";
-import { Loader2, Lock, Sparkles, Star } from "lucide-react";
+import { AudioLines, Loader2, Lock, Sparkles, Star } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -71,6 +74,7 @@ function ensurePanelLeaveListeners(playPreview: boolean): void {
   if (panelLeaveBound) return;
   panelLeaveBound = true;
   const clear = () => {
+    stopSfxPreview();
     if (!panelLeavePlayPreview) clearExclusiveHover();
   };
   const onVisibility = () => {
@@ -128,6 +132,7 @@ const PreviewCard = memo(function PreviewCard({
 
   const favorited = isFavorite(item.id);
   const motion = media.motion;
+  const isAudio = packItemIsAudio(item);
   const isVideoMotion = motion?.kind === "webm" || motion?.kind === "mp4";
   const isGifMotion = motion?.kind === "gif";
   const aspectRatio = resolvePreviewAspectRatio(item.group);
@@ -137,6 +142,11 @@ const PreviewCard = memo(function PreviewCard({
   // AutoPlay must stay silent even when footer audio is on; sound only on hover.
   const shouldMute = playPreview || !audioEnabled;
 
+  const audioPath = useMemo(
+    () => (isAudio ? resolveItemAudioFile(item, packFilePath) : null),
+    [isAudio, item, packFilePath],
+  );
+
   // Reset media state whenever the cell binds a different item.
   useEffect(() => {
     setHovered(false);
@@ -145,6 +155,7 @@ const PreviewCard = memo(function PreviewCard({
     setPosterUrl(media.posterUrl);
     setMotionUrl(null);
     if (exclusiveHoverId === item.id) clearExclusiveHover();
+    stopSfxPreview(item.id);
   }, [item.id, media.posterUrl]);
 
   // Load poster as soon as the card mounts / item changes (queued FS reads).
@@ -203,6 +214,7 @@ const PreviewCard = memo(function PreviewCard({
   // AutoPlay ⇒ visible cards; otherwise hover-only.
   const wantMotion = playPreview ? inView : hovered;
   const showMotion = !!motion && !!motionUrl && wantMotion;
+  const wantAudio = isAudio && hovered && audioEnabled && !locked;
 
   useEffect(() => {
     if (!motion) return;
@@ -248,12 +260,35 @@ const PreviewCard = memo(function PreviewCard({
     };
   }, [showMotion, isVideoMotion, motionUrl, shouldMute, playPreview]);
 
+  useEffect(() => {
+    if (!wantAudio || !audioPath) {
+      stopSfxPreview(item.id);
+      return;
+    }
+    const id = item.id;
+    let cancelled = false;
+    void loadPreviewObjectUrl(audioPath).then((url) => {
+      if (cancelled || itemIdRef.current !== id || !url) return;
+      playSfxPreview(id, url);
+    });
+    return () => {
+      cancelled = true;
+      stopSfxPreview(id);
+    };
+  }, [wantAudio, audioPath, item.id]);
+
   const resolvedPoster = posterUrl ?? media.posterUrl;
   const gifSrc = showMotion && isGifMotion && motionUrl ? motionUrl : null;
   const imgSrc = gifSrc || resolvedPoster || undefined;
+  const showAudioIcon = isAudio && (!imgSrc || posterFailed);
 
   function handlePointerEnter() {
     setHoveredItemName(item.name);
+    if (isAudio) {
+      setHovered(true);
+      if (!playPreview) setExclusiveHoverId(item.id);
+      return;
+    }
     if (!playPreview) {
       setExclusiveHoverId(item.id);
       setHovered(true);
@@ -262,6 +297,11 @@ const PreviewCard = memo(function PreviewCard({
 
   function handlePointerLeave() {
     setHoveredItemName(null);
+    if (isAudio) {
+      setHovered(false);
+      if (!playPreview && exclusiveHoverId === item.id) clearExclusiveHover();
+      return;
+    }
     if (!playPreview) {
       if (exclusiveHoverId === item.id) clearExclusiveHover();
       setHovered(false);
@@ -313,11 +353,17 @@ const PreviewCard = memo(function PreviewCard({
       title={locked ? `${item.name} (premium — sign in to apply)` : item.name}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
-      onFocus={() => setHoveredItemName(item.name)}
+      onFocus={() => {
+        setHoveredItemName(item.name);
+        if (isAudio || !playPreview) {
+          if (!playPreview) setExclusiveHoverId(item.id);
+          setHovered(true);
+        }
+      }}
       onBlur={() => {
         setHoveredItemName(null);
-        if (!playPreview) {
-          if (exclusiveHoverId === item.id) clearExclusiveHover();
+        if (isAudio || !playPreview) {
+          if (!playPreview && exclusiveHoverId === item.id) clearExclusiveHover();
           setHovered(false);
         }
       }}
@@ -331,6 +377,19 @@ const PreviewCard = memo(function PreviewCard({
     >
       {(!imgSrc || posterFailed) && !(showMotion && isVideoMotion) && (
         <div className="absolute inset-0 bg-gradient-to-br from-secondary to-background" />
+      )}
+
+      {showAudioIcon && (
+        <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+          <AudioLines
+            className={cn(
+              "text-white/35 transition-colors duration-150",
+              hovered && audioEnabled && "text-primary/75",
+            )}
+            style={{ width: "38%", height: "38%" }}
+            strokeWidth={1.5}
+          />
+        </div>
       )}
 
       {/* Keep poster mounted under video so hover never flashes a blank/broken frame. */}

@@ -162,6 +162,21 @@ function metaFromPackFile(packFilePath: string): InstalledPackMeta | null {
   }
 }
 
+function mergeInstalledPackMeta(
+  prev: InstalledPackMeta,
+  meta: InstalledPackMeta,
+): InstalledPackMeta {
+  const merged: InstalledPackMeta = { ...prev, ...meta };
+  // Market installs stamp catalog version onto prefs. Disk scan reads
+  // settings.main.version from the pack file, which often lags admin
+  // (`1.0` vs `1.0.0`, or a leading `v`) and would retrigger Update forever.
+  if (prev.marketId && prev.version) {
+    merged.version = prev.version;
+    merged.marketId = meta.marketId ?? prev.marketId;
+  }
+  return merged;
+}
+
 function upsertInstalledPackMeta(
   packages: InstalledPackMeta[],
   meta: InstalledPackMeta,
@@ -170,13 +185,15 @@ function upsertInstalledPackMeta(
   const byPath = packages.findIndex((p) => p.path && normalizePackPath(p.path) === normPath);
   if (byPath >= 0) {
     const prev = packages[byPath];
+    const merged = mergeInstalledPackMeta(prev, meta);
     const changed =
-      prev.name !== meta.name ||
-      prev.version !== meta.version ||
-      prev.author !== meta.author ||
-      prev.appID !== meta.appID ||
-      prev.appVersion !== meta.appVersion;
-    packages[byPath] = { ...prev, ...meta };
+      prev.name !== merged.name ||
+      prev.version !== merged.version ||
+      prev.author !== merged.author ||
+      prev.appID !== merged.appID ||
+      prev.appVersion !== merged.appVersion ||
+      prev.marketId !== merged.marketId;
+    packages[byPath] = merged;
     return changed ? "updated" : "unchanged";
   }
 
@@ -188,7 +205,8 @@ function upsertInstalledPackMeta(
       normalizePackHost(p.appID || p.load) === metaHost,
   );
   if (byName >= 0) {
-    packages[byName] = { ...packages[byName], ...meta };
+    const prev = packages[byName];
+    packages[byName] = mergeInstalledPackMeta(prev, meta);
     return "updated";
   }
 

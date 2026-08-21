@@ -15,6 +15,7 @@ import { notifyPackagesRescan, resolvePackagesInstallRoot, scanAndRegisterPacksA
 import { EXTENSION_VERSION } from "@/lib/config/masked";
 import { fetchSpunkramVersions, isReleaseAdminEmail, type SpunkramVersionEntry } from "@/api/update";
 import { applyExtensionUpdate } from "@/utils/extension-update";
+import { friendlyErrorMessage } from "@/utils/user-error";
 import * as panelStore from "@/lib/userdata-store";
 import { clearAllActivePackStorageKeys } from "@/lib/utils/pack-host";
 
@@ -187,7 +188,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
     } catch (err) {
       setInstallBusy(false);
       setInstallProgress(undefined);
-      setInstallError(err instanceof Error ? err.message : String(err));
+      setInstallError(friendlyErrorMessage(err));
     }
   }
 

@@ -16,7 +16,7 @@ import { getBundledAudioPresetPath } from "../../utils/audioPreset";
 import { describeForExport } from "../../utils/describeForExport";
 import { getUserIdentity } from "../../api";
 import { reportSupportError } from "../../api/support";
-import { authErrorMessage, getLocalStyleAssetPaths } from "../../styles";
+import { authErrorMessage, getLocalStyleAssetPaths, matchPresetByStyleName } from "../../styles";
 import { patchCaptionsRawData, toHostCaptionPayload, captionsRawJsonToChunks, groupingModeFromSegmentType } from "../../utils/captionHostPayload";
 import {
   captionsToChunks,
@@ -134,6 +134,7 @@ export const CaptionsApp = ({
     translateTo,
     presets,
     selectedPresetId,
+    selectPreset,
     ensureStyleDownloaded,
     applySelectedPresetToHost,
     updateMode,
@@ -257,7 +258,7 @@ export const CaptionsApp = ({
       .then(() => undefined)
       .catch((e: unknown) => {
         showError(e);
-        reportSupportError("captions.resegment", e);
+        if (!isSoftHostError(e)) reportSupportError("captions.resegment", e);
       });
   };
 
@@ -300,6 +301,7 @@ export const CaptionsApp = ({
             trackIndex?: number;
             startTime?: number;
             durationSeconds?: number;
+            styleName?: string;
             segments?: { text: string; timestamp: [number, number] }[];
             segmentType?: number;
             lineCount?: number;
@@ -360,12 +362,11 @@ export const CaptionsApp = ({
       setMeta(nextMeta);
       skipSessionSaveRef.current = true;
       setScreen("editor");
-      if (hostRef) {
-        try {
-          await applySelectedPresetToHost();
-        } catch {
-          // стиль не применился — не блокируем Load
-        }
+
+      const styleName = typeof loaded.styleName === "string" ? loaded.styleName.trim() : "";
+      const matched = styleName ? matchPresetByStyleName(presets, styleName) : undefined;
+      if (matched) {
+        selectPreset(matched.id, { applyToHost: false });
       }
     } catch {
       // не isMGT / несколько слоёв / пустой mogrt — тихая ошибка
@@ -655,7 +656,7 @@ export const CaptionsApp = ({
       })
       .catch((e: unknown) => {
       showError(e);
-      reportSupportError("captions.live_edit", e);
+      if (!isSoftHostError(e)) reportSupportError("captions.live_edit", e);
     });
   };
 

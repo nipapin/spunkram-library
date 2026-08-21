@@ -83,10 +83,21 @@ function defaultSubscribeUrl(): string {
   return `${SITE_ORIGIN}/pricing?client=spunkram-cep`;
 }
 
+/** Trim + drop a leading `v` so catalog `1.0.0` matches pack-file `v1.0.0`. */
+export function normalizePackVersion(raw: unknown): string {
+  return String(raw ?? "")
+    .trim()
+    .replace(/^v/i, "");
+}
+
 /** Compare dotted versions; returns negative if a < b, 0 if equal, positive if a > b. */
 export function compareDottedVersions(a: string, b: string): number {
-  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
-  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
+  const pa = normalizePackVersion(a)
+    .split(".")
+    .map((n) => parseInt(n, 10) || 0);
+  const pb = normalizePackVersion(b)
+    .split(".")
+    .map((n) => parseInt(n, 10) || 0);
   const len = Math.max(pa.length, pb.length);
   for (let i = 0; i < len; i++) {
     const d = (pa[i] ?? 0) - (pb[i] ?? 0);
@@ -142,6 +153,7 @@ function normalizePackage(raw: CepMarketPackage): CepMarketPackage {
     install_url: raw.install_url ?? null,
     buy_url: raw.buy_url ?? null,
     details_url: raw.details_url ?? null,
+    version: raw.version != null ? String(raw.version) : undefined,
     min_extension_version: raw.min_extension_version ?? null,
     min_host_version: raw.min_host_version ?? null,
   };
@@ -187,9 +199,15 @@ export async function resolvePackEntitlementContextForScan(opts: {
 export function tagInstalledPackWithMarketId(
   meta: InstalledPackMeta,
   marketId: string | number,
+  version?: string | null,
 ): InstalledPackMeta {
   const id = String(marketId);
-  const tagged: InstalledPackMeta = { ...meta, marketId: id };
+  const catalogVersion = normalizePackVersion(version);
+  const tagged: InstalledPackMeta = {
+    ...meta,
+    marketId: id,
+    ...(catalogVersion ? { version: catalogVersion } : {}),
+  };
   try {
     const prefs = loadPreferencesFile();
     const packages = Array.isArray(prefs.packages)
@@ -197,7 +215,11 @@ export function tagInstalledPackWithMarketId(
       : [];
     const idx = packages.findIndex((p) => p.path === meta.path);
     if (idx >= 0) {
-      packages[idx] = { ...packages[idx], marketId: id };
+      packages[idx] = {
+        ...packages[idx],
+        marketId: id,
+        ...(catalogVersion ? { version: catalogVersion } : {}),
+      };
       prefs.packages = packages;
       savePreferencesFile(prefs);
     }
@@ -316,7 +338,7 @@ async function installFromZipPath(
     return { ok: false, message: installed.message, cachedZipPath: zipPath };
   }
   const meta = item
-    ? tagInstalledPackWithMarketId(installed.meta, item.id)
+    ? tagInstalledPackWithMarketId(installed.meta, item.id, item.version)
     : installed.meta;
   removeCachedPackZip(zipPath);
   return { ok: true, meta };
@@ -442,16 +464,16 @@ export async function downloadAndInstallPack(
   return installFromZipPath(destPath, item);
 }
 
-/** True when catalog version differs from the installed prefs entry. */
+/** True when the catalog version is newer than the installed prefs entry. */
 export function installedPackNeedsUpdate(
   meta: InstalledPackMeta,
   item: CepMarketPackage,
 ): boolean {
-  const remote = (item.version || "").trim();
-  const local = (meta.version || "").trim();
-  if (!remote || !local) return Boolean(remote && remote !== local);
-  if (remote === local) return false;
-  return compareDottedVersions(local, remote) !== 0;
+  const remote = normalizePackVersion(item.version);
+  const local = normalizePackVersion(meta.version);
+  if (!remote) return false;
+  if (!local) return true;
+  return compareDottedVersions(local, remote) < 0;
 }
 
 function updateInstalledPackVersion(
@@ -606,7 +628,10 @@ export async function downloadAndApplyPackDiff(
       /* fonts best-effort */
     }
 
-    const version = (item.version || meta.version || "1.0").trim();
+    const version =
+      normalizePackVersion(item.version) ||
+      normalizePackVersion(meta.version) ||
+      "1.0";
     const updated = updateInstalledPackVersion(meta, version, item.id);
 
     try {

@@ -7,9 +7,12 @@
  * Folders: prefer `Assets` / `Previews` (see pack-folders.ts).
  */
 import { fs, path } from "../cep/node";
-import { resolvePackTemplatesPath } from "./pack-folders";
+import { resolvePackPreviewsPath, resolvePackTemplatesPath } from "./pack-folders";
 import { resolveItemAssetSegments } from "./pack-tree";
 import type { PackPreviewItem, PackSettings, PackTreeItem } from "./pack-types";
+
+const AUDIO_EXTS = [".wav", ".mp3", ".ogg", ".m4a", ".aac", ".aif", ".aiff", ".flac"] as const;
+const AUDIO_FILETYPES = new Set(AUDIO_EXTS.map((ext) => ext.slice(1)));
 
 export type HostAppId = "PPRO" | "AEFT";
 
@@ -44,6 +47,75 @@ function customArgsFor(item: PackTreeItem): Record<string, unknown> {
   return (entry?.custom_args as Record<string, unknown>) || {};
 }
 
+function cepFsAvailable(): boolean {
+  return typeof fs?.existsSync === "function";
+}
+
+function audioStemFor(item: PackTreeItem): string {
+  return item.group.preview_name_instead_id ? item.name : item.previewKey;
+}
+
+function preferredAudioExt(item: PackTreeItem): string {
+  const filetype = customArgsFor(item).filetype;
+  const raw = typeof filetype === "string" && filetype.trim() ? filetype : "wav";
+  const ext = raw.toLowerCase().replace(/^\./, "");
+  return `.${ext}`;
+}
+
+export function packItemIsAudio(item: PackTreeItem): boolean {
+  if (item.group.is_audio) return true;
+  const filetype = customArgsFor(item).filetype;
+  if (typeof filetype !== "string") return false;
+  return AUDIO_FILETYPES.has(filetype.toLowerCase().replace(/^\./, ""));
+}
+
+function firstExistingAudioInDir(dir: string, stem: string, preferredExt: string): string | null {
+  if (!cepFsAvailable() || !dir || !stem) return null;
+  const ordered = [preferredExt, ...AUDIO_EXTS.filter((ext) => ext !== preferredExt)];
+  for (const ext of ordered) {
+    const candidate = path.join(dir, `${stem}${ext}`);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Absolute path to an SFX file (Assets first, then Previews).
+ * Returns null when the group isn't audio or nothing exists on disk.
+ */
+export function resolveItemAudioFile(item: PackTreeItem, packFilePath: string): string | null {
+  if (!packItemIsAudio(item) || !packFilePath || typeof path?.join !== "function") return null;
+  const preferredExt = preferredAudioExt(item);
+  const stems = [audioStemFor(item), item.previewKey, item.name].filter(
+    (stem, i, arr) => !!stem && arr.indexOf(stem) === i,
+  );
+  const segments = resolveItemAssetSegments(item);
+  const previewGroupRel =
+    segments.length > 0 ? path.dirname(path.join(...segments)) : "";
+  const instanceGroupRel =
+    item.pathSegments.length > 0 ? path.join(...item.pathSegments) : "";
+  const rels = [instanceGroupRel, previewGroupRel].filter(
+    (rel, i, arr) => !!rel && rel !== "." && arr.indexOf(rel) === i,
+  );
+  if (rels.length === 0) rels.push("");
+
+  const roots = [
+    resolvePackTemplatesPath(packFilePath, "PPRO"),
+    resolvePackPreviewsPath(packFilePath),
+  ];
+  for (const root of roots) {
+    if (!root) continue;
+    for (const rel of rels) {
+      const dir = rel ? path.join(root, rel) : root;
+      for (const stem of stems) {
+        const found = firstExistingAudioInDir(dir, stem, preferredExt);
+        if (found) return found;
+      }
+    }
+  }
+  return null;
+}
+
 /** Apply an item-level `_Files/<folder>/` override, when the pack sets it (PR only). */
 function withCustomFilesFolder(
   file: string,
@@ -73,22 +145,15 @@ export function resolveItemSourceFile(
     return { ctype: "UNSUPPORTED", file: "", cacheName: "" };
   }
 
-  if (group.is_audio) {
-    // Audio lives under Assets (same tree as projects), not Previews.
-    const segments = resolveItemAssetSegments(item);
-    const ext =
-      typeof customArgs.filetype === "string" ? customArgs.filetype : "wav";
-    const baseWithoutExt = path.join(templatesDir, ...segments);
-    const itemNameAudio = group.preview_name_instead_id
-      ? item.name
-      : item.previewKey;
+  if (packItemIsAudio(item)) {
+    const preferredExt = preferredAudioExt(item);
+    const found = resolveItemAudioFile(item, packFilePath);
+    const fallbackDir = path.dirname(path.join(templatesDir, ...resolveItemAssetSegments(item)));
+    const file = found || path.join(fallbackDir, `${audioStemFor(item)}${preferredExt}`);
     return {
       ctype: "AUDIO",
-      file: path.join(
-        path.dirname(baseWithoutExt),
-        `${itemNameAudio}.${String(ext).toLowerCase()}`,
-      ),
-      cacheName: `${sanitizeName(item.id)}.${String(ext).toLowerCase()}`,
+      file,
+      cacheName: `${sanitizeName(item.id)}${path.extname(file) || preferredExt}`,
     };
   }
 

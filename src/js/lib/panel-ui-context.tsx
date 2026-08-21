@@ -10,6 +10,7 @@ import {
 } from "react";
 import * as panelStore from "@/lib/userdata-store";
 import { storageKey } from "@/lib/config/brand";
+import { friendlyErrorMessage } from "@/utils/user-error";
 
 export const THUMB_SIZE_MIN = 1;
 export const THUMB_SIZE_MAX = 5;
@@ -254,7 +255,8 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
       card?: StatusMessage["card"],
     ) => {
       if (statusTimer.current) clearTimeout(statusTimer.current);
-      setStatusMessage({ text, tone, card });
+      const display = tone === "error" ? friendlyErrorMessage(text) : text;
+      setStatusMessage({ text: display, tone, card });
       statusTimer.current = setTimeout(() => setStatusMessage(null), durationMs);
     },
     [],

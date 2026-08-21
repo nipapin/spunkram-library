@@ -59,18 +59,27 @@ function buildItems(
   return items;
 }
 
+function nodeIsAudio(node: PackStructureNode): boolean {
+  return !!(node as { is_audio?: boolean }).is_audio;
+}
+
 function processNode(
   node: PackStructureNode,
   label: string,
   pathSegments: string[],
+  inheritedAudio = false,
 ): PackTreeNode {
+  const isAudio = inheritedAudio || nodeIsAudio(node);
+
   if (isLeafGroup(node)) {
-    const items = buildItems(node, pathSegments);
+    const group: PackLeafGroup =
+      isAudio && !node.is_audio ? { ...node, is_audio: true } : node;
+    const items = buildItems(group, pathSegments);
     const enabledItems = items.filter((item) => item.enabled);
     const count = enabledItems.length;
-    const isNew = !!node.is_new_mark;
+    const isNew = !!group.is_new_mark;
     const premiumCount =
-      node.premium || node.enabled_only
+      group.premium || group.enabled_only
         ? enabledItems.filter((item) => item.enabled).length
         : 0;
 
@@ -83,9 +92,9 @@ function processNode(
       count,
       newCount: isNew ? 1 : 0,
       premiumCount,
-      icon: resolveGroupIcon(node),
+      icon: resolveGroupIcon(group),
       isNew,
-      group: node,
+      group,
       items: enabledItems,
     };
     return groupNode;
@@ -99,7 +108,7 @@ function processNode(
   for (const childKey of Object.keys(node as PackStructureMap)) {
     const child = (node as PackStructureMap)[childKey];
     if (!child || typeof child !== "object") continue;
-    const childNode = processNode(child, childKey, [...pathSegments, childKey]);
+    const childNode = processNode(child, childKey, [...pathSegments, childKey], isAudio);
     children.push(childNode);
     count += childNode.count;
     newCount += childNode.newCount;

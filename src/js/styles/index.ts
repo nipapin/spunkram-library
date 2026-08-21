@@ -24,6 +24,7 @@ export {
   isPresetValuesDirty,
   makeOrigin,
   presetSwatchColors,
+  matchPresetByStyleName,
   previewFromValues,
   refreshStylePackageIfRemoteChanged,
   syncCaptionStyles,

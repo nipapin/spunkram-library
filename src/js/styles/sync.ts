@@ -505,3 +505,20 @@ export const syncCaptionStyles = async (options?: {
     error: catalogError,
   };
 };
+
+/** Catalog style whose name matches the selected MOGRT projectItem. */
+export const matchPresetByStyleName = (
+  presets: StylePreset[],
+  rawName: string,
+): StylePreset | undefined => {
+  const name = rawName.replace(/\.mogrt$/i, "").replace(/\s+copy$/i, "").trim();
+  if (!name) return undefined;
+  const catalog = presets.filter((p) => p.source !== "user");
+  const lower = name.toLowerCase();
+  return (
+    catalog.find((p) => p.name === name) ||
+    catalog.find((p) => p.name.toLowerCase() === lower) ||
+    catalog.find((p) => p.styleId === name) ||
+    catalog.find((p) => p.styleId.toLowerCase().endsWith("/" + lower))
+  );
+};

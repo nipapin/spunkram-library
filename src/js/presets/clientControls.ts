@@ -223,8 +223,15 @@ export const stylePropsFromValues = (
     const current = values[control.id];
     const leafIndex = leafCounts[name] ?? 0;
     leafCounts[name] = leafIndex + 1;
+    const essentialPath = control.essentialName
+      ? String(control.essentialName)
+          .replace(/>/g, "/")
+          .split("/")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
     out.push({
-      path: nextPath,
+      path: essentialPath.length ? essentialPath : nextPath,
       type: control.type,
       value: current !== undefined ? current : cloneValue(control.value as ControlValue),
       leafIndex,
@@ -234,14 +241,22 @@ export const stylePropsFromValues = (
   };
 
   const roots = getRootGroups(definition);
-  for (let i = 0; i < roots.length; i++) {
-    walk(roots[i], [], new Set());
+  if (roots.length) {
+    for (let i = 0; i < roots.length; i++) {
+      walk(roots[i], [], new Set());
+    }
+  } else {
+    const controls = definition.clientControls ?? [];
+    for (let i = 0; i < controls.length; i++) {
+      if (!isGroup(controls[i])) walk(controls[i], [], new Set());
+    }
   }
 
   return out;
 };
 
-const stylePropKey = (prop: StylePropPayload): string => prop.path.join("\0");
+const stylePropKey = (prop: StylePropPayload): string =>
+  prop.essentialName || prop.path.join("\0");
 
 /** Только изменившиеся листья — полный список на каждый слайдер вешает Premiere. */
 export const diffStyleProps = (

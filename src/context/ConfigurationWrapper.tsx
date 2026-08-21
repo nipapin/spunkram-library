@@ -15,6 +15,7 @@ import {
   type StylePreset,
   type StylesSyncStatus,
 } from "../js/styles";
+import { friendlyErrorMessage } from "../js/utils/user-error";
 import {
   defaultsFromDefinition,
   diffStyleProps,
@@ -58,7 +59,7 @@ interface IConfigurationValue {
   updateAudioPresetPath: (value: string) => void;
   updateSrcLang: (value: string) => void;
   updateTranslateTo: (value: string) => void;
-  selectPreset: (id: string) => void;
+  selectPreset: (id: string, opts?: { applyToHost?: boolean }) => void;
   updateSelectedPreset: (patch: Partial<StylePreset>) => void;
   addPreset: (patch?: Partial<StylePreset>) => string;
   toggleFavorite: (id: string) => void;
@@ -222,7 +223,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
           /* grid already shown */
         });
     } catch (err) {
-      setStylesError(err instanceof Error ? err.message : String(err));
+      setStylesError(friendlyErrorMessage(err));
       setStylesStatus("error");
     } finally {
       setRefreshingStyles(false);
@@ -447,8 +448,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     await flushStyleValuesToHost(selected.styleId, values, true, definition);
   }, [presets, selectedPresetId, ensureDefinitionLoaded, flushStyleValuesToHost]);
 
-  /** Выбор в UI + подгрузка definition для Styles. aep/mogrt — на Transcribe. */
-  const selectPreset = (id: string) => {
+  /** Выбор в UI + подгрузка controls.json для Styles. aep/mogrt — на Transcribe. */
+  const selectPreset = (id: string, opts?: { applyToHost?: boolean }) => {
     setSelectedPresetId(id);
     setAcquireStatus("idle");
     const target = presets.find((p) => p.id === id);
@@ -464,7 +465,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     }
     void ensureDefinitionLoaded(target.styleId).then((definition) => {
       if (!definition?.clientControls?.length) return;
-      // Catalog cards may still have empty values until definition hydrates.
+      if (opts?.applyToHost === false) return;
       const values = Object.keys(target.values || {}).length
         ? target.values
         : defaultsFromDefinition(definition);

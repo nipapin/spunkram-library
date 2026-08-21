@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { authErrorMessage } from "@/lib/api/market-api";
+import { friendlyErrorMessage } from "@/utils/user-error";
 import { onSessionExpired } from "@/lib/api/session";
 import { cepWs } from "@/lib/cep-ws";
 import {
@@ -270,9 +271,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const msg = error || "Unable to refresh profile";
         setSubscription((prev) => ({ ...prev, error: msg }));
-        reportSupportError("auth.refresh_profile", msg, {
-          error_code: error || null,
-        });
+        if (error !== "NO_CONNECTION" && error !== "TIMEOUT" && error !== "NO_SUCCESS_LOAD") {
+          reportSupportError("auth.refresh_profile", msg, {
+            error_code: error || null,
+          });
+        }
         return { ok: false as const, message: msg };
       }
       const nextAuth: MotionflowAuth = {
@@ -309,9 +312,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const msg =
           error === "UNAUTHORIZED"
             ? "Please sign in again"
-            : authErrorMessage(error) || error || "Unable to load market";
+            : friendlyErrorMessage(authErrorMessage(error) || error || "Unable to load market");
         setMarketError(msg);
-        if (error !== "UNAUTHORIZED") {
+        if (
+          error !== "UNAUTHORIZED" &&
+          error !== "NO_CONNECTION" &&
+          error !== "TIMEOUT" &&
+          error !== "NO_SUCCESS_LOAD"
+        ) {
           reportSupportError("auth.refresh_market", msg, {
             error_code: error || null,
           });
@@ -337,7 +345,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const started = await startDeviceAuth();
     if ("error" in started) {
       setLoginBusy(false);
-      reportSupportError("auth.device_start", started.error);
+      if (
+        started.error !== "NO_CONNECTION" &&
+        started.error !== "TIMEOUT" &&
+        started.error !== "NO_SUCCESS_LOAD" &&
+        !/^HTTP\s*4\d\d/i.test(started.error)
+      ) {
+        reportSupportError("auth.device_start", started.error);
+      }
       return { ok: false, message: started.error };
     }
 

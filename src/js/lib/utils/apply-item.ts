@@ -109,12 +109,6 @@ export async function applyPackItemToHost(
 
   if (!fs.existsSync(resolved.file)) {
     const msg = `Source file not found: ${path.basename(resolved.file)}`;
-    await reportSupportError("pack.apply_item", msg, {
-      item: item.name,
-      reason: "SOURCE_MISSING",
-      ctype: resolved.ctype,
-      file: path.basename(resolved.file),
-    });
     return {
       ok: false,
       message: msg,
@@ -213,6 +207,8 @@ export async function applyPackItemToHost(
       const message = friendlyReason(reason);
       if (
         reason !== "NO_ACTIVE_SEQUENCE" &&
+        reason !== "NO_ACTIVE_COMP" &&
+        reason !== "SOURCE_MISSING" &&
         reason !== "MOGRT_NOT_SUPPORTED_IN_AE"
       ) {
         await reportSupportError("pack.apply_item", message, {
