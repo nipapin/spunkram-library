@@ -17,10 +17,10 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@esTypes/*": ["./src/jsx"],
+      "@esTypes/*": ["./src/js/lib/cep/es-types"],
       "@/*": ["./src/js/*"]
     }
   },
   "include": ["./src"],
-  "exclude": ["./src/jsx"]
+  "exclude": []
 }

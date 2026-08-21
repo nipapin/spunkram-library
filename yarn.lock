@@ -3225,6 +3225,14 @@ mkdirp@^3.0.1:
   resolved "https://registry.npmjs.org/mkdirp/-/mkdirp-3.0.1.tgz"
   integrity sha512-+NsyUUAZDmo6YVHzL/stxSu3t9YS1iljliy3BSDrXJ/dkn1KYdmtZODGGjLcc9XLgVVpH4KshHB8XmZgMhaBXg==
 
+"motionflow-host@file:../../../../Projects/motionflow-host":
+  version "0.1.0"
+  resolved "file:../../../../Projects/motionflow-host"
+
+"motionflow-sdk@file:../../../../Projects/motionflow-sdk":
+  version "0.1.0"
+  resolved "file:../../../../Projects/motionflow-sdk"
+
 ms@^2.1.1, ms@^2.1.3:
   version "2.1.3"
   resolved "https://registry.npmjs.org/ms/-/ms-2.1.3.tgz"

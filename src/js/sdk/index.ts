@@ -1,6 +1,8 @@
-export { MotionFlow } from "./MotionFlow";
-/** @deprecated Use `MotionFlow` — kept for in-progress rename. */
-export { MotionFlow as Motionflow } from "./MotionFlow";
+export { MotionFlow, Motionflow } from "./motion-flow";
 export { hostSdk, sdkData } from "./host-api";
-export type { MfResult, MfHost, ApplyPackItemPayload, ApplyPackItemResult } from "./types";
-export type * from "./types";
+export type {
+  MfResult,
+  MfHost,
+  ApplyPackItemPayload,
+  ApplyPackItemResult,
+} from "motionflow-sdk";

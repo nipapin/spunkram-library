@@ -13,6 +13,7 @@ import { Motionflow } from "@/sdk";
 import { hostSdk, sdkData } from "@/sdk/host-api";
 import { convertToMp3, detectSpeechStart } from "../../utils/ffmpeg";
 import { getBundledAudioPresetPath } from "../../utils/audioPreset";
+import { describeForExport } from "../../utils/describeForExport";
 import { getUserIdentity } from "../../api";
 import { reportSupportError } from "../../api/support";
 import { authErrorMessage, getLocalStyleAssetPaths } from "../../styles";
@@ -422,39 +423,8 @@ export const CaptionsApp = ({
     // Premiere: пользовательский .epr из Settings, иначе бандленный WAV-пресет;
     // AE игнорирует параметр
     const effectivePresetPath = audioPresetPath || getBundledAudioPresetPath() || undefined;
-    const describeRaw = await sdkData(Motionflow.describe(effectivePresetPath));
+    const res = await describeForExport(effectivePresetPath);
     throwIfCancelled(signal);
-    const describeFail = describeRaw as {
-      ok?: false;
-      message?: string;
-      reason?: string;
-      source?: string;
-      dest?: string;
-      offset?: number;
-      durationSeconds?: number;
-      type?: "composition" | "selected";
-    } | null;
-    if (!describeRaw || !describeFail?.source || !describeFail.dest) {
-      const soft =
-        describeFail?.reason === "NO_ACTIVE_COMP" ||
-        describeFail?.reason === "NO_ACTIVE_SEQUENCE" ||
-        describeFail?.reason === "NO_AUDIO" ||
-        describeFail?.reason === "NO_INOUT" ||
-        describeFail?.reason === "NO_WORK_AREA";
-      const msg =
-        (typeof describeFail?.message === "string" && describeFail.message) ||
-        "Could not export audio. Set In/Out (Premiere) or Work Area (After Effects) and try again.";
-      const err = new Error(msg);
-      (err as Error & { soft?: boolean }).soft = soft;
-      throw err;
-    }
-    const res = {
-      source: describeFail.source,
-      dest: describeFail.dest,
-      offset: describeFail.offset ?? 0,
-      durationSeconds: describeFail.durationSeconds ?? 0,
-      type: (describeFail.type ?? "composition") as "composition" | "selected",
-    };
 
     try {
       setProgress({ stage: "converting" });

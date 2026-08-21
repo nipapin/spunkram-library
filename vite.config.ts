@@ -6,7 +6,13 @@ import { cep, CepOptions, runAction } from "vite-cep-plugin";
 import cepConfig from "./cep.config";
 import path from "path";
 import fs from "fs";
+import { createRequire } from "module";
 import { extendscriptConfig } from "./vite.es.config";
+import { BRAND } from "./src/js/lib/config/brand-core";
+
+const require = createRequire(import.meta.url);
+const hostPkgRoot = path.dirname(require.resolve("motionflow-host/package.json"));
+const hostEntry = path.join(hostPkgRoot, "src/index.ts");
 
 const extensions = [".js", ".ts", ".tsx"];
 
@@ -111,7 +117,7 @@ export default defineConfig({
   },
   resolve: {
     alias: [
-      { find: "@esTypes", replacement: path.resolve(__dirname, "src") },
+      { find: "@esTypes", replacement: hostPkgRoot },
       { find: "@", replacement: path.resolve(__dirname, "src/js") },
     ],
   },
@@ -167,7 +173,7 @@ export default defineConfig({
   build: {
     sourcemap: isPackage ? cepConfig.zxp.sourceMap : cepConfig.build?.sourceMap,
     watch: {
-      include: "src/jsx/**",
+      include: path.join(hostPkgRoot, "src/**"),
     },
     rollupOptions: {
       input,
@@ -187,10 +193,15 @@ export default defineConfig({
 // rollup es3 build
 const outPathExtendscript = path.join("dist", cepDist, "jsx", "index.js");
 extendscriptConfig(
-  `src/jsx/index.ts`,
+  hostEntry,
   outPathExtendscript,
   cepConfig,
   extensions,
   isProduction,
   isPackage,
+  {
+    namespace: cepConfig.id,
+    captionsBin: BRAND.captionsBin,
+    stylesBin: BRAND.stylesBin,
+  },
 );

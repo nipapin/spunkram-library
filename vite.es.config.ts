@@ -10,12 +10,22 @@ import path from "path";
 
 const GLOBAL_THIS = "thisObj";
 
-/** Inline package env so ExtendScript never sees bare `process`. */
-function extEnvDefines(): Record<string, string> {
-  return {
+/** Inline env + motionflow-host identity placeholders for ExtendScript bundle. */
+function extEnvDefines(host?: {
+  namespace: string;
+  captionsBin: string;
+  stylesBin: string;
+}): Record<string, string> {
+  const defines: Record<string, string> = {
     "process.env.ZXP_PACKAGE": JSON.stringify(process.env.ZXP_PACKAGE || ""),
     "process.env.ZIP_PACKAGE": JSON.stringify(process.env.ZIP_PACKAGE || ""),
   };
+  if (host) {
+    defines['"__MF_HOST_NS__"'] = JSON.stringify(host.namespace);
+    defines['"__MF_CAPTIONS_BIN__"'] = JSON.stringify(host.captionsBin);
+    defines['"__MF_STYLES_BIN__"'] = JSON.stringify(host.stylesBin);
+  }
+  return defines;
 }
 
 export const extendscriptConfig = (
@@ -25,6 +35,7 @@ export const extendscriptConfig = (
   extensions: string[],
   isProduction: boolean,
   isPackage: boolean,
+  host?: { namespace: string; captionsBin: string; stylesBin: string },
 ) => {
   console.log(outPath);
   const config: RollupOptions = {
@@ -38,7 +49,7 @@ export const extendscriptConfig = (
     },
     plugins: [
       replace({
-        values: extEnvDefines(),
+        values: extEnvDefines(host),
         preventAssignment: true,
       }),
       json(),
