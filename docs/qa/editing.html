@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QA — Editing</title>
+  <link rel="stylesheet" href="assets/qa.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div>
+        <h1><a href="index.html">← QA</a> · Editing</h1>
+        <p class="meta" id="page-progress-label">0 / 0</p>
+        <div class="progress-bar"><span id="page-progress-bar"></span></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-reset-page">Сброс страницы</button>
+      </div>
+    </header>
+    <section>
+      <h2>Entitlement <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">E-01</td><td>Purchase gate → Upgrade Account</td><td class="check-col"><input type="checkbox" data-id="E-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-01"></td></tr>
+          <tr><td class="id-col">E-02</td><td>Free plan banner</td><td class="check-col"><input type="checkbox" data-id="E-02" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-02"></td></tr>
+          <tr><td class="id-col">E-03</td><td>Premium lock на items без subscription</td><td class="check-col"><input type="checkbox" data-id="E-03" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-03"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Toolbar & Sidebar <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">E-10</td><td>Active pack name</td><td class="check-col"><input type="checkbox" data-id="E-10" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-10" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-10"></td></tr>
+          <tr><td class="id-col">E-11</td><td>Find items search (global)</td><td class="check-col"><input type="checkbox" data-id="E-11" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-11" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-11"></td></tr>
+          <tr><td class="id-col">E-12</td><td>Favorites filter</td><td class="check-col"><input type="checkbox" data-id="E-12" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-12" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-12"></td></tr>
+          <tr><td class="id-col">E-20</td><td>Category tree + icons</td><td class="check-col"><input type="checkbox" data-id="E-20" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-20" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-20"></td></tr>
+          <tr><td class="id-col">E-21</td><td>Expand/collapse folders</td><td class="check-col"><input type="checkbox" data-id="E-21" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-21" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-21"></td></tr>
+          <tr><td class="id-col">E-22</td><td>Select category → filter grid</td><td class="check-col"><input type="checkbox" data-id="E-22" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-22" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-22"></td></tr>
+          <tr><td class="id-col">E-23</td><td>Resizable sidebar (persisted)</td><td class="check-col"><input type="checkbox" data-id="E-23" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-23" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-23"></td></tr>
+          <tr><td class="id-col">E-24</td><td>Last category per pack persisted</td><td class="check-col"><input type="checkbox" data-id="E-24" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-24" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-24"></td></tr>
+          <tr><td class="id-col">E-25</td><td>Focus mode hides sidebar</td><td class="check-col"><input type="checkbox" data-id="E-25" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-25" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-25"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Footage grid <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">E-30</td><td>Thumbnail grid + aspect ratio</td><td class="check-col"><input type="checkbox" data-id="E-30" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-30" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-30"></td></tr>
+          <tr><td class="id-col">E-31</td><td>Hover preview webm/mp4/gif</td><td class="check-col"><input type="checkbox" data-id="E-31" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-31" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-31"></td></tr>
+          <tr><td class="id-col">E-32</td><td>AutoPlay all in-view (muted)</td><td class="check-col"><input type="checkbox" data-id="E-32" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-32" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-32"></td></tr>
+          <tr><td class="id-col">E-33</td><td>Hover-only preview when AutoPlay off</td><td class="check-col"><input type="checkbox" data-id="E-33" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-33" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-33"></td></tr>
+          <tr><td class="id-col">E-34</td><td>Audio items: hover preview + audio toggle</td><td class="check-col"><input type="checkbox" data-id="E-34" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-34" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-34"></td></tr>
+          <tr><td class="id-col">E-35</td><td>Favorite star persisted</td><td class="check-col"><input type="checkbox" data-id="E-35" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-35" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-35"></td></tr>
+          <tr><td class="id-col">E-36</td><td>NEW badge toggle</td><td class="check-col"><input type="checkbox" data-id="E-36" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-36" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-36"></td></tr>
+          <tr><td class="id-col">E-37</td><td>Double-click / Enter / Space → apply</td><td class="check-col"><input type="checkbox" data-id="E-37" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-37" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-37"></td></tr>
+          <tr><td class="id-col">E-38</td><td>Apply spinner on card</td><td class="check-col"><input type="checkbox" data-id="E-38" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-38" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-38"></td></tr>
+          <tr><td class="id-col">E-39</td><td>Success toast Applied</td><td class="check-col"><input type="checkbox" data-id="E-39" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-39" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-39"></td></tr>
+          <tr><td class="id-col">E-40</td><td>Errors: no seq/comp, missing file, wrong host</td><td class="check-col"><input type="checkbox" data-id="E-40" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-40" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-40"></td></tr>
+          <tr><td class="id-col">E-41</td><td>Skeleton for 64+ items</td><td class="check-col"><input type="checkbox" data-id="E-41" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-41" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-41"></td></tr>
+          <tr><td class="id-col">E-42</td><td>Leave panel stops hover playback</td><td class="check-col"><input type="checkbox" data-id="E-42" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-42" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-42"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Footer <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">E-50</td><td>Play preview toggle</td><td class="check-col"><input type="checkbox" data-id="E-50" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-50" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-50"></td></tr>
+          <tr><td class="id-col">E-51</td><td>Audio toggle</td><td class="check-col"><input type="checkbox" data-id="E-51" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-51" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-51"></td></tr>
+          <tr><td class="id-col">E-52</td><td>NEW badges switch</td><td class="check-col"><input type="checkbox" data-id="E-52" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-52" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-52"></td></tr>
+          <tr><td class="id-col">E-53</td><td>Hovered item name hint</td><td class="check-col"><input type="checkbox" data-id="E-53" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-53" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-53"></td></tr>
+          <tr><td class="id-col">E-54</td><td>Fit thumbnails</td><td class="check-col"><input type="checkbox" data-id="E-54" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-54" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-54"></td></tr>
+          <tr><td class="id-col">E-55</td><td>Focus mode toggle</td><td class="check-col"><input type="checkbox" data-id="E-55" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-55" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-55"></td></tr>
+          <tr><td class="id-col">E-56</td><td>Thumbnail size slider</td><td class="check-col"><input type="checkbox" data-id="E-56" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-56" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-56"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Pack errors <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">E-60</td><td>Corrupt/missing pack error</td><td class="check-col"><input type="checkbox" data-id="E-60" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-60" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-60"></td></tr>
+          <tr><td class="id-col">E-61</td><td>Uninstall last pack → Market tab</td><td class="check-col"><input type="checkbox" data-id="E-61" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-61" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-61"></td></tr>
+          <tr><td class="id-col">E-62</td><td>Rescan on auth/purchase change</td><td class="check-col"><input type="checkbox" data-id="E-62" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="E-62" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="E-62"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Apply by type <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">M-40</td><td>FULL_PROJECT (.prproj) copy-paste + Motionflow.dll <span class="tag pr">PR</span></td><td class="check-col"></td><td class="check-col"><input type="checkbox" data-id="M-40" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-40"></td></tr>
+          <tr><td class="id-col">M-41</td><td>MOGRT importMGT <span class="tag pr">PR</span></td><td class="check-col"></td><td class="check-col"><input type="checkbox" data-id="M-41" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-41"></td></tr>
+          <tr><td class="id-col">M-41</td><td>MOGRT blocked in AE (MOGRT_NOT_SUPPORTED) <span class="tag ae">AE</span></td><td class="check-col"><input type="checkbox" data-id="M-41" data-host="ae"></td><td class="check-col"></td><td class="notes-col"><input type="text" data-note-for="M-41"></td></tr>
+          <tr><td class="id-col">M-42</td><td>AEP/PROJECT applyComp pipeline <span class="tag ae">AE</span></td><td class="check-col"><input type="checkbox" data-id="M-42" data-host="ae"></td><td class="check-col"></td><td class="notes-col"><input type="text" data-note-for="M-42"></td></tr>
+          <tr><td class="id-col">M-43</td><td>AUDIO import + place timeline</td><td class="check-col"><input type="checkbox" data-id="M-43" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-43" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-43"></td></tr>
+          <tr><td class="id-col">M-44</td><td>FOOTAGE import + place</td><td class="check-col"><input type="checkbox" data-id="M-44" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-44" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-44"></td></tr>
+          <tr><td class="id-col">M-45</td><td>FULL_PROJECT requires active sequence <span class="tag pr">PR</span></td><td class="check-col"></td><td class="check-col"><input type="checkbox" data-id="M-45" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-45"></td></tr>
+          <tr><td class="id-col">M-46</td><td>AEP requires active composition <span class="tag ae">AE</span></td><td class="check-col"><input type="checkbox" data-id="M-46" data-host="ae"></td><td class="check-col"></td><td class="notes-col"><input type="text" data-note-for="M-46"></td></tr>
+          <tr><td class="id-col">M-47</td><td>MOGRT at playhead on timeline <span class="tag pr">PR</span></td><td class="check-col"></td><td class="check-col"><input type="checkbox" data-id="M-47" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-47"></td></tr>
+          <tr><td class="id-col">M-48</td><td>software_id mismatch → NO_SUPPORT_APP</td><td class="check-col"><input type="checkbox" data-id="M-48" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-48" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-48"></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+  <script src="assets/qa-keys.js"></script>
+  <script src="assets/qa.js"></script>
+</body>
+</html>

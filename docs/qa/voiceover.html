@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QA — Voiceover</title>
+  <link rel="stylesheet" href="assets/qa.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div>
+        <h1><a href="index.html">← QA</a> · Voiceover</h1>
+        <p class="meta" id="page-progress-label">0 / 0</p>
+        <div class="progress-bar"><span id="page-progress-bar"></span></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-reset-page">Сброс страницы</button>
+      </div>
+    </header>
+    <section>
+      <h2>Generate <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">VO-01</td><td>Script textarea</td><td class="check-col"><input type="checkbox" data-id="VO-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-01"></td></tr>
+          <tr><td class="id-col">VO-02</td><td>Language dropdown</td><td class="check-col"><input type="checkbox" data-id="VO-02" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-02"></td></tr>
+          <tr><td class="id-col">VO-03</td><td>Voice dropdown + sample preview</td><td class="check-col"><input type="checkbox" data-id="VO-03" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-03"></td></tr>
+          <tr><td class="id-col">VO-04</td><td>Emotion dropdown</td><td class="check-col"><input type="checkbox" data-id="VO-04" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-04"></td></tr>
+          <tr><td class="id-col">VO-05</td><td>Speed / Volume / Pitch sliders</td><td class="check-col"><input type="checkbox" data-id="VO-05" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-05" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-05"></td></tr>
+          <tr><td class="id-col">VO-06</td><td>Generate (N) — cost by text length</td><td class="check-col"><input type="checkbox" data-id="VO-06" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-06" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-06"></td></tr>
+          <tr><td class="id-col">VO-07</td><td>Out-of-credits disabled state</td><td class="check-col"><input type="checkbox" data-id="VO-07" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-07" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-07"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>History & import <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">VO-08</td><td>History overlay (max 30) + waveform</td><td class="check-col"><input type="checkbox" data-id="VO-08" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-08" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-08"></td></tr>
+          <tr><td class="id-col">VO-09</td><td>Add to timeline</td><td class="check-col"><input type="checkbox" data-id="VO-09" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-09" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-09"></td></tr>
+          <tr><td class="id-col">VO-10</td><td>Add to project bin</td><td class="check-col"><input type="checkbox" data-id="VO-10" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-10" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-10"></td></tr>
+          <tr><td class="id-col">VO-11</td><td>Re-download if file missing</td><td class="check-col"><input type="checkbox" data-id="VO-11" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-11" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-11"></td></tr>
+          <tr><td class="id-col">VO-12</td><td>NO_ACTIVE_SEQUENCE / NO_ACTIVE_COMP errors</td><td class="check-col"><input type="checkbox" data-id="VO-12" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="VO-12" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="VO-12"></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+  <script src="assets/qa-keys.js"></script>
+  <script src="assets/qa.js"></script>
+</body>
+</html>

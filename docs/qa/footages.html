@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QA — Footages</title>
+  <link rel="stylesheet" href="assets/qa.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div>
+        <h1><a href="index.html">← QA</a> · Footages</h1>
+        <p class="meta" id="page-progress-label">0 / 0</p>
+        <div class="progress-bar"><span id="page-progress-bar"></span></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-reset-page">Сброс страницы</button>
+      </div>
+    </header>
+    <section>
+      <h2>Browse & search <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">F-01</td><td>Type: Image / Video</td><td class="check-col"><input type="checkbox" data-id="F-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-01"></td></tr>
+          <tr><td class="id-col">F-02</td><td>Import to: Timeline / Project</td><td class="check-col"><input type="checkbox" data-id="F-02" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-02"></td></tr>
+          <tr><td class="id-col">F-03</td><td>Orientation filter</td><td class="check-col"><input type="checkbox" data-id="F-03" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-03"></td></tr>
+          <tr><td class="id-col">F-04</td><td>Search (debounced)</td><td class="check-col"><input type="checkbox" data-id="F-04" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-04"></td></tr>
+          <tr><td class="id-col">F-05</td><td>Infinite scroll (max 10 pages)</td><td class="check-col"><input type="checkbox" data-id="F-05" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-05" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-05"></td></tr>
+          <tr><td class="id-col">F-06</td><td>Skeleton on first load</td><td class="check-col"><input type="checkbox" data-id="F-06" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-06" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-06"></td></tr>
+          <tr><td class="id-col">F-07</td><td>Error + retry</td><td class="check-col"><input type="checkbox" data-id="F-07" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-07" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-07"></td></tr>
+          <tr><td class="id-col">F-08</td><td>Hover video preview (Pexels)</td><td class="check-col"><input type="checkbox" data-id="F-08" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-08" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-08"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Import <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">F-09</td><td>Import → /api/stock/download Bearer</td><td class="check-col"><input type="checkbox" data-id="F-09" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-09" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-09"></td></tr>
+          <tr><td class="id-col">F-10</td><td>Quality menu (image/video resolutions)</td><td class="check-col"><input type="checkbox" data-id="F-10" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-10" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-10"></td></tr>
+          <tr><td class="id-col">F-11</td><td>Cached file skip re-download</td><td class="check-col"><input type="checkbox" data-id="F-11" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-11" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-11"></td></tr>
+          <tr><td class="id-col">F-12</td><td>Assets path or picker on first download</td><td class="check-col"><input type="checkbox" data-id="F-12" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-12" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-12"></td></tr>
+          <tr><td class="id-col">F-13</td><td>Use project location override</td><td class="check-col"><input type="checkbox" data-id="F-13" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-13" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-13"></td></tr>
+          <tr><td class="id-col">F-14</td><td>Media preview dialog</td><td class="check-col"><input type="checkbox" data-id="F-14" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-14" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-14"></td></tr>
+          <tr><td class="id-col">F-15</td><td>Author attribution</td><td class="check-col"><input type="checkbox" data-id="F-15" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-15" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-15"></td></tr>
+          <tr><td class="id-col">F-16</td><td>Download progress bar</td><td class="check-col"><input type="checkbox" data-id="F-16" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-16" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-16"></td></tr>
+          <tr><td class="id-col">F-17</td><td>importMedia success in host</td><td class="check-col"><input type="checkbox" data-id="F-17" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="F-17" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="F-17"></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+  <script src="assets/qa-keys.js"></script>
+  <script src="assets/qa.js"></script>
+</body>
+</html>

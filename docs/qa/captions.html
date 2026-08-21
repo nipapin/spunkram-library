@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QA — Captions</title>
+  <link rel="stylesheet" href="assets/qa.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div>
+        <h1><a href="index.html">← QA</a> · Captions</h1>
+        <p class="meta" id="page-progress-label">0 / 0</p>
+        <div class="progress-bar"><span id="page-progress-bar"></span></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-reset-page">Сброс страницы</button>
+      </div>
+    </header>
+    <section>
+      <h2>AI Tools hub <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">AI-01</td><td>Generations left counter + bar</td><td class="check-col"><input type="checkbox" data-id="AI-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="AI-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="AI-01"></td></tr>
+          <tr><td class="id-col">AI-04</td><td>Tool cards: Captions / Chapters / Voiceover</td><td class="check-col"><input type="checkbox" data-id="AI-04" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="AI-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="AI-04"></td></tr>
+          <tr><td class="id-col">AI-05</td><td>Tools disabled when totalLeft &lt;= 0</td><td class="check-col"><input type="checkbox" data-id="AI-05" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="AI-05" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="AI-05"></td></tr>
+          <tr><td class="id-col">AI-06</td><td>Sub-shell: Back, title, gens count</td><td class="check-col"><input type="checkbox" data-id="AI-06" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="AI-06" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="AI-06"></td></tr>
+          <tr><td class="id-col">AI-08</td><td>Credits refresh after generation event</td><td class="check-col"><input type="checkbox" data-id="AI-08" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="AI-08" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="AI-08"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Landing <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">CAP-01</td><td>PresetGrid browse/select</td><td class="check-col"><input type="checkbox" data-id="CAP-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-01"></td></tr>
+          <tr><td class="id-col">CAP-02</td><td>Source language</td><td class="check-col"><input type="checkbox" data-id="CAP-02" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-02"></td></tr>
+          <tr><td class="id-col">CAP-03</td><td>Translate-to (off = none)</td><td class="check-col"><input type="checkbox" data-id="CAP-03" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-03"></td></tr>
+          <tr><td class="id-col">CAP-04</td><td>Transcribe (N) — cost from In/Out / Work Area</td><td class="check-col"><input type="checkbox" data-id="CAP-04" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-04"></td></tr>
+          <tr><td class="id-col">CAP-05</td><td>Load from existing caption on timeline</td><td class="check-col"><input type="checkbox" data-id="CAP-05" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-05" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-05"></td></tr>
+          <tr><td class="id-col">CAP-06</td><td>Progress: Rendering → Converting → Transcribing → Creating</td><td class="check-col"><input type="checkbox" data-id="CAP-06" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-06" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-06"></td></tr>
+          <tr><td class="id-col">CAP-07</td><td>Cancel transcribe (quiet)</td><td class="check-col"><input type="checkbox" data-id="CAP-07" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-07" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-07"></td></tr>
+          <tr><td class="id-col">CAP-08</td><td>No generations left error</td><td class="check-col"><input type="checkbox" data-id="CAP-08" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-08" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-08"></td></tr>
+          <tr><td class="id-col">CAP-09</td><td>No speech in range error</td><td class="check-col"><input type="checkbox" data-id="CAP-09" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-09" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-09"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Editor <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">CAP-10</td><td>Tabs Transcribe | Styles</td><td class="check-col"><input type="checkbox" data-id="CAP-10" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-10" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-10"></td></tr>
+          <tr><td class="id-col">CAP-11</td><td>Back → landing (data kept)</td><td class="check-col"><input type="checkbox" data-id="CAP-11" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-11" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-11"></td></tr>
+          <tr><td class="id-col">CAP-12</td><td>Caption list timestamps</td><td class="check-col"><input type="checkbox" data-id="CAP-12" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-12" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-12"></td></tr>
+          <tr><td class="id-col">CAP-13</td><td>Click caption → seek playhead</td><td class="check-col"><input type="checkbox" data-id="CAP-13" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-13" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-13"></td></tr>
+          <tr><td class="id-col">CAP-14</td><td>Auto-sync highlight with playhead</td><td class="check-col"><input type="checkbox" data-id="CAP-14" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-14" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-14"></td></tr>
+          <tr><td class="id-col">CAP-15</td><td>Edit text → live update on timeline</td><td class="check-col"><input type="checkbox" data-id="CAP-15" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-15" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-15"></td></tr>
+          <tr><td class="id-col">CAP-16</td><td>Word menu: split, merge, move</td><td class="check-col"><input type="checkbox" data-id="CAP-16" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-16" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-16"></td></tr>
+          <tr><td class="id-col">CAP-17</td><td>Re-segment Words / Custom</td><td class="check-col"><input type="checkbox" data-id="CAP-17" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-17" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-17"></td></tr>
+          <tr><td class="id-col">CAP-18</td><td>Custom: Lines + Chars sliders</td><td class="check-col"><input type="checkbox" data-id="CAP-18" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-18" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-18"></td></tr>
+          <tr><td class="id-col">CAP-19</td><td>Update → resegment on host</td><td class="check-col"><input type="checkbox" data-id="CAP-19" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-19" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-19"></td></tr>
+          <tr><td class="id-col">CAP-20</td><td>Session JSON → marker (debounced)</td><td class="check-col"><input type="checkbox" data-id="CAP-20" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CAP-20" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-20"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Host-specific <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">CAP-AE-01</td><td>Captions on comp layer (compId) <span class="tag ae">AE</span></td><td class="check-col"><input type="checkbox" data-id="CAP-AE-01" data-host="ae"></td><td class="check-col"></td><td class="notes-col"><input type="text" data-note-for="CAP-AE-01"></td></tr>
+          <tr><td class="id-col">CAP-AE-02</td><td>Sync only in source comp <span class="tag ae">AE</span></td><td class="check-col"><input type="checkbox" data-id="CAP-AE-02" data-host="ae"></td><td class="check-col"></td><td class="notes-col"><input type="text" data-note-for="CAP-AE-02"></td></tr>
+          <tr><td class="id-col">CAP-AE-03</td><td>Style .aep path <span class="tag ae">AE</span></td><td class="check-col"><input type="checkbox" data-id="CAP-AE-03" data-host="ae"></td><td class="check-col"></td><td class="notes-col"><input type="text" data-note-for="CAP-AE-03"></td></tr>
+          <tr><td class="id-col">CAP-PR-01</td><td>Captions on video track <span class="tag pr">PR</span></td><td class="check-col"></td><td class="check-col"><input type="checkbox" data-id="CAP-PR-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-PR-01"></td></tr>
+          <tr><td class="id-col">CAP-PR-02</td><td>Requires .mogrt style — clear error <span class="tag pr">PR</span></td><td class="check-col"></td><td class="check-col"><input type="checkbox" data-id="CAP-PR-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-PR-02"></td></tr>
+          <tr><td class="id-col">CAP-PR-03</td><td>Audio export: .epr preset or bundled WAV <span class="tag pr">PR</span></td><td class="check-col"></td><td class="check-col"><input type="checkbox" data-id="CAP-PR-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-PR-03"></td></tr>
+          <tr><td class="id-col">CAP-PR-04</td><td>Load single caption MOGRT from timeline <span class="tag pr">PR</span></td><td class="check-col"></td><td class="check-col"><input type="checkbox" data-id="CAP-PR-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CAP-PR-04"></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+  <script src="assets/qa-keys.js"></script>
+  <script src="assets/qa.js"></script>
+</body>
+</html>

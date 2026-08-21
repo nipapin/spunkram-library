@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QA — Chapters</title>
+  <link rel="stylesheet" href="assets/qa.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div>
+        <h1><a href="index.html">← QA</a> · Chapters</h1>
+        <p class="meta" id="page-progress-label">0 / 0</p>
+        <div class="progress-bar"><span id="page-progress-bar"></span></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-reset-page">Сброс страницы</button>
+      </div>
+    </header>
+    <section>
+      <h2>Landing <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">CH-01</td><td>Intro when no history</td><td class="check-col"><input type="checkbox" data-id="CH-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-01"></td></tr>
+          <tr><td class="id-col">CH-02</td><td>History list (max 20): open, delete</td><td class="check-col"><input type="checkbox" data-id="CH-02" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-02"></td></tr>
+          <tr><td class="id-col">CH-03</td><td>Language + translate</td><td class="check-col"><input type="checkbox" data-id="CH-03" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-03"></td></tr>
+          <tr><td class="id-col">CH-04</td><td>Generate (N) — work range cost</td><td class="check-col"><input type="checkbox" data-id="CH-04" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-04"></td></tr>
+          <tr><td class="id-col">CH-05</td><td>Progress through Summarizing</td><td class="check-col"><input type="checkbox" data-id="CH-05" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-05" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-05"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Results <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">CH-10</td><td>Titles: edit + regenerate</td><td class="check-col"><input type="checkbox" data-id="CH-10" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-10" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-10"></td></tr>
+          <tr><td class="id-col">CH-11</td><td>Description: edit + regenerate</td><td class="check-col"><input type="checkbox" data-id="CH-11" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-11" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-11"></td></tr>
+          <tr><td class="id-col">CH-12</td><td>Tags: edit, #normalize, regenerate</td><td class="check-col"><input type="checkbox" data-id="CH-12" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-12" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-12"></td></tr>
+          <tr><td class="id-col">CH-13</td><td>Chapters: edit time/title, add, delete</td><td class="check-col"><input type="checkbox" data-id="CH-13" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-13" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-13"></td></tr>
+          <tr><td class="id-col">CH-14</td><td>YouTube min chapters warning</td><td class="check-col"><input type="checkbox" data-id="CH-14" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-14" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-14"></td></tr>
+          <tr><td class="id-col">CH-15</td><td>Copy chapters (timestamps only)</td><td class="check-col"><input type="checkbox" data-id="CH-15" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-15" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-15"></td></tr>
+          <tr><td class="id-col">CH-16</td><td>Copy Description (full block)</td><td class="check-col"><input type="checkbox" data-id="CH-16" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-16" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-16"></td></tr>
+          <tr><td class="id-col">CH-17</td><td>Add Markers on timeline/comp</td><td class="check-col"><input type="checkbox" data-id="CH-17" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-17" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-17"></td></tr>
+          <tr><td class="id-col">CH-18</td><td>Back / Close preserves history</td><td class="check-col"><input type="checkbox" data-id="CH-18" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-18" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-18"></td></tr>
+          <tr><td class="id-col">CH-19</td><td>Regenerate disabled without gens</td><td class="check-col"><input type="checkbox" data-id="CH-19" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="CH-19" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="CH-19"></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+  <script src="assets/qa-keys.js"></script>
+  <script src="assets/qa.js"></script>
+</body>
+</html>

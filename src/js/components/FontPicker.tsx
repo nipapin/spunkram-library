@@ -48,7 +48,7 @@ const FontMenu = ({
       if (menuRef.current?.contains(target) || anchor?.contains(target)) return;
       onClose();
     };
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("mousedown", onPointer);

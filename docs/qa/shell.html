@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QA — Shell &amp; Auth</title>
+  <link rel="stylesheet" href="assets/qa.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div>
+        <h1><a href="index.html">← QA</a> · Shell &amp; Auth</h1>
+        <p class="meta" id="page-progress-label">0 / 0</p>
+        <div class="progress-bar"><span id="page-progress-bar"></span></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-reset-page">Сброс страницы</button>
+      </div>
+    </header>
+
+    <section>
+      <h2>Глобальная оболочка <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">G-01</td><td>Без логина виден только LoginScreen</td><td class="check-col"><input type="checkbox" data-id="G-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-01"></td></tr>
+          <tr><td class="id-col">G-02</td><td>После логина — полный shell (header, контент)</td><td class="check-col"><input type="checkbox" data-id="G-02" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-02"></td></tr>
+          <tr><td class="id-col">G-03</td><td>Loading… пока authReady = false</td><td class="check-col"><input type="checkbox" data-id="G-03" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-03"></td></tr>
+          <tr><td class="id-col">G-04</td><td>Default tab: Market без паков, Editing если пак установлен</td><td class="check-col"><input type="checkbox" data-id="G-04" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-04"></td></tr>
+          <tr><td class="id-col">G-05</td><td>Цвет active pack (header_color_hex) в --primary</td><td class="check-col"><input type="checkbox" data-id="G-05" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-05" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-05"></td></tr>
+          <tr><td class="id-col">G-06</td><td>ffmpeg prefetch при старте панели</td><td class="check-col"><input type="checkbox" data-id="G-06" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-06" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-06"></td></tr>
+          <tr><td class="id-col">G-07</td><td>Toast «Restart host» если .pending-update после native update</td><td class="check-col"><input type="checkbox" data-id="G-07" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-07" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-07"></td></tr>
+          <tr><td class="id-col">G-08</td><td>Status toast: success / error / info, dismiss</td><td class="check-col"><input type="checkbox" data-id="G-08" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-08" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-08"></td></tr>
+          <tr><td class="id-col">G-09</td><td>Pack notification toast (WSS) → Details / Market</td><td class="check-col"><input type="checkbox" data-id="G-09" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-09" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-09"></td></tr>
+          <tr><td class="id-col">G-10</td><td>Download float: progress, cancel, badge при нескольких job</td><td class="check-col"><input type="checkbox" data-id="G-10" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-10" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-10"></td></tr>
+          <tr><td class="id-col">G-11</td><td>Update banner при новой версии на CDN</td><td class="check-col"><input type="checkbox" data-id="G-11" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-11" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-11"></td></tr>
+          <tr><td class="id-col">G-12</td><td>Expiry сессии → re-auth, WSS отключается</td><td class="check-col"><input type="checkbox" data-id="G-12" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="G-12" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="G-12"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Навигация <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">N-01</td><td>Logo → Settings</td><td class="check-col"><input type="checkbox" data-id="N-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="N-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="N-01"></td></tr>
+          <tr><td class="id-col">N-02</td><td>Editing tab</td><td class="check-col"><input type="checkbox" data-id="N-02" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="N-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="N-02"></td></tr>
+          <tr><td class="id-col">N-03</td><td>Editing disabled без паков + tooltip</td><td class="check-col"><input type="checkbox" data-id="N-03" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="N-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="N-03"></td></tr>
+          <tr><td class="id-col">N-04</td><td>Footages tab</td><td class="check-col"><input type="checkbox" data-id="N-04" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="N-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="N-04"></td></tr>
+          <tr><td class="id-col">N-05</td><td>AI Tools tab</td><td class="check-col"><input type="checkbox" data-id="N-05" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="N-05" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="N-05"></td></tr>
+          <tr><td class="id-col">N-06</td><td>Market + badge непрочитанных событий</td><td class="check-col"><input type="checkbox" data-id="N-06" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="N-06" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="N-06"></td></tr>
+          <tr><td class="id-col">N-07</td><td>Market spinner при активных download</td><td class="check-col"><input type="checkbox" data-id="N-07" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="N-07" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="N-07"></td></tr>
+          <tr><td class="id-col">N-08</td><td>Account: green=subscribed, amber=free</td><td class="check-col"><input type="checkbox" data-id="N-08" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="N-08" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="N-08"></td></tr>
+          <tr><td class="id-col">N-09</td><td>Узкая панель: labels → icons</td><td class="check-col"><input type="checkbox" data-id="N-09" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="N-09" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="N-09"></td></tr>
+          <tr><td class="id-col">N-10</td><td>Смена tab закрывает Settings overlay</td><td class="check-col"><input type="checkbox" data-id="N-10" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="N-10" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="N-10"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Login &amp; Account <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">A-01</td><td>Sign in → browser OAuth Motionflow</td><td class="check-col"><input type="checkbox" data-id="A-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-01"></td></tr>
+          <tr><td class="id-col">A-02</td><td>Confirm code UI</td><td class="check-col"><input type="checkbox" data-id="A-02" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-02"></td></tr>
+          <tr><td class="id-col">A-03</td><td>Cancel login</td><td class="check-col"><input type="checkbox" data-id="A-03" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-03"></td></tr>
+          <tr><td class="id-col">A-04</td><td>Saved accounts list</td><td class="check-col"><input type="checkbox" data-id="A-04" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-04"></td></tr>
+          <tr><td class="id-col">A-05</td><td>Switch saved account без browser</td><td class="check-col"><input type="checkbox" data-id="A-05" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-05" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-05"></td></tr>
+          <tr><td class="id-col">A-06</td><td>Use another account</td><td class="check-col"><input type="checkbox" data-id="A-06" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-06" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-06"></td></tr>
+          <tr><td class="id-col">A-07</td><td>Login error/success messages</td><td class="check-col"><input type="checkbox" data-id="A-07" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-07" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-07"></td></tr>
+          <tr><td class="id-col">A-10</td><td>Profile: name, email, avatar</td><td class="check-col"><input type="checkbox" data-id="A-10" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-10" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-10"></td></tr>
+          <tr><td class="id-col">A-11</td><td>Refresh subscription + generations</td><td class="check-col"><input type="checkbox" data-id="A-11" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-11" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-11"></td></tr>
+          <tr><td class="id-col">A-12</td><td>Sign out → LoginScreen</td><td class="check-col"><input type="checkbox" data-id="A-12" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-12" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-12"></td></tr>
+          <tr><td class="id-col">A-13</td><td>Plan tile: Active/Cancelled/Free</td><td class="check-col"><input type="checkbox" data-id="A-13" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-13" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-13"></td></tr>
+          <tr><td class="id-col">A-14</td><td>Generations: monthly/extra, Add extra</td><td class="check-col"><input type="checkbox" data-id="A-14" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-14" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-14"></td></tr>
+          <tr><td class="id-col">A-15</td><td>Subscribe CTA если не subscribed</td><td class="check-col"><input type="checkbox" data-id="A-15" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-15" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-15"></td></tr>
+          <tr><td class="id-col">A-16</td><td>Multi-account: Add / Switch / Remove</td><td class="check-col"><input type="checkbox" data-id="A-16" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-16" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-16"></td></tr>
+          <tr><td class="id-col">A-17</td><td>Add account via browser confirm</td><td class="check-col"><input type="checkbox" data-id="A-17" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-17" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-17"></td></tr>
+          <tr><td class="id-col">A-18</td><td>Sessions list + Revoke others</td><td class="check-col"><input type="checkbox" data-id="A-18" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-18" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-18"></td></tr>
+          <tr><td class="id-col">A-19</td><td>Contact support link</td><td class="check-col"><input type="checkbox" data-id="A-19" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-19" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-19"></td></tr>
+          <tr><td class="id-col">A-20</td><td>Market: owned/install vs buy по subscription</td><td class="check-col"><input type="checkbox" data-id="A-20" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-20" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-20"></td></tr>
+          <tr><td class="id-col">A-21</td><td>Editing: premium pack entitlement</td><td class="check-col"><input type="checkbox" data-id="A-21" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-21" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-21"></td></tr>
+          <tr><td class="id-col">A-22</td><td>AI generations limit с сервера</td><td class="check-col"><input type="checkbox" data-id="A-22" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-22" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-22"></td></tr>
+          <tr><td class="id-col">A-23</td><td>Beta update channel только для signed-in testers</td><td class="check-col"><input type="checkbox" data-id="A-23" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="A-23" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="A-23"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Settings <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">S-01</td><td>Back → предыдущий workspace tab</td><td class="check-col"><input type="checkbox" data-id="S-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="S-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="S-01"></td></tr>
+          <tr><td class="id-col">S-02</td><td>Version badge в header</td><td class="check-col"><input type="checkbox" data-id="S-02" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="S-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="S-02"></td></tr>
+          <tr><td class="id-col">S-03</td><td>Packages path browse + scan AE/PR subfolders</td><td class="check-col"><input type="checkbox" data-id="S-03" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="S-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="S-03"></td></tr>
+          <tr><td class="id-col">S-04</td><td>Scan: found / registered / rejected messages</td><td class="check-col"><input type="checkbox" data-id="S-04" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="S-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="S-04"></td></tr>
+          <tr><td class="id-col">S-05</td><td>Assets download path browse</td><td class="check-col"><input type="checkbox" data-id="S-05" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="S-05" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="S-05"></td></tr>
+          <tr><td class="id-col">S-06</td><td>Use project location (footage downloads)</td><td class="check-col"><input type="checkbox" data-id="S-06" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="S-06" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="S-06"></td></tr>
+          <tr><td class="id-col">S-07</td><td>Use System Fonts toggle</td><td class="check-col"><input type="checkbox" data-id="S-07" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="S-07" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="S-07"></td></tr>
+          <tr><td class="id-col">S-08</td><td>Reload extension</td><td class="check-col"><input type="checkbox" data-id="S-08" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="S-08" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="S-08"></td></tr>
+          <tr><td class="id-col">S-09</td><td>Reset all settings (confirm)</td><td class="check-col"><input type="checkbox" data-id="S-09" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="S-09" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="S-09"></td></tr>
+          <tr><td class="id-col">S-10</td><td>Remove package files (confirm)</td><td class="check-col"><input type="checkbox" data-id="S-10" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="S-10" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="S-10"></td></tr>
+          <tr><td class="id-col">S-11</td><td>Prefs file path shown</td><td class="check-col"><input type="checkbox" data-id="S-11" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="S-11" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="S-11"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Extension update <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">U-01</td><td>Update banner: version, stable/beta label</td><td class="check-col"><input type="checkbox" data-id="U-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="U-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="U-01"></td></tr>
+          <tr><td class="id-col">U-02</td><td>What's new popover (changelog)</td><td class="check-col"><input type="checkbox" data-id="U-02" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="U-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="U-02"></td></tr>
+          <tr><td class="id-col">U-03</td><td>Update → download ZXP → apply → reload</td><td class="check-col"><input type="checkbox" data-id="U-03" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="U-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="U-03"></td></tr>
+          <tr><td class="id-col">U-04</td><td>Progress: Downloading / Extracting / Applying</td><td class="check-col"><input type="checkbox" data-id="U-04" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="U-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="U-04"></td></tr>
+          <tr><td class="id-col">U-05</td><td>Native DLL pending → restart host toast</td><td class="check-col"><input type="checkbox" data-id="U-05" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="U-05" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="U-05"></td></tr>
+          <tr><td class="id-col">U-06</td><td>WSS extension.update → re-check</td><td class="check-col"><input type="checkbox" data-id="U-06" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="U-06" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="U-06"></td></tr>
+          <tr><td class="id-col">U-07</td><td>Beta updates gated (tester email)</td><td class="check-col"><input type="checkbox" data-id="U-07" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="U-07" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="U-07"></td></tr>
+          <tr><td class="id-col">U-08</td><td>Update error in banner</td><td class="check-col"><input type="checkbox" data-id="U-08" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="U-08" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="U-08"></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+  <script src="assets/qa-keys.js"></script>
+  <script src="assets/qa.js"></script>
+</body>
+</html>

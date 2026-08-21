@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spunkram CEP — QA Checklist</title>
+  <link rel="stylesheet" href="assets/qa.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div>
+        <h1>Spunkram Library CEP — QA</h1>
+        <p class="meta">Ручной чеклист функционала панели (не сайт). Прогресс сохраняется в браузере.</p>
+        <p class="meta" id="global-progress-label">0 / 0 (0%)</p>
+        <div class="progress-bar"><span id="global-progress-bar"></span></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-export">Export JSON</button>
+        <button type="button" id="btn-reset-all">Сбросить всё</button>
+      </div>
+    </header>
+
+    <p class="hint">
+      Отмечайте отдельно для <strong style="color:var(--ae)">After Effects</strong> и
+      <strong style="color:var(--pr)">Premiere Pro</strong>. Рекомендуемые хосты: AE/PR 2024+.
+    </p>
+
+    <div class="smoke-box">
+      <h3>Smoke (~30 мин на хост)</h3>
+      <ul>
+        <li>G-01, G-04, N-02–N-08, M-01, M-20, M-30, E-37</li>
+        <li>CAP-04, CH-04, CH-17, VO-06, F-09, A-01, S-03, U-03</li>
+        <li>PR: CAP-PR-02 · AE: CAP-AE-03 · PR: M-40 · AE: M-42</li>
+      </ul>
+    </div>
+
+    <nav class="grid-cards" aria-label="Разделы QA">
+      <a class="card" href="shell.html" data-page-key="shell">
+        <h2>Shell &amp; Auth</h2>
+        <p>Загрузка, навигация, логин, аккаунт, настройки, обновления</p>
+        <div class="pct">—</div>
+      </a>
+      <a class="card" href="market.html" data-page-key="market">
+        <h2>Market</h2>
+        <p>Каталог, установка, обновление, удаление паков</p>
+        <div class="pct">—</div>
+      </a>
+      <a class="card" href="editing.html" data-page-key="editing">
+        <h2>Editing</h2>
+        <p>Браузер пака, grid, apply AEP/MOGRT/FOOTAGE/AUDIO/FULL_PROJECT</p>
+        <div class="pct">—</div>
+      </a>
+      <a class="card" href="captions.html" data-page-key="captions">
+        <h2>Captions</h2>
+        <p>Transcribe, Load, редактор, resegment, timeline sync</p>
+        <div class="pct">—</div>
+      </a>
+      <a class="card" href="styles.html" data-page-key="styles">
+        <h2>Captions Styles</h2>
+        <p>Preset grid, Styles tab, live apply, user presets</p>
+        <div class="pct">—</div>
+      </a>
+      <a class="card" href="chapters.html" data-page-key="chapters">
+        <h2>Chapters</h2>
+        <p>Generate, history, markers, copy для YouTube</p>
+        <div class="pct">—</div>
+      </a>
+      <a class="card" href="voiceover.html" data-page-key="voiceover">
+        <h2>Voiceover</h2>
+        <p>TTS, голоса, история, import в timeline/project</p>
+        <div class="pct">—</div>
+      </a>
+      <a class="card" href="footages.html" data-page-key="footages">
+        <h2>Footages</h2>
+        <p>Stock Unsplash/Pexels, preview, import</p>
+        <div class="pct">—</div>
+      </a>
+    </nav>
+
+    <footer class="page-foot">
+      Файлы: <code>docs/qa/</code> · Открывайте <code>index.html</code> локально в браузере.
+      Для релиза 1.0 прогоните full regression на AE + PR (free + subscribed аккаунты).
+    </footer>
+  </div>
+
+  <script src="assets/qa-keys.js"></script>
+  <script src="assets/qa.js"></script>
+</body>
+</html>

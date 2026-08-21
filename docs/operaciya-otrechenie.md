@@ -54,7 +54,7 @@ Host/SDK выход из Beta JSX (отдельный трек): [`sdk/POLNOE_OT
 
 - [x] Grep: ноль `get-atomx` / `atomx.plus` / `external_lib_assets` / `track_download` / `mau?king` в `src/`
 - [x] `PATHS.md` / `BACKEND_CEP_API.md` обновлены
-- [ ] QA checklist AE + PR (manual)
+- [ ] QA checklist AE + PR (manual) — [`docs/qa/index.html`](./qa/index.html)
 
 ---
 

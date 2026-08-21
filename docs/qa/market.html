@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QA — Market</title>
+  <link rel="stylesheet" href="assets/qa.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div>
+        <h1><a href="index.html">← QA</a> · Market</h1>
+        <p class="meta" id="page-progress-label">0 / 0</p>
+        <div class="progress-bar"><span id="page-progress-bar"></span></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-reset-page">Сброс страницы</button>
+      </div>
+    </header>
+    <section>
+      <h2>Каталог <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">M-01</td><td>Загрузка GET /api/cep/market?host= — только паки своего хоста</td><td class="check-col"><input type="checkbox" data-id="M-01" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-01" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-01"></td></tr>
+          <tr><td class="id-col">M-02</td><td>Loading spinner</td><td class="check-col"><input type="checkbox" data-id="M-02" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-02" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-02"></td></tr>
+          <tr><td class="id-col">M-03</td><td>Error + Retry</td><td class="check-col"><input type="checkbox" data-id="M-03" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-03" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-03"></td></tr>
+          <tr><td class="id-col">M-04</td><td>Empty state для хоста</td><td class="check-col"><input type="checkbox" data-id="M-04" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-04" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-04"></td></tr>
+          <tr><td class="id-col">M-05</td><td>Subscribe banner ($9.9/mo)</td><td class="check-col"><input type="checkbox" data-id="M-05" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-05" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-05"></td></tr>
+          <tr><td class="id-col">M-06</td><td>Card: Owned / Free / In subscription</td><td class="check-col"><input type="checkbox" data-id="M-06" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-06" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-06"></td></tr>
+          <tr><td class="id-col">M-07</td><td>Version badge, installed badge, active ring</td><td class="check-col"><input type="checkbox" data-id="M-07" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-07" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-07"></td></tr>
+          <tr><td class="id-col">M-08</td><td>Play preview (YouTube video_id)</td><td class="check-col"><input type="checkbox" data-id="M-08" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-08" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-08"></td></tr>
+          <tr><td class="id-col">M-09</td><td>Details → details_url в браузере</td><td class="check-col"><input type="checkbox" data-id="M-09" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-09" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-09"></td></tr>
+          <tr><td class="id-col">M-10</td><td>Web store footer link</td><td class="check-col"><input type="checkbox" data-id="M-10" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-10" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-10"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Действия на карточке <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">M-20</td><td>Install / Get Free (action с сервера)</td><td class="check-col"><input type="checkbox" data-id="M-20" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-20" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-20"></td></tr>
+          <tr><td class="id-col">M-21</td><td>Buy → buy_url или subscribe</td><td class="check-col"><input type="checkbox" data-id="M-21" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-21" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-21"></td></tr>
+          <tr><td class="id-col">M-22</td><td>Update когда version &lt; market</td><td class="check-col"><input type="checkbox" data-id="M-22" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-22" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-22"></td></tr>
+          <tr><td class="id-col">M-23</td><td>Switch → select pack</td><td class="check-col"><input type="checkbox" data-id="M-23" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-23" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-23"></td></tr>
+          <tr><td class="id-col">M-24</td><td>Active disabled для текущего пака</td><td class="check-col"><input type="checkbox" data-id="M-24" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-24" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-24"></td></tr>
+          <tr><td class="id-col">M-25</td><td>Remove (uninstall + clear active)</td><td class="check-col"><input type="checkbox" data-id="M-25" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-25" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-25"></td></tr>
+          <tr><td class="id-col">M-26</td><td>Install progress + cancel (X)</td><td class="check-col"><input type="checkbox" data-id="M-26" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-26" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-26"></td></tr>
+          <tr><td class="id-col">M-27</td><td>Failed job: error + Retry</td><td class="check-col"><input type="checkbox" data-id="M-27" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-27" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-27"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Install flow <span data-section-progress></span></h2>
+      <table class="qa">
+        <thead><tr><th>ID</th><th>Тест</th><th class="check-col ae">AE</th><th class="check-col pr">PR</th><th>Заметки</th></tr></thead>
+        <tbody>
+          <tr><td class="id-col">M-30</td><td>Packages path dialog на первом install</td><td class="check-col"><input type="checkbox" data-id="M-30" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-30" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-30"></td></tr>
+          <tr><td class="id-col">M-31</td><td>Install в {root}/AE/ или {root}/PR/</td><td class="check-col"><input type="checkbox" data-id="M-31" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-31" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-31"></td></tr>
+          <tr><td class="id-col">M-32</td><td>Bearer download → zip → install; 403 NOT_OWNED</td><td class="check-col"><input type="checkbox" data-id="M-32" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-32" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-32"></td></tr>
+          <tr><td class="id-col">M-33</td><td>useWhenReady: register + select pack</td><td class="check-col"><input type="checkbox" data-id="M-33" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-33" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-33"></td></tr>
+          <tr><td class="id-col">M-34</td><td>Wrong-host pack rejected</td><td class="check-col"><input type="checkbox" data-id="M-34" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-34" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-34"></td></tr>
+          <tr><td class="id-col">M-35</td><td>WSS pack.created/updated → refresh + toast</td><td class="check-col"><input type="checkbox" data-id="M-35" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-35" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-35"></td></tr>
+          <tr><td class="id-col">M-36</td><td>Manual folder scan в Settings</td><td class="check-col"><input type="checkbox" data-id="M-36" data-host="ae"></td><td class="check-col"><input type="checkbox" data-id="M-36" data-host="pr"></td><td class="notes-col"><input type="text" data-note-for="M-36"></td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+  <script src="assets/qa-keys.js"></script>
+  <script src="assets/qa.js"></script>
+</body>
+</html>
