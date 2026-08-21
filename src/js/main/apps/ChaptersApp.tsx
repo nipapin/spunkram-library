@@ -358,7 +358,12 @@ export const ChaptersApp = ({
 
   const handleGenerate = async () => {
     if (progress) return;
-    if (generationsLeft < generationCost) {
+    const range = await workRange.refresh();
+    if (range.error) {
+      showError(range.error);
+      return;
+    }
+    if (generationsLeft < range.cost) {
       showError("No generations left. Upgrade your plan or buy extra credits.");
       return;
     }

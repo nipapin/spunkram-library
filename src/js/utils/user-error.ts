@@ -84,7 +84,13 @@ export function friendlyErrorMessage(err: unknown): string {
   if (/open a composition first/i.test(msg)) {
     return "Open a composition in After Effects, then try again.";
   }
-  if (/could not read selection timing/i.test(msg) || /set in and out/i.test(msg) || /NO_INOUT/i.test(msg)) {
+  if (
+    /could not read selection timing/i.test(msg) ||
+    /set in and out/i.test(msg) ||
+    /set in\/out or work area/i.test(msg) ||
+    /NO_INOUT/i.test(msg) ||
+    /no in\/out range/i.test(msg)
+  ) {
     return "Set In and Out points on the sequence, then try again.";
   }
   if (/set a work area/i.test(msg) || /NO_WORK_AREA/i.test(msg)) {

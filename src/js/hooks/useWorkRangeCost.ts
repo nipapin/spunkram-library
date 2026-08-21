@@ -8,6 +8,10 @@ export type WorkRangeProbe = {
   error?: string;
 };
 
+export type WorkRangeCostState = WorkRangeProbe & {
+  refresh: () => Promise<WorkRangeProbe>;
+};
+
 type WorkRangeOk = {
   ok: true;
   start: number;
@@ -21,52 +25,60 @@ type WorkRangeFail = {
   message?: string;
 };
 
+const unsetProbe = (error: string): WorkRangeProbe => ({
+  durationSeconds: 0,
+  cost: 1,
+  error,
+});
+
 /**
  * Reads sequence In/Out (PPro) or Work Area (AE) for generation cost labels.
  * Refreshes on mount, window focus, and visibility — when the user activates the panel.
+ * Unset In/Out must stay at cost 1 — never bill the whole timeline.
  */
-export const useWorkRangeCost = (enabled = true): WorkRangeProbe => {
+export const useWorkRangeCost = (enabled = true): WorkRangeCostState => {
   const [probe, setProbe] = useState<WorkRangeProbe>({ durationSeconds: 0, cost: 1 });
 
-  const refresh = useCallback(async () => {
-    if (!enabled) return;
+  const refresh = useCallback(async (): Promise<WorkRangeProbe> => {
+    if (!enabled) {
+      const next = { durationSeconds: 0, cost: 1 };
+      setProbe(next);
+      return next;
+    }
     try {
       const result = await Motionflow.getWorkRange();
       if (!result.ok) {
-        setProbe({
-          durationSeconds: 0,
-          cost: 1,
-          error: result.error || "No In/Out range",
-        });
-        return;
+        const next = unsetProbe(result.error || "No In/Out range");
+        setProbe(next);
+        return next;
       }
       const data = result.data as WorkRangeOk | WorkRangeFail;
       if (data && typeof data === "object" && "ok" in data && data.ok === false) {
-        setProbe({
-          durationSeconds: 0,
-          cost: 1,
-          error: data.message || data.reason || "No In/Out range",
-        });
-        return;
+        const next = unsetProbe(data.message || data.reason || "No In/Out range");
+        setProbe(next);
+        return next;
       }
       const durationSeconds =
         data && typeof data === "object" && "durationSeconds" in data
           ? Number((data as WorkRangeOk).durationSeconds)
           : 0;
       if (!(durationSeconds > 0)) {
-        setProbe({ durationSeconds: 0, cost: 1, error: "Set In/Out or Work Area" });
-        return;
+        const next = unsetProbe("Set In/Out or Work Area");
+        setProbe(next);
+        return next;
       }
-      setProbe({
+      const next = {
         durationSeconds,
         cost: durationGenerationsCost(durationSeconds),
-      });
+      };
+      setProbe(next);
+      return next;
     } catch (e) {
-      setProbe({
-        durationSeconds: 0,
-        cost: 1,
-        error: e instanceof Error ? e.message : "Could not read timeline range",
-      });
+      const next = unsetProbe(
+        e instanceof Error ? e.message : "Could not read timeline range",
+      );
+      setProbe(next);
+      return next;
     }
   }, [enabled]);
 
@@ -86,5 +98,5 @@ export const useWorkRangeCost = (enabled = true): WorkRangeProbe => {
     };
   }, [enabled, refresh]);
 
-  return probe;
+  return { ...probe, refresh };
 };
