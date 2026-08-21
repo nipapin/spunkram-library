@@ -5,7 +5,6 @@ import {
   getLocalStyleAssetPaths,
   isPresetDirty,
   isPresetValuesDirty,
-  loadLocalPackage,
   loadLocalState,
   makeOrigin,
   presetSwatchColors,
@@ -17,7 +16,6 @@ import {
   type StylesSyncStatus,
 } from "../js/styles";
 import {
-  createDefaultValues,
   defaultsFromDefinition,
   diffStyleProps,
   stylePropsFromValues,
@@ -67,7 +65,7 @@ interface IConfigurationValue {
   deletePreset: (id: string) => void;
   refreshStyles: () => Promise<void>;
   ensureStyleDownloaded: (styleId: string) => Promise<void>;
-  /** Подтянуть definition.json для Styles UI (можно до Transcribe). */
+  /** Подтянуть controls.json для Styles UI (можно до Transcribe). */
   ensureDefinitionLoaded: (styleId: string) => Promise<MogrtDefinition>;
   /** Применить values выбранного пресета к caption MOGRT на таймлайне (full push). */
   applySelectedPresetToHost: () => Promise<void>;
@@ -176,6 +174,11 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   const [presetAssets, setPresetAssets] = useState<LocalStyleAssetPaths | null>(null);
   const [aepPath, setAepPath] = useState("");
   const booted = useRef(false);
+  const definitionsRef = useRef(definitions);
+  definitionsRef.current = definitions;
+  const presetsRef = useRef(presets);
+  presetsRef.current = presets;
+  const definitionLoadsRef = useRef(new Map<string, Promise<MogrtDefinition>>());
 
   const updateMode = (value: GroupingMode) => setMode(value);
   const updateLines = (value: number) => setLines(value);
@@ -226,45 +229,56 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     }
   }, [applySyncResult]);
 
-  const ensureDefinitionLoaded = useCallback(
-    async (styleId: string) => {
-      const cached = definitions[styleId];
-      if (cached?.clientControls?.length) return cached;
+  const ensureDefinitionLoaded = useCallback(async (styleId: string) => {
+    const cached = definitionsRef.current[styleId];
+    if (cached?.clientControls?.length) return cached;
 
-      const local = loadLocalPackage(styleId);
-      if (local?.definition?.clientControls?.length) {
-        setDefinitions((prev) => ({ ...prev, [styleId]: local.definition }));
-        return local.definition;
-      }
+    const inflight = definitionLoadsRef.current.get(styleId);
+    if (inflight) return inflight;
 
-      const fromCatalog = presets.find((p) => p.styleId === styleId);
-      const definition = await ensureDefinitionForStyle(styleId, {
-        files: fromCatalog?.files,
-        name: fromCatalog?.name,
-      });
-      setDefinitions((prev) => ({ ...prev, [styleId]: definition }));
-      if (definition.clientControls?.length) {
-        setPresets((prev) =>
-          prev.map((p) => {
-            if (p.styleId !== styleId) return p;
-            // каталожный пресет без values — заполняем дефолтами из definition
-            if (p.source === "catalog" || !Object.keys(p.values || {}).length) {
-              const values = defaultsFromDefinition(definition);
-              return {
-                ...p,
-                values,
-                origin: makeOrigin(p.name, values),
-                source: p.source === "catalog" ? "downloaded" : p.source,
-              };
-            }
-            return p;
-          }),
-        );
+    const load = (async () => {
+      try {
+        const fromCatalog = presetsRef.current.find((p) => p.styleId === styleId);
+        const definition = await ensureDefinitionForStyle(styleId, {
+          files: fromCatalog?.files,
+          name: fromCatalog?.name,
+          controlsUrl: fromCatalog?.controlsUrl,
+          previewImageUrl: fromCatalog?.previewImageUrl,
+          previewVideoUrl: fromCatalog?.previewVideoUrl,
+        });
+        setDefinitions((prev) => {
+          const existing = prev[styleId];
+          if (existing?.clientControls?.length && !definition.clientControls?.length) {
+            return prev;
+          }
+          return { ...prev, [styleId]: definition };
+        });
+        if (definition.clientControls?.length) {
+          setPresets((prev) =>
+            prev.map((p) => {
+              if (p.styleId !== styleId) return p;
+              if (p.source === "catalog" || !Object.keys(p.values || {}).length) {
+                const values = defaultsFromDefinition(definition);
+                return {
+                  ...p,
+                  values,
+                  origin: makeOrigin(p.name, values),
+                  source: p.source === "catalog" ? "downloaded" : p.source,
+                };
+              }
+              return p;
+            }),
+          );
+        }
+        return definition;
+      } finally {
+        definitionLoadsRef.current.delete(styleId);
       }
-      return definition;
-    },
-    [definitions, presets],
-  );
+    })();
+
+    definitionLoadsRef.current.set(styleId, load);
+    return load;
+  }, []);
 
   const ensureStyleDownloaded = useCallback(
     async (styleId: string) => {
@@ -285,6 +299,9 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       const { preset, definition } = await downloadStylePackage(styleId, {
         files: fromCatalog?.files,
         name: fromCatalog?.name,
+        controlsUrl: fromCatalog?.controlsUrl,
+        previewImageUrl: fromCatalog?.previewImageUrl,
+        previewVideoUrl: fromCatalog?.previewVideoUrl,
       });
       setDefinitions((prev) => ({ ...prev, [styleId]: definition }));
       setPresets((prev) => {
@@ -296,6 +313,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
           tags: prevItem?.tags ?? (prevItem?.categoryName ? [prevItem.categoryName] : preset.tags),
           previewImageUrl: prevItem?.previewImageUrl ?? preset.previewImageUrl,
           previewVideoUrl: prevItem?.previewVideoUrl ?? preset.previewVideoUrl,
+          controlsUrl: prevItem?.controlsUrl ?? preset.controlsUrl,
           files: prevItem?.files ?? preset.files,
         };
         const without = prev.filter((p) => p.id !== styleId);
@@ -482,7 +500,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     const name = patch?.name ?? "New Preset";
     const values: ControlValues = definition
       ? { ...defaultsFromDefinition(definition), ...patch?.values }
-      : createDefaultValues(patch?.values);
+      : { ...(patch?.values ?? {}) };
     const preset: StylePreset = {
       id,
       name,
@@ -493,6 +511,9 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       values,
       origin: makeOrigin(name, values),
       preview: patch?.preview ?? selected?.preview,
+      controlsUrl: patch?.controlsUrl ?? selected?.controlsUrl,
+      previewImageUrl: patch?.previewImageUrl ?? selected?.previewImageUrl,
+      previewVideoUrl: patch?.previewVideoUrl ?? selected?.previewVideoUrl,
     };
     setPresets((prev) => [...prev, preset]);
     setSelectedPresetId(id);

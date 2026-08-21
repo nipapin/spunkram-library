@@ -1,6 +1,5 @@
-import definitionJson from "./definition.json";
-import { defaultsFromDefinition, findControlByAnyNames } from "./clientControls";
-import type { ControlValues, MogrtDefinition } from "./types";
+import { findControlByAnyNames } from "./clientControls";
+import type { MogrtDefinition } from "./types";
 
 export type {
   ClientControl,
@@ -9,11 +8,9 @@ export type {
   ControlValues,
   MogrtDefinition,
   PointValue,
-  UiOrderNode,
 } from "./types";
 export { ControlType } from "./types";
 export {
-  PRESET_UI_ORDER,
   buildUiTree,
   defaultsFromDefinition,
   findControlByNames,
@@ -30,30 +27,22 @@ export {
 } from "./clientControls";
 export type { StylePropPayload } from "./clientControls";
 export { hexToRgba, rgbaToHex } from "./color";
+export {
+  CONTROLS_FILE,
+  controlsToDefinition,
+  isControlsDocument,
+  normalizeDefinition,
+} from "./controlsSchema";
+export type { ControlsDocument } from "./controlsSchema";
 
-/**
- * Bundled reference definition (формат MOGRT).
- * Рабочие стили приходят с сервера / AppData — см. `src/js/styles`.
- */
-export const PRESET_DEFINITION = definitionJson as MogrtDefinition;
-
-export const createDefaultValues = (
-  overrides?: ControlValues,
-  definition: MogrtDefinition = PRESET_DEFINITION,
-): ControlValues => ({
-  ...defaultsFromDefinition(definition),
-  ...overrides,
-});
-
-/** UUID известных цветов для превью (по конкретному definition). */
-export const colorControlIds = (definition: MogrtDefinition = PRESET_DEFINITION) => {
+export const colorControlIds = (definition: MogrtDefinition) => {
   const idByPath = (...paths: string[][]) => findControlByAnyNames(definition, paths)?.id ?? "";
   return {
-    fill: idByPath(["Static Segment", "Fill"], ["Segment Static", "Fill"]),
-    highlight: idByPath(["Animated Segment", "Fill"], ["Segment Animated", "Fill"]),
-    background: idByPath(["Background", "Fill"]),
+    fill: idByPath(["Static", "Fill"]),
+    highlight: idByPath(["Animated Text", "Fill"]),
+    background: idByPath(
+      ["Segment Settings", "Background", "Fill"],
+      ["Follow", "Background", "Fill"],
+    ),
   };
 };
-
-/** @deprecated используйте colorControlIds(definition) — UUID зависят от пакета стиля. */
-export const PRESET_CONTROL_IDS = colorControlIds(PRESET_DEFINITION);

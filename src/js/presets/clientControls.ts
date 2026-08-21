@@ -6,22 +6,9 @@ import type {
   LocalizedStr,
   MogrtDefinition,
   PointValue,
-  UiOrderNode,
 } from "./types";
 import { ControlType } from "./types";
 import { CEP_WRITTEN_SYSTEM_NAMES } from "../../shared/caption-system";
-import rawUiOrder from "./ui-order.json";
-
-const asUiOrder = (raw: unknown): UiOrderNode[] => {
-  if (Array.isArray(raw)) return raw as UiOrderNode[];
-  if (raw && typeof raw === "object" && "default" in raw) {
-    const nested = (raw as { default: unknown }).default;
-    if (Array.isArray(nested)) return nested as UiOrderNode[];
-  }
-  return [];
-};
-
-export const PRESET_UI_ORDER = asUiOrder(rawUiOrder);
 
 export const uiName = (control: ClientControl, locale = "en_US"): string => {
   const db = control.uiName?.strDB;
@@ -34,6 +21,9 @@ export const isGroup = (c: ClientControl) => c.type === ControlType.Group;
 /** Группа с `hidden` в uiName — не показываем её и всех детей. */
 export const isHiddenUiGroup = (control: ClientControl): boolean =>
   isGroup(control) && uiName(control).toLowerCase().includes("hidden");
+
+const isCepWrittenControl = (control: ClientControl): boolean =>
+  (CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(uiName(control));
 
 export const isPointValue = (v: unknown): v is PointValue =>
   !!v && typeof v === "object" && !Array.isArray(v) && "x" in v && "y" in v;
@@ -77,15 +67,6 @@ export const getRootGroups = (definition: MogrtDefinition): ClientControl[] => {
   return controls.filter((c) => isGroup(c) && !refs.has(c.id));
 };
 
-const normName = (name: string): string => name.trim().toLowerCase();
-
-const findOrderNode = (order: UiOrderNode[] | undefined, name: string): UiOrderNode | undefined =>
-  order?.find((n) => normName(n.name) === normName(name));
-
-const childOrder = (order: UiOrderNode[] | undefined, name: string): UiOrderNode[] | undefined =>
-  findOrderNode(order, name)?.children;
-
-/** Достаём детей группы из definition, затем расставляем по ui-order (не sort). */
 const groupChildren = (control: ClientControl, byId: Map<string, ClientControl>): ClientControl[] => {
   if (!isGroup(control) || !Array.isArray(control.value)) return [];
   const kids: ClientControl[] = [];
@@ -97,48 +78,37 @@ const groupChildren = (control: ClientControl, byId: Map<string, ClientControl>)
   return kids;
 };
 
-const pickInOrder = (controls: ClientControl[], order?: UiOrderNode[]): ClientControl[] => {
-  if (!order?.length) return controls;
-  const remaining = [...controls];
-  const out: ClientControl[] = [];
-  for (const node of order) {
-    const i = remaining.findIndex((c) => normName(uiName(c)) === normName(node.name));
-    if (i >= 0) out.push(remaining.splice(i, 1)[0]);
-  }
-  return out.concat(remaining);
-};
-
 const buildNode = (
   control: ClientControl,
   byId: Map<string, ClientControl>,
-  order?: UiOrderNode[],
+  seen: Set<string> = new Set(),
 ): ControlTreeNode => {
   if (!isGroup(control) || !Array.isArray(control.value)) {
     return { kind: "control", control };
   }
+  if (seen.has(control.id)) {
+    return { kind: "group", control, children: [] };
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(control.id);
   const children: ControlTreeNode[] = [];
-  for (const child of pickInOrder(groupChildren(control, byId), order)) {
+  for (const child of groupChildren(control, byId)) {
     if (isHiddenUiGroup(child)) continue;
-    children.push(buildNode(child, byId, childOrder(order, uiName(child))));
+    if (!isGroup(child) && isCepWrittenControl(child)) continue;
+    const node = buildNode(child, byId, nextSeen);
+    if (node.kind === "group" && !node.children.length) continue;
+    children.push(node);
   }
   return { kind: "group", control, children };
 };
 
-/**
- * Дерево Styles UI: типы/id из definition, порядок siblings из ui-order.json (дамп AE EP).
- * Имя из order без контрола в definition пропускается; лишний контрол — в конец группы.
- * Группы с `hidden` в названии (и все их дети) не показываем.
- */
-export const buildUiTree = (
-  definition: MogrtDefinition,
-  order: UiOrderNode[] = PRESET_UI_ORDER,
-): ControlTreeNode[] => {
+/** Styles tree — order is the groups array in controls.json. */
+export const buildUiTree = (definition: MogrtDefinition): ControlTreeNode[] => {
   const byId = indexControls(definition);
-  const roots = pickInOrder(
-    getRootGroups(definition).filter((g) => !isHiddenUiGroup(g)),
-    order,
-  );
-  return roots.map((g) => buildNode(g, byId, childOrder(order, uiName(g))));
+  return getRootGroups(definition)
+    .filter((g) => !isHiddenUiGroup(g))
+    .map((g) => buildNode(g, byId))
+    .filter((n) => n.kind !== "group" || n.children.length > 0);
 };
 
 /** id контролов внутри hidden-групп — не Styles UI и не preset.values. */
@@ -146,6 +116,7 @@ const hiddenControlIds = (definition: MogrtDefinition): Set<string> => {
   const byId = indexControls(definition);
   const skip = new Set<string>();
   const mark = (control: ClientControl) => {
+    if (skip.has(control.id)) return;
     skip.add(control.id);
     if (!isGroup(control) || !Array.isArray(control.value)) return;
     for (const id of control.value) {
@@ -160,7 +131,7 @@ const hiddenControlIds = (definition: MogrtDefinition): Set<string> => {
   return skip;
 };
 
-/** Дефолтные значения по UUID (группы, hidden и CEP-written System props пропускаем). */
+/** Дефолтные значения по uiPath (группы, hidden и CEP-written System props пропускаем). */
 export const defaultsFromDefinition = (definition: MogrtDefinition): ControlValues => {
   const skipIds = hiddenControlIds(definition);
   const values: ControlValues = {};
@@ -178,7 +149,7 @@ export const getControlValue = (values: ControlValues, control: ClientControl): 
   return cloneValue(control.value as ControlValue);
 };
 
-/** Найти контрол по цепочке uiName, напр. ["Static Segment","Fill"]. */
+/** Найти контрол по цепочке uiName, напр. ["Follow", "Background", "Fill"]. */
 export const findControlByNames = (
   definition: MogrtDefinition,
   names: string[],
@@ -195,7 +166,7 @@ export const findControlByNames = (
   return found;
 };
 
-/** First matching path — new mogrt uses Static Segment; legacy used Segment Static. */
+/** First matching path in the Styles tree, e.g. ["Follow", "Background", "Fill"]. */
 export const findControlByAnyNames = (
   definition: MogrtDefinition,
   paths: string[][],
@@ -218,6 +189,9 @@ export type StylePropPayload = {
    * список имён без групп, и delta-apply не может надёжно матчить «первый unused».
    */
   leafIndex: number;
+  /** controls.json: layer/effect path, e.g. Captions_Settings/Effects/Position. */
+  essentialName?: string;
+  source?: string;
 };
 
 export const stylePropsFromValues = (
@@ -228,8 +202,10 @@ export const stylePropsFromValues = (
   const out: StylePropPayload[] = [];
   const leafCounts: Record<string, number> = {};
 
-  const walk = (control: ClientControl, path: string[]) => {
-    if (isHiddenUiGroup(control)) return;
+  const walk = (control: ClientControl, path: string[], seen: Set<string>) => {
+    if (isHiddenUiGroup(control) || seen.has(control.id)) return;
+    const nextSeen = new Set(seen);
+    nextSeen.add(control.id);
     const name = uiName(control);
     const nextPath = path.concat([name]);
     if (isGroup(control)) {
@@ -238,7 +214,7 @@ export const stylePropsFromValues = (
         const id = control.value[i];
         if (typeof id !== "string") continue;
         const child = byId.get(id);
-        if (child) walk(child, nextPath);
+        if (child) walk(child, nextPath, nextSeen);
       }
       return;
     }
@@ -252,12 +228,14 @@ export const stylePropsFromValues = (
       type: control.type,
       value: current !== undefined ? current : cloneValue(control.value as ControlValue),
       leafIndex,
+      essentialName: control.essentialName,
+      source: control.source,
     });
   };
 
   const roots = getRootGroups(definition);
   for (let i = 0; i < roots.length; i++) {
-    walk(roots[i], []);
+    walk(roots[i], [], new Set());
   }
 
   return out;

@@ -33,11 +33,13 @@ export {
   CaptionApiError,
   authErrorMessage,
   downloadCaptionProject,
+  fetchCaptionControls,
   fetchCaptionStylesCatalog,
   fetchCaptionsCatalog,
   flattenCatalog,
   hashArrayBuffer,
   pickProjectFile,
+  resolveControlsUrl,
   resolveMediaUrl,
 } from "./api";
 export type { CaptionDownloadResult } from "./api";

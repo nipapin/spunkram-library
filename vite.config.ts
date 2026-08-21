@@ -23,6 +23,35 @@ const src = path.resolve(__dirname, "src");
 const root = path.resolve(src, "js");
 const outDir = path.resolve(__dirname, "dist", cepDist);
 
+function isBusyError(err: unknown): boolean {
+  const code =
+    err && typeof err === "object" && "code" in err
+      ? String((err as { code: unknown }).code)
+      : "";
+  return code === "EBUSY" || code === "EPERM" || code === "EACCES";
+}
+
+/** Copy even when Windows has the dest mapped (loaded Motionflow.dll). */
+function copyFileOverwrite(from: string, to: string): void {
+  try {
+    fs.copyFileSync(from, to);
+    return;
+  } catch (err) {
+    if (!isBusyError(err) || !fs.existsSync(to)) throw err;
+  }
+  const backup = `${to}.update-old.${Date.now()}`;
+  try {
+    fs.renameSync(to, backup);
+  } catch (err) {
+    if (!isBusyError(err)) throw err;
+    console.warn(
+      `[copy-motionflow-bin] skip locked file (close Premiere / After Effects to replace): ${to}`,
+    );
+    return;
+  }
+  fs.copyFileSync(from, to);
+}
+
 function copyDirRecursive(from: string, to: string): void {
   if (!fs.existsSync(from)) return;
   fs.mkdirSync(to, { recursive: true });
@@ -30,7 +59,7 @@ function copyDirRecursive(from: string, to: string): void {
     const srcPath = path.join(from, entry.name);
     const destPath = path.join(to, entry.name);
     if (entry.isDirectory()) copyDirRecursive(srcPath, destPath);
-    else fs.copyFileSync(srcPath, destPath);
+    else copyFileOverwrite(srcPath, destPath);
   }
 }
 
@@ -171,6 +200,9 @@ export default defineConfig({
   },
 
   build: {
+    // clean-dist.mjs already emptied dist/; Vite must not retry unlink on a
+    // Premiere-mapped Motionflow.dll (EPERM on Windows).
+    emptyOutDir: false,
     sourcemap: isPackage ? cepConfig.zxp.sourceMap : cepConfig.build?.sourceMap,
     watch: {
       include: path.join(hostPkgRoot, "src/**"),

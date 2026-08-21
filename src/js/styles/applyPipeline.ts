@@ -4,9 +4,8 @@ import { Motionflow } from "@/sdk";
 import { defaultsFromDefinition } from "../presets";
 import type { MogrtDefinition } from "../presets/types";
 import { loadLocalPackage } from "./localStore";
-import { downloadStylePackage, makeOrigin, previewFromValues } from "./sync";
+import { downloadStylePackage, ensureDefinitionForStyle, makeOrigin, previewFromValues } from "./sync";
 import type { CaptionCatalogEntry, StylePreset } from "./types";
-import { EMPTY_DEFINITION } from "./types";
 
 export interface LocalStyleAssetPaths {
   dir: string;
@@ -57,7 +56,7 @@ const hostHasNeededFile = (paths: LocalStyleAssetPaths | null, hostAppId?: strin
 };
 
 const presetFromLocal = (
-  target: Pick<StylePreset, "id" | "name" | "styleId" | "files">,
+  target: Pick<StylePreset, "id" | "name" | "styleId" | "files" | "controlsUrl" | "previewImageUrl" | "previewVideoUrl">,
   definition: MogrtDefinition,
   version: string,
 ): StylePreset => {
@@ -74,6 +73,9 @@ const presetFromLocal = (
     updateAvailable: false,
     preview: previewFromValues(values, definition),
     files: target.files,
+    controlsUrl: target.controlsUrl,
+    previewImageUrl: target.previewImageUrl,
+    previewVideoUrl: target.previewVideoUrl,
   };
 };
 
@@ -83,30 +85,40 @@ const presetFromLocal = (
  * 3) вернуть локальные пути
  */
 export const acquirePresetProject = async (
-  target: Pick<StylePreset, "id" | "name" | "styleId" | "files">,
+  target: Pick<StylePreset, "id" | "name" | "styleId" | "files" | "controlsUrl" | "previewImageUrl" | "previewVideoUrl">,
   options?: { forceDownload?: boolean },
 ): Promise<PreparedPresetProject> => {
   const hostAppId = csi.hostEnvironment?.appId;
   const local = loadLocalPackage(target.styleId);
   const paths = local ? getLocalStyleAssetPaths(target.styleId) : null;
+  const definition = await ensureDefinitionForStyle(target.styleId, {
+    name: target.name,
+    files: target.files,
+    controlsUrl: target.controlsUrl,
+    previewImageUrl: target.previewImageUrl,
+    previewVideoUrl: target.previewVideoUrl,
+  });
 
   if (local && !options?.forceDownload && hostHasNeededFile(paths, hostAppId)) {
     return {
-      preset: presetFromLocal(target, local.definition, local.manifest.version),
-      definition: local.definition,
+      preset: presetFromLocal(target, definition, local.manifest.version),
+      definition,
       paths,
     };
   }
 
-  const { preset, definition } = await downloadStylePackage(target.styleId, {
+  const { preset, definition: downloadedDef } = await downloadStylePackage(target.styleId, {
     hostAppId,
     files: target.files as CaptionCatalogEntry["files"] | undefined,
     name: target.name,
+    controlsUrl: target.controlsUrl,
+    previewImageUrl: target.previewImageUrl,
+    previewVideoUrl: target.previewVideoUrl,
   });
 
   return {
     preset,
-    definition: definition.clientControls?.length ? definition : EMPTY_DEFINITION,
+    definition: downloadedDef.clientControls?.length ? downloadedDef : definition,
     paths: getLocalStyleAssetPaths(target.styleId),
   };
 };
@@ -139,7 +151,7 @@ export const applyPresetProjectInHost = async (
 };
 
 export const acquireAndApplyPreset = async (
-  target: Pick<StylePreset, "id" | "name" | "styleId" | "files">,
+  target: Pick<StylePreset, "id" | "name" | "styleId" | "files" | "controlsUrl" | "previewImageUrl" | "previewVideoUrl">,
   options?: { forceDownload?: boolean },
 ): Promise<{ prepared: PreparedPresetProject; apply: ApplyStyleProjectResult }> => {
   const prepared = await acquirePresetProject(target, options);

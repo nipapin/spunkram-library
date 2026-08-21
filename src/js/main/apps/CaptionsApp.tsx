@@ -51,6 +51,7 @@ type HostRef =
   | { compId: number };
 type Meta = {
   type: DescribeType;
+  /** Timeline start of the caption mogrt (clip.start / layer.startTime). */
   offset: number;
   /** In/Out (PPro) / Work Area (AE) — длина единственного caption-клипа. */
   durationSeconds?: number;
@@ -297,6 +298,8 @@ export const CaptionsApp = ({
             sequenceId?: string;
             compId?: number;
             trackIndex?: number;
+            startTime?: number;
+            durationSeconds?: number;
             segments?: { text: string; timestamp: [number, number] }[];
             segmentType?: number;
             lineCount?: number;
@@ -345,9 +348,12 @@ export const CaptionsApp = ({
                 sequenceId: loaded.sequenceId,
               }
             : undefined;
+      const startTime = Number(loaded.startTime);
+      const durationSeconds = Number(loaded.durationSeconds);
       const nextMeta: Meta = {
         type: "composition",
-        offset: 0,
+        offset: Number.isFinite(startTime) ? startTime : 0,
+        durationSeconds: durationSeconds > 0 ? durationSeconds : undefined,
         hostRef,
       };
       panelStore.setItem(META_KEY, JSON.stringify(nextMeta));
@@ -508,6 +514,8 @@ export const CaptionsApp = ({
             sequenceId?: string;
             compId?: number;
             sourceCompId?: number;
+            startTime?: number;
+            durationSeconds?: number;
           }
         | null
         | undefined;
@@ -521,8 +529,13 @@ export const CaptionsApp = ({
           : createResult && typeof createResult.compId === "number"
             ? { compId: createResult.compId }
             : undefined;
+      const placedStart = Number(createResult?.startTime);
+      const placedDuration = Number(createResult?.durationSeconds);
       const finalMeta: Meta = {
         ...nextMeta,
+        offset: Number.isFinite(placedStart) ? placedStart : nextMeta.offset,
+        durationSeconds:
+          placedDuration > 0 ? placedDuration : nextMeta.durationSeconds,
         ...(hostRef ? { hostRef } : {}),
         ...(typeof createResult?.sourceCompId === "number" ? { sourceCompId: createResult.sourceCompId } : {}),
       };

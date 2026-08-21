@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { StylePreset } from "../../context/ConfigurationWrapper";
 import {
   ControlType,
-  PRESET_DEFINITION,
   buildUiTree,
   getControlValue,
   isColorArray,
@@ -41,7 +40,6 @@ const withLocalizedText = (previous: ControlValue, text: string): ControlValue =
 
 interface PresetFieldsProps {
   value: StylePreset;
-  /** Definition пакета стиля; fallback — bundled reference. */
   definition?: MogrtDefinition;
   onChange: (patch: Partial<StylePreset>, opts?: { coalesceKey?: string }) => void;
   dirty?: boolean;
@@ -63,7 +61,7 @@ const Collapse = ({
   title: string;
   depth: number;
   defaultOpen?: boolean;
-  children: ReactNode;
+  children: ReactNode | (() => ReactNode);
 }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -80,7 +78,11 @@ const Collapse = ({
           className={`preset-fields__collapse-chevron ${open ? "preset-fields__collapse-chevron--open" : ""}`}
         />
       </button>
-      {open && <div className="preset-fields__collapse-body">{children}</div>}
+      {open && (
+        <div className="preset-fields__collapse-body">
+          {typeof children === "function" ? children() : children}
+        </div>
+      )}
     </div>
   );
 };
@@ -214,7 +216,13 @@ const ControlField = ({
     );
   }
 
-  if (control.type === ControlType.Point && isPointValue(raw)) {
+  if (control.type === ControlType.Point) {
+    const point = isPointValue(raw)
+      ? raw
+      : Array.isArray(raw) && raw.length >= 2
+        ? { x: Number(raw[0]) || 0, y: Number(raw[1]) || 0 }
+        : null;
+    if (!point) return null;
     return (
       <div className="preset-fields__param preset-fields__param--point">
         <span className="preset-fields__param-label">{label}</span>
@@ -223,8 +231,8 @@ const ControlField = ({
             <label key={axis} className="preset-fields__point-axis">
               <span>{axis.toUpperCase()}</span>
               <ScrubNumber
-                value={raw[axis]}
-                onChange={(n) => onValue(control.id, { ...raw, [axis]: n })}
+                value={point[axis]}
+                onChange={(n) => onValue(control.id, { ...point, [axis]: n })}
               />
             </label>
           ))}
@@ -233,8 +241,12 @@ const ControlField = ({
     );
   }
 
-  if (control.type === ControlType.Menu && control.menucontent?.length) {
-    const options = control.menucontent;
+  if (control.type === ControlType.Menu) {
+    const options = control.menucontent?.length
+      ? control.menucontent
+      : Array.from({ length: Math.max(3, typeof raw === "number" ? Number(raw) : 1) }, (_, i) => ({
+          strDB: [{ localeString: "en_US", str: String(i + 1) }],
+        }));
     // AE / MOGRT dropdown: 1-based index into menucontent
     const selected = typeof raw === "number" ? raw : Number(raw) || 1;
     return (
@@ -320,7 +332,7 @@ const renderNodes = (
       const name = uiName(node.control);
       return (
         <Collapse key={node.control.id} title={name} depth={depth}>
-          {renderNodes(node.children, depth + 1, values, onValue)}
+          {() => renderNodes(node.children, depth + 1, values, onValue)}
         </Collapse>
       );
     }
@@ -329,14 +341,14 @@ const renderNodes = (
 
 export const PresetFields = ({
   value: p,
-  definition = PRESET_DEFINITION,
+  definition,
   onChange,
   dirty,
   nameEditable,
   onSaveAsNew,
   onReset,
 }: PresetFieldsProps) => {
-  const tree = useMemo(() => buildUiTree(definition), [definition]);
+  const tree = useMemo(() => (definition ? buildUiTree(definition) : []), [definition]);
 
   const setValue = (id: string, next: ControlValue) => {
     // один жест слайдера/scrub = один Ctrl+Z

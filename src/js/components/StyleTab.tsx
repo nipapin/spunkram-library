@@ -34,11 +34,7 @@ export const StyleTab = () => {
   const [definitionError, setDefinitionError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!selected?.styleId || hasControls) {
-      setLoadingDefinition(false);
-      setDefinitionError(null);
-      return;
-    }
+    if (!selected?.styleId || hasControls) return;
     let cancelled = false;
     setLoadingDefinition(true);
     setDefinitionError(null);
@@ -46,7 +42,7 @@ export const StyleTab = () => {
       .then((def) => {
         if (cancelled) return;
         if (!def?.clientControls?.length) {
-          setDefinitionError("No style controls in definition.json for this caption.");
+          setDefinitionError("No style controls in controls.json for this caption.");
         }
       })
       .catch((e: unknown) => {
@@ -83,6 +79,43 @@ export const StyleTab = () => {
     );
   }
 
+  if (hasControls && definition) {
+    return (
+      <div className="style-tab thin-scroll" tabIndex={-1}>
+        <div className="style-tab__editing-head">
+          <span className="style-tab__section-label">EDITING · {selected.name}</span>
+          {selected.updateAvailable && <span className="style-tab__update-pill">Update available</span>}
+        </div>
+
+        <PresetFields
+          value={selected}
+          definition={definition}
+          onChange={onChange}
+          dirty={dirty}
+          nameEditable={valuesDirty}
+          onReset={() =>
+            onChange({
+              name: selected.origin.name,
+              values: JSON.parse(JSON.stringify(selected.origin.values)),
+            })
+          }
+          onSaveAsNew={() =>
+            addPreset({
+              name: `${selected.name} Copy`,
+              values: selected.values,
+              favorite: false,
+              styleId: selected.styleId,
+              styleVersion: selected.styleVersion,
+              preview: selected.preview,
+              tags: selected.tags,
+              categoryName: selected.categoryName,
+            })
+          }
+        />
+      </div>
+    );
+  }
+
   if (loadingDefinition) {
     return (
       <div className="style-tab style-tab--empty thin-scroll">
@@ -92,50 +125,13 @@ export const StyleTab = () => {
     );
   }
 
-  if (!hasControls) {
-    return (
-      <div className="style-tab style-tab--empty thin-scroll">
-        <p>{selected.name}</p>
-        <p className="style-tab__hint">
-          {definitionError ||
-            "Style controls aren’t available for this caption (missing definition.json)."}
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="style-tab thin-scroll" tabIndex={-1}>
-      <div className="style-tab__editing-head">
-        <span className="style-tab__section-label">EDITING · {selected.name}</span>
-        {selected.updateAvailable && <span className="style-tab__update-pill">Update available</span>}
-      </div>
-
-      <PresetFields
-        value={selected}
-        definition={definition}
-        onChange={onChange}
-        dirty={dirty}
-        nameEditable={valuesDirty}
-        onReset={() =>
-          onChange({
-            name: selected.origin.name,
-            values: JSON.parse(JSON.stringify(selected.origin.values)),
-          })
-        }
-        onSaveAsNew={() =>
-          addPreset({
-            name: `${selected.name} Copy`,
-            values: selected.values,
-            favorite: false,
-            styleId: selected.styleId,
-            styleVersion: selected.styleVersion,
-            preview: selected.preview,
-            tags: selected.tags,
-            categoryName: selected.categoryName,
-          })
-        }
-      />
+    <div className="style-tab style-tab--empty thin-scroll">
+      <p>{selected.name}</p>
+      <p className="style-tab__hint">
+        {definitionError ||
+          "Style controls aren’t available for this caption (missing controls.json)."}
+      </p>
     </div>
   );
 };

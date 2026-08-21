@@ -49,9 +49,11 @@ export const useStyleUndo = (
   const applyRef = useRef(apply);
   applyRef.current = apply;
 
-  // CEP: без registerKeyEventsInterest Ctrl+Z уходит в After Effects / Premiere
+  // CEP: without registerKeyEventsInterest Ctrl+Z goes to Premiere/AE.
+  // Defer so opening Styles doesn't block the first paint.
   useEffect(() => {
-    registerUndoKeyEvents();
+    const timer = window.setTimeout(() => registerUndoKeyEvents(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {

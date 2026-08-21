@@ -1,9 +1,11 @@
 import {
   downloadCaptionProject,
+  fetchCaptionControls,
   fetchCaptionsCatalog,
   flattenCatalog,
   hashArrayBuffer,
   pickProjectFile,
+  resolveControlsUrl,
   resolveMediaUrl,
 } from "./api";
 import { fs, path } from "../lib/cep/node";
@@ -65,9 +67,12 @@ export const isPresetValuesDirty = (p: StylePreset): boolean => {
 };
 
 export const colorIdsFromDefinition = (definition: MogrtDefinition) => ({
-  fill: findControlByAnyNames(definition, [["Static Segment", "Fill"], ["Segment Static", "Fill"]])?.id ?? "",
-  highlight: findControlByAnyNames(definition, [["Animated Segment", "Fill"], ["Segment Animated", "Fill"]])?.id ?? "",
-  background: findControlByAnyNames(definition, [["Background", "Fill"]])?.id ?? "",
+  fill: findControlByAnyNames(definition, [["Static", "Fill"]])?.id ?? "",
+  highlight: findControlByAnyNames(definition, [["Animated Text", "Fill"]])?.id ?? "",
+  background: findControlByAnyNames(definition, [
+    ["Segment Settings", "Background", "Fill"],
+    ["Follow", "Background", "Fill"],
+  ])?.id ?? "",
 });
 
 export const previewFromValues = (
@@ -102,27 +107,9 @@ const catalogToPreset = (item: CaptionCatalogEntry, favorite: boolean, downloade
   tags: item.categoryName ? [item.categoryName] : [],
   previewImageUrl: resolveMediaUrl(item.previewImageUrl),
   previewVideoUrl: resolveMediaUrl(item.previewVideoUrl),
+  controlsUrl: resolveControlsUrl(item, getActiveBrand()),
   files: item.files,
 });
-
-const hydrateFromPackage = (
-  preset: StylePreset,
-  definition: MogrtDefinition,
-  version: string,
-  favorite: boolean,
-): StylePreset => {
-  const values = defaultsFromDefinition(definition);
-  return {
-    ...preset,
-    favorite,
-    styleVersion: version,
-    source: "downloaded",
-    values,
-    origin: makeOrigin(preset.name, values),
-    updateAvailable: false,
-    preview: previewFromValues(values, definition, preset.preview),
-  };
-};
 
 export interface DownloadStyleOptions {
   /** Какой файл качать; по умолчанию — под активный хост. */
@@ -131,56 +118,54 @@ export interface DownloadStyleOptions {
   /** Уже известные flags из каталога (чтобы не качать отсутствующий формат). */
   files?: CaptionCatalogEntry["files"];
   name?: string;
+  controlsUrl?: string | null;
+  previewImageUrl?: string | null;
+  previewVideoUrl?: string | null;
 }
 
+const controlsCache = new Map<string, MogrtDefinition>();
+
 /**
- * Подтянуть definition.json для Styles UI (без обязательного aep/mogrt).
- * Нужен, чтобы контролы появились до Transcribe.
+ * GET public controls.json for Styles UI (CDN URL, not AppData).
  */
 export const ensureDefinitionForStyle = async (
   styleId: string,
-  options?: { name?: string; files?: CaptionCatalogEntry["files"] },
+  options?: {
+    name?: string;
+    files?: CaptionCatalogEntry["files"];
+    controlsUrl?: string | null;
+    previewImageUrl?: string | null;
+    previewVideoUrl?: string | null;
+  },
 ): Promise<MogrtDefinition> => {
-  const existing = loadLocalPackage(styleId);
-  if (existing?.definition?.clientControls?.length) {
-    return existing.definition;
-  }
+  const cached = controlsCache.get(styleId);
+  if (cached) return cached;
 
-  // каталог говорит, что definition нет — не долбим API
-  if (options?.files && options.files.definition === false) {
-    return existing?.definition ?? EMPTY_DEFINITION;
-  }
+  const brand = getActiveBrand();
+  const url = resolveControlsUrl(
+    {
+      id: styleId,
+      controlsUrl: options?.controlsUrl,
+      previewImageUrl: options?.previewImageUrl,
+      previewVideoUrl: options?.previewVideoUrl,
+    },
+    brand,
+  );
 
   try {
-    const defDl = await downloadCaptionProject(styleId, "definition", undefined, getActiveBrand());
-    const text = new TextDecoder("utf-8").decode(new Uint8Array(defDl.buffer));
-    const parsed = JSON.parse(text) as MogrtDefinition;
-    if (!parsed?.clientControls?.length) {
-      return existing?.definition ?? EMPTY_DEFINITION;
-    }
-
-    const name = options?.name || existing?.manifest.name || styleId.split("/").pop() || styleId;
-    const version = existing?.manifest.version || new Date().toISOString();
-    const manifest: LocalStyleManifest = {
-      id: styleId,
-      name,
-      version,
-      downloadedAt: existing?.manifest.downloadedAt || version,
-      files: {
-        ...(existing?.manifest.files ?? {}),
-        definition: "definitions.json",
-      },
-    };
-    saveLocalPackage(manifest, parsed);
+    const parsed = await fetchCaptionControls(url, brand);
+    controlsCache.set(styleId, parsed);
     return parsed;
   } catch {
-    return existing?.definition ?? EMPTY_DEFINITION;
+    const empty = EMPTY_DEFINITION;
+    controlsCache.set(styleId, empty);
+    return empty;
   }
 };
 
 /**
- * POST /api/captions → сохранить project.mogrt / project.aep (+ definition.json) в AppData.
- * Вызывать при активном действии (Transcribe), не при выборе карточки.
+ * POST /api/captions → сохранить только project.mogrt / project.aep в AppData.
+ * controls.json / thumb / preview — публичные CDN URL, на диск не пишем.
  */
 export const downloadStylePackage = async (
   styleId: string,
@@ -192,7 +177,7 @@ export const downloadStylePackage = async (
   const hostAppId = options?.hostAppId ?? csi.hostEnvironment?.appId;
   const fileFlags = options?.files ?? { mogrt: true, aep: true, definition: true };
   const file = options?.file ?? pickProjectFile(fileFlags, hostAppId);
-  if (!file) {
+  if (!file || file === "definition") {
     throw new Error("No project file available for this caption (mogrt/aep)");
   }
 
@@ -201,27 +186,12 @@ export const downloadStylePackage = async (
   const name = options?.name || existing?.manifest.name || styleId.split("/").pop() || styleId;
   const version = new Date().toISOString();
 
-  let definition: MogrtDefinition =
-    existing?.definition?.clientControls?.length ? existing.definition : EMPTY_DEFINITION;
-
-  if (fileFlags.definition) {
-    try {
-      const defDl = await downloadCaptionProject(styleId, "definition", undefined, getActiveBrand());
-      const text = new TextDecoder("utf-8").decode(new Uint8Array(defDl.buffer));
-      const parsed = JSON.parse(text) as MogrtDefinition;
-      if (parsed?.clientControls) definition = parsed;
-    } catch {
-      // definition опционален — Styles UI просто будет без контролов
-    }
-  }
-
   const manifest: LocalStyleManifest = {
     id: styleId,
     name,
     version,
     downloadedAt: version,
     files: {
-      definition: definition.clientControls?.length ? "definitions.json" : existing?.manifest.files.definition,
       aep: file === "aep" || existing?.manifest.files.aep ? "project.aep" : undefined,
       mogrt: file === "mogrt" || existing?.manifest.files.mogrt ? "project.mogrt" : undefined,
     },
@@ -237,9 +207,16 @@ export const downloadStylePackage = async (
   if (file === "aep") assets.aep = downloaded.buffer;
   if (file === "mogrt") assets.mogrt = downloaded.buffer;
 
-  const saved = saveLocalPackage(manifest, definition, assets);
+  const saved = saveLocalPackage(manifest, assets);
   if (!saved) throw new Error("Failed to save caption project locally");
 
+  const definition = await ensureDefinitionForStyle(styleId, {
+    name,
+    files: fileFlags,
+    controlsUrl: options?.controlsUrl,
+    previewImageUrl: options?.previewImageUrl,
+    previewVideoUrl: options?.previewVideoUrl,
+  });
   const values = defaultsFromDefinition(definition);
   const preset: StylePreset = {
     id: styleId,
@@ -252,6 +229,9 @@ export const downloadStylePackage = async (
     origin: makeOrigin(name, values),
     updateAvailable: false,
     files: fileFlags,
+    controlsUrl: options?.controlsUrl,
+    previewImageUrl: options?.previewImageUrl,
+    previewVideoUrl: options?.previewVideoUrl,
   };
 
   return { preset, definition };
@@ -269,12 +249,7 @@ const localProjectFingerprint = (
     };
   }
   if (pkg.dir.startsWith("memory://") || typeof fs?.readFileSync !== "function") return null;
-  const fileName =
-    file === "aep"
-      ? pkg.manifest.files.aep
-      : file === "mogrt"
-        ? pkg.manifest.files.mogrt
-        : pkg.manifest.files.definition;
+  const fileName = file === "aep" ? pkg.manifest.files.aep : file === "mogrt" ? pkg.manifest.files.mogrt : null;
   if (!fileName) return null;
   const full = path.join(pkg.dir, fileName);
   try {
@@ -350,13 +325,10 @@ export const refreshStylePackageIfRemoteChanged = async (
     if (remote.unchanged || fingerprintsMatch(localFp, remoteFp)) {
       // Backfill fingerprint on older packages that never stored remote meta.
       if (!existing.manifest.remote?.contentHash && (remoteFp.contentHash || remoteFp.etag)) {
-        saveLocalPackage(
-          {
-            ...existing.manifest,
-            remote: { file, ...remoteFp },
-          },
-          existing.definition,
-        );
+        saveLocalPackage({
+          ...existing.manifest,
+          remote: { file, ...remoteFp },
+        });
       }
       return { updated: false, updateAvailable: false };
     }
@@ -367,27 +339,12 @@ export const refreshStylePackageIfRemoteChanged = async (
 
     const name = options?.name || existing.manifest.name;
     const version = new Date().toISOString();
-    let definition = existing.definition;
-    if (fileFlags.definition) {
-      try {
-        const defDl = await downloadCaptionProject(styleId, "definition", undefined, getActiveBrand());
-        const text = new TextDecoder("utf-8").decode(new Uint8Array(defDl.buffer));
-        const parsed = JSON.parse(text) as MogrtDefinition;
-        if (parsed?.clientControls) definition = parsed;
-      } catch {
-        // keep existing definition
-      }
-    }
-
     const manifest: LocalStyleManifest = {
       id: styleId,
       name,
       version,
       downloadedAt: version,
       files: {
-        definition: definition.clientControls?.length
-          ? "definitions.json"
-          : existing.manifest.files.definition,
         aep: file === "aep" || existing.manifest.files.aep ? "project.aep" : undefined,
         mogrt: file === "mogrt" || existing.manifest.files.mogrt ? "project.mogrt" : undefined,
       },
@@ -396,7 +353,7 @@ export const refreshStylePackageIfRemoteChanged = async (
     const assets: { aep?: ArrayBuffer; mogrt?: ArrayBuffer } = {};
     if (file === "aep") assets.aep = remote.buffer;
     if (file === "mogrt") assets.mogrt = remote.buffer;
-    saveLocalPackage(manifest, definition, assets);
+    saveLocalPackage(manifest, assets);
     return { updated: true, updateAvailable: false };
   } catch {
     // Network / auth — keep local
@@ -452,10 +409,7 @@ export const syncCaptionStyles = async (options?: {
 
   for (const item of catalog) {
     const pkg = loadLocalPackage(item.id);
-    if (pkg) {
-      localById.set(item.id, pkg);
-      definitions[item.id] = pkg.definition;
-    }
+    if (pkg) localById.set(item.id, pkg);
   }
 
   // Compare local project files with R2 and replace when the remote copy changed.
@@ -468,13 +422,13 @@ export const syncCaptionStyles = async (options?: {
           files: item.files,
           name: item.name,
           hostAppId,
+          controlsUrl: item.controlsUrl,
+          previewImageUrl: item.previewImageUrl,
+          previewVideoUrl: item.previewVideoUrl,
         });
         if (result.updated) {
           const pkg = loadLocalPackage(item.id);
-          if (pkg) {
-            localById.set(item.id, pkg);
-            definitions[item.id] = pkg.definition;
-          }
+          if (pkg) localById.set(item.id, pkg);
         }
       } catch {
         // keep existing local package
@@ -490,31 +444,24 @@ export const syncCaptionStyles = async (options?: {
     const base = catalogToPreset(item, favorite, !!local);
 
     if (local) {
-      const hydrated = hydrateFromPackage(base, local.definition, local.manifest.version, favorite);
       const edit = localState.downloadedEdits[item.id];
       if (edit && edit.styleVersion === local.manifest.version) {
         presets.push({
-          ...hydrated,
+          ...base,
           name: edit.name,
           values: edit.values,
           origin: edit.origin,
           favorite,
-          preview: edit.preview ?? hydrated.preview,
-          categoryName: item.categoryName,
-          tags: item.categoryName ? [item.categoryName] : [],
-          previewImageUrl: base.previewImageUrl,
-          previewVideoUrl: base.previewVideoUrl,
-          files: item.files,
+          preview: edit.preview ?? base.preview,
+          styleVersion: local.manifest.version,
+          source: "downloaded",
           updateAvailable: false,
         });
       } else {
         presets.push({
-          ...hydrated,
-          categoryName: item.categoryName,
-          tags: item.categoryName ? [item.categoryName] : [],
-          previewImageUrl: base.previewImageUrl,
-          previewVideoUrl: base.previewVideoUrl,
-          files: item.files,
+          ...base,
+          styleVersion: local.manifest.version,
+          source: "downloaded",
           updateAvailable: false,
         });
       }
@@ -524,15 +471,15 @@ export const syncCaptionStyles = async (options?: {
   }
 
   for (const user of localState.userPresets) {
+    const parent = catalog.find((c) => c.id === user.styleId);
     presets.push({
       ...user,
       favorite: localState.favorites[user.id] ?? user.favorite,
       source: "user",
+      controlsUrl: user.controlsUrl ?? parent?.controlsUrl ?? null,
+      previewImageUrl: user.previewImageUrl ?? parent?.previewImageUrl ?? null,
+      previewVideoUrl: user.previewVideoUrl ?? parent?.previewVideoUrl ?? null,
     });
-    if (!definitions[user.styleId]) {
-      const parent = loadLocalPackage(user.styleId);
-      if (parent) definitions[user.styleId] = parent.definition;
-    }
   }
 
   presets.sort((a, b) =>

@@ -1,5 +1,5 @@
 import {
-  buildFontCatalog,
+  buildFontCatalogAsync,
   type FontCatalog,
   type FontFace,
   findFaceInCatalog,
@@ -15,10 +15,17 @@ let pending: Promise<FontCatalog> | null = null;
 export function getFontCatalog(): Promise<FontCatalog> {
   if (cached) return Promise.resolve(cached);
   if (!pending) {
-    pending = Promise.resolve().then(() => {
-      cached = buildFontCatalog();
-      return cached;
-    });
+    pending = buildFontCatalogAsync()
+      .then((next) => {
+        cached = next;
+        return next;
+      })
+      .catch(() => {
+        pending = null;
+        const empty: FontCatalog = { families: [], byId: new Map() };
+        cached = empty;
+        return empty;
+      });
   }
   return pending;
 }

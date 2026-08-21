@@ -1,7 +1,7 @@
 import { fs, path } from "../lib/cep/node";
-import type { MogrtDefinition } from "../presets/types";
 import { ensureDir, getLocalStatePath, getStylePackageDir, getStylesDir, getStylesRoot } from "./paths";
 import type { LocalStyleManifest, LocalStylePackage, StylesLocalState, StylePreset } from "./types";
+import { EMPTY_DEFINITION } from "./types";
 
 export const LOCAL_STATE_VERSION = 1;
 
@@ -41,10 +41,7 @@ const writeJson = (filePath: string, data: unknown): boolean => {
 const MEMORY_KEY = "aitools-cep-styles-state";
 const MEMORY_PACKAGES_KEY = "aitools-cep-style-packages";
 
-type MemoryPackages = Record<
-  string,
-  { manifest: LocalStyleManifest; definition: MogrtDefinition }
->;
+type MemoryPackages = Record<string, { manifest: LocalStyleManifest }>;
 
 const readMemoryState = (): StylesLocalState => {
   try {
@@ -129,40 +126,38 @@ export const loadLocalPackage = (styleId: string): LocalStylePackage | null => {
   if (!dir || !isCepFs()) {
     const mem = readMemoryPackages()[styleId];
     if (!mem) return null;
-    return { manifest: mem.manifest, definition: mem.definition, dir: `memory://${styleId}` };
+    return {
+      manifest: mem.manifest,
+      definition: EMPTY_DEFINITION,
+      dir: `memory://${styleId}`,
+    };
   }
   const manifestPath = path.join(dir, "manifest.json");
   const manifest = readJson<LocalStyleManifest>(manifestPath);
   if (!manifest) return null;
-  const defName = manifest.files?.definition || "definitions.json";
-  const definition = readJson<MogrtDefinition>(path.join(dir, defName));
-  // definition на сервере не публичный — пакет может содержать только .mogrt/.aep
   return {
     manifest,
-    definition: definition?.clientControls ? definition : { clientControls: [] },
+    definition: EMPTY_DEFINITION,
     dir,
   };
 };
 
+/** Persist only project.mogrt / project.aep. controls.json is fetched from CDN. */
 export const saveLocalPackage = (
   manifest: LocalStyleManifest,
-  definition: MogrtDefinition,
   assets?: { aep?: ArrayBuffer | Uint8Array; mogrt?: ArrayBuffer | Uint8Array },
 ): LocalStylePackage | null => {
   const dir = getStylePackageDir(manifest.id);
   if (!dir || !isCepFs()) {
     const packages = readMemoryPackages();
-    packages[manifest.id] = { manifest, definition };
+    packages[manifest.id] = { manifest };
     writeMemoryPackages(packages);
-    return { manifest, definition, dir: `memory://${manifest.id}` };
+    return { manifest, definition: EMPTY_DEFINITION, dir: `memory://${manifest.id}` };
   }
 
   if (!ensureDir(dir)) return null;
 
   writeJson(path.join(dir, "manifest.json"), manifest);
-  if (manifest.files.definition) {
-    writeJson(path.join(dir, manifest.files.definition), definition);
-  }
 
   if (assets?.aep && manifest.files.aep) {
     fs.writeFileSync(path.join(dir, manifest.files.aep), new Uint8Array(assets.aep));
@@ -171,7 +166,7 @@ export const saveLocalPackage = (
     fs.writeFileSync(path.join(dir, manifest.files.mogrt), new Uint8Array(assets.mogrt));
   }
 
-  return { manifest, definition, dir };
+  return { manifest, definition: EMPTY_DEFINITION, dir };
 };
 
 export const removeLocalPackage = (styleId: string): void => {

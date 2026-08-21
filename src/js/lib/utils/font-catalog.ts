@@ -1,4 +1,4 @@
-import { child_process, cepProcessEnv, fs, os, path } from "@/lib/cep/node";
+import { cepProcessEnv, fs, os, path } from "@/lib/cep/node";
 
 /** PostScript name stored in MOGRT Caption Font control. */
 export type FontFace = {
@@ -149,7 +149,6 @@ const collectFontFiles = (): string[] => {
   if (os.platform() === "win32") {
     dirs.push(path.join(os.homedir(), "AppData", "Local", "Microsoft", "Windows", "Fonts"));
     dirs.push(path.join(cepProcessEnv().WINDIR || "C:\\Windows", "Fonts"));
-    collectWindowsRegistryFontFiles(files);
   } else {
     dirs.push(path.join(os.homedir(), "Library", "Fonts"));
     dirs.push("/Library/Fonts");
@@ -172,28 +171,6 @@ const collectFontFiles = (): string[] => {
   return [...files];
 };
 
-const collectWindowsRegistryFontFiles = (files: Set<string>) => {
-  if (typeof child_process?.execSync !== "function") return;
-  try {
-    const out = child_process
-      .execSync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts"', {
-        encoding: "utf8",
-      })
-      .toString();
-    const fontsDir = path.join(cepProcessEnv().WINDIR || "C:\\Windows", "Fonts");
-    for (const line of out.split(/\r?\n/)) {
-      const match = line.match(/REG_SZ\s+(.+?)\s*$/);
-      if (!match) continue;
-      const fileName = match[1].trim();
-      if (!fileName) continue;
-      const full = path.isAbsolute(fileName) ? fileName : path.join(fontsDir, fileName);
-      if (fs.existsSync(full)) files.add(full);
-    }
-  } catch {
-    // registry unavailable
-  }
-};
-
 const readFacesFromFile = (filePath: string): FontFace[] => {
   try {
     const buf = fs.readFileSync(filePath);
@@ -214,6 +191,27 @@ const readFacesFromFile = (filePath: string): FontFace[] => {
   }
 };
 
+const yieldUi = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+const assembleCatalog = (
+  byId: Map<string, FontFace>,
+  familyMap: Map<string, FontFace[]>,
+): FontCatalog => {
+  const families: FontFamilyGroup[] = [...familyMap.entries()]
+    .map(([name, faces]) => ({
+      name,
+      faces: [...faces].sort(
+        (a, b) =>
+          styleSortKey(a.style) - styleSortKey(b.style) ||
+          a.style.localeCompare(b.style, undefined, { sensitivity: "base" }),
+      ),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+
+  return { families, byId };
+};
+
+/** Sync fallback (tests). Prefer `buildFontCatalogAsync` in the CEP panel. */
 export const buildFontCatalog = (): FontCatalog => {
   const byId = new Map<string, FontFace>();
   const familyMap = new Map<string, FontFace[]>();
@@ -228,18 +226,28 @@ export const buildFontCatalog = (): FontCatalog => {
     }
   }
 
-  const families: FontFamilyGroup[] = [...familyMap.entries()]
-    .map(([name, faces]) => ({
-      name,
-      faces: [...faces].sort(
-        (a, b) =>
-          styleSortKey(a.style) - styleSortKey(b.style) ||
-          a.style.localeCompare(b.style, undefined, { sensitivity: "base" }),
-      ),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  return assembleCatalog(byId, familyMap);
+};
 
-  return { families, byId };
+/** Parse fonts in chunks so CEP/Premiere stay responsive. */
+export const buildFontCatalogAsync = async (): Promise<FontCatalog> => {
+  const byId = new Map<string, FontFace>();
+  const familyMap = new Map<string, FontFace[]>();
+  const files = collectFontFiles();
+  const chunk = 20;
+
+  for (let i = 0; i < files.length; i++) {
+    for (const face of readFacesFromFile(files[i])) {
+      if (byId.has(face.id)) continue;
+      byId.set(face.id, face);
+      const list = familyMap.get(face.family) ?? [];
+      list.push(face);
+      familyMap.set(face.family, list);
+    }
+    if (i % chunk === chunk - 1) await yieldUi();
+  }
+
+  return assembleCatalog(byId, familyMap);
 };
 
 export const findFaceInCatalog = (catalog: FontCatalog, id: string): FontFace | null =>

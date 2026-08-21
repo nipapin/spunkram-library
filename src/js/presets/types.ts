@@ -1,10 +1,10 @@
-/** Сырой clientControl из MOGRT definition.json — без предобработки файла. */
+/** In-memory Styles control, converted from controls.json. */
 
 export type LocalizedStr = { strDB: { localeString: string; str: string }[] };
 
 export type PointValue = { x: number; y: number };
 
-/** Значение контрола (не группы). Ключ в preset.values — control.id (UUID). */
+/** Значение контрола (не группы). Ключ в preset.values — control.id (uiPath). */
 export type ControlValue = boolean | number | number[] | PointValue | LocalizedStr | string;
 
 export const ControlType = {
@@ -33,10 +33,16 @@ export interface ClientControl {
   menucontent?: LocalizedStr[];
   fonteditinfo?: unknown;
   alternateRectInfo?: unknown;
+  /** controls.json: AE effect path used when applying to the host. */
+  essentialName?: string;
+  source?: string;
+  uiPath?: string;
 }
 
 export interface MogrtDefinition {
   capsuleName?: string;
+  schema?: "controls";
+  enabledLayers?: string[];
   clientControls: ClientControl[];
   [key: string]: unknown;
 }
@@ -46,9 +52,3 @@ export type ControlValues = Record<string, ControlValue>;
 export type ControlTreeNode =
   | { kind: "group"; control: ClientControl; children: ControlTreeNode[] }
   | { kind: "control"; control: ClientControl };
-
-/** Порядок UI из AE Essential Properties. Definition даёт типы/id, не индекс. */
-export type UiOrderNode = {
-  name: string;
-  children?: UiOrderNode[];
-};

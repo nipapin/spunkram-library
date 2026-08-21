@@ -11,6 +11,8 @@ export interface CaptionCatalogEntry {
   categorySlug: string;
   previewImageUrl: string | null;
   previewVideoUrl: string | null;
+  /** Public CDN URL for `controls.json` (Styles UI). */
+  controlsUrl: string | null;
   files: {
     mogrt: boolean;
     aep: boolean;
@@ -68,6 +70,7 @@ export interface StylePreset {
   tags?: string[];
   previewImageUrl?: string | null;
   previewVideoUrl?: string | null;
+  controlsUrl?: string | null;
   files?: CaptionCatalogEntry["files"];
 }
 
@@ -78,7 +81,6 @@ export interface LocalStyleManifest {
   version: string;
   downloadedAt: string;
   files: {
-    definition?: string;
     aep?: string;
     mogrt?: string;
   };

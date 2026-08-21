@@ -43,11 +43,14 @@ type KeyInterest = {
   metaKey?: boolean;
 };
 
+let undoKeysRegistered = false;
+
 /**
  * Забрать у хоста (AE/PPro) Ctrl/Cmd+Z и redo — иначе панель их не видит.
  * keyCode 90 = Z, 89 = Y.
  */
 export const registerUndoKeyEvents = () => {
+  if (undoKeysRegistered) return;
   try {
     if (typeof window === "undefined" || typeof (window as { cep?: unknown }).cep === "undefined") {
       return;
@@ -61,6 +64,7 @@ export const registerUndoKeyEvents = () => {
       { keyCode: 89, metaKey: true },
     ];
     csi.registerKeyEventsInterest(JSON.stringify(keys));
+    undoKeysRegistered = true;
   } catch {
     // вне CEP (browser preview) — обычный keydown и так доходит
   }

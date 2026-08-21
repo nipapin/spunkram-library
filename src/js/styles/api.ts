@@ -1,5 +1,7 @@
 import { CAPTIONS_ENDPOINTS, apiUrl, getUserIdentity, type UserIdentity } from "../api";
 import type { BrandId } from "../../../brands.config";
+import { CONTROLS_FILE, normalizeDefinition } from "../presets/controlsSchema";
+import type { MogrtDefinition } from "../presets/types";
 import type {
   CaptionCatalogCategory,
   CaptionCatalogEntry,
@@ -74,6 +76,7 @@ const asCaption = (
     categorySlug,
     previewImageUrl: typeof o.previewImageUrl === "string" ? o.previewImageUrl : null,
     previewVideoUrl: typeof o.previewVideoUrl === "string" ? o.previewVideoUrl : null,
+    controlsUrl: typeof o.controlsUrl === "string" ? o.controlsUrl : null,
     files: {
       mogrt: !!files.mogrt,
       aep: !!files.aep,
@@ -101,6 +104,106 @@ const asCategory = (raw: unknown): CaptionCatalogCategory | null => {
 export const resolveMediaUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   return url.startsWith("http") ? url : apiUrl(url);
+};
+
+const CAPTIONS_CDN_BASE = "https://cdn.motionflow.pro";
+const CAPTIONS_CDN_PREFIX: Record<BrandId, string> = {
+  gal: "Gal Captions",
+  spunkram: "Spunkram Captions",
+};
+
+/** Sibling file next to a CDN thumb/preview URL (`thumb.png` → `controls.json`). */
+export const siblingPublicUrl = (
+  url: string | null | undefined,
+  fileName: string,
+): string | null => {
+  if (!url) return null;
+  const clean = url.split("#")[0].split("?")[0];
+  const slash = clean.lastIndexOf("/");
+  if (slash < 0) return null;
+  return `${clean.slice(0, slash + 1)}${encodeURIComponent(fileName)}`;
+};
+
+export const publicCaptionFileUrl = (
+  styleId: string,
+  fileName: string,
+  brand: BrandId,
+): string => {
+  const segs = [
+    CAPTIONS_CDN_PREFIX[brand],
+    ...styleId.replace(/\\/g, "/").split("/").filter((p) => p && p !== "." && p !== ".."),
+    fileName,
+  ];
+  return `${CAPTIONS_CDN_BASE}/${segs.map(encodeURIComponent).join("/")}`;
+};
+
+/** Public CDN URL for Styles `controls.json` — same host as thumb/preview. */
+export const resolveControlsUrl = (
+  item: {
+    id: string;
+    controlsUrl?: string | null;
+    previewImageUrl?: string | null;
+    previewVideoUrl?: string | null;
+  },
+  brand: BrandId,
+): string => {
+  const explicit = resolveMediaUrl(item.controlsUrl);
+  if (explicit) return explicit;
+  return (
+    siblingPublicUrl(item.previewImageUrl, CONTROLS_FILE) ||
+    siblingPublicUrl(item.previewVideoUrl, CONTROLS_FILE) ||
+    publicCaptionFileUrl(item.id, CONTROLS_FILE, brand)
+  );
+};
+
+const controlsApiFallbackUrl = (cdnUrl: string, brand: BrandId): string | null => {
+  try {
+    const pathname = decodeURIComponent(new URL(cdnUrl).pathname).replace(/^\//, "");
+    const prefix = `${CAPTIONS_CDN_PREFIX[brand]}/`;
+    if (!pathname.startsWith(prefix)) return null;
+    const rest = pathname
+      .slice(prefix.length)
+      .split("/")
+      .filter(Boolean)
+      .map(encodeURIComponent)
+      .join("/");
+    return `${apiUrl(`/api/captions/media/${rest}`)}?brand=${encodeURIComponent(brand)}`;
+  } catch {
+    return null;
+  }
+};
+
+/** GET public `controls.json` (CDN, then API proxy if CORS/CDN fails). */
+export const fetchCaptionControls = async (
+  url: string,
+  brand: BrandId,
+): Promise<MogrtDefinition> => {
+  const load = async (target: string): Promise<MogrtDefinition> => {
+    const response = await fetch(target, { method: "GET", headers: { Accept: "application/json" } });
+    if (!response.ok) {
+      throw new CaptionApiError(`Could not load controls.json (${response.status})`, response.status);
+    }
+    return normalizeDefinition(await response.json());
+  };
+
+  try {
+    const parsed = await load(url);
+    if (parsed.clientControls?.length) return parsed;
+  } catch {
+    // CDN CORS or missing file — try same-origin catalog host
+  }
+
+  const fallback = controlsApiFallbackUrl(url, brand);
+  if (fallback && fallback !== url) {
+    try {
+      const parsed = await load(fallback);
+      if (parsed.clientControls?.length) return parsed;
+    } catch {
+      // API proxy missing or 404
+    }
+  }
+
+  return { clientControls: [] };
 };
 
 /** GET /api/captions — публичный каталог. `brand` — явная фиксация (по умолчанию сервер отдаёт "gal"). */

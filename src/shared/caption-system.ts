@@ -1,14 +1,10 @@
 /**
- * Essential Graphics names — must match definition.json clientControls uiName (en_US).
+ * Essential Graphics / controls.json names — must match uiName (en_US).
  * CEP writes v4 lookup + offset batches into captions_batch_01..15.
  * Captions_Raw_Data / Captions_Data are computed by AE expressions — do not fill.
  *
- * New mogrt (Base Simple):
- *   Store hidden  — captions_batch_01..15
- *   Bridge hidden — Segment Type, Line Count, Chars Per Line, Composition Height
- *   Global        — Pause Gap, Hold Duration (user style, CEP does not write)
- * Legacy mogrt: one group "System hidden" (or "System") held all of the above.
- * Styles UI hides groups whose uiName contains "hidden" (and all children).
+ * Styles UI is the `groups` tree in controls.json.
+ * Segment Type / Line Count / Chars Per Line stay CEP-written, not Styles.
  */
 export const CAPTION_SYSTEM = {
   group: "Store hidden",
