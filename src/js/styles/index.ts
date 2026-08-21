@@ -4,6 +4,8 @@ export type {
   CaptionCatalogResponse,
   CaptionProjectFile,
   CaptionStyleCatalogItem,
+  CaptionsCdnBaseManifest,
+  LocalCdnBaseManifest,
   LocalStyleManifest,
   LocalStylePackage,
   PresetOrigin,
@@ -33,27 +35,32 @@ export {
 export {
   CaptionApiError,
   authErrorMessage,
+  captionsCdnBaseManifestUrl,
   downloadCaptionProject,
   fetchCaptionControls,
   fetchCaptionStylesCatalog,
   fetchCaptionsCatalog,
+  fetchCaptionsCdnBaseManifest,
   flattenCatalog,
   hashArrayBuffer,
   pickProjectFile,
   resolveControlsUrl,
   resolveMediaUrl,
+  CAPTIONS_CDN_VERSION_FOLDER,
 } from "./api";
 export type { CaptionDownloadResult } from "./api";
 export {
+  loadCdnBaseManifest,
   loadLocalPackage,
   loadLocalState,
   removeLocalPackage,
   removeUserPreset,
+  saveCdnBaseManifest,
   saveLocalPackage,
   saveLocalState,
   upsertUserPreset,
 } from "./localStore";
-export { getStylePackageDir, getStylesDir, getStylesRoot, styleIdToDirName } from "./paths";
+export { getCdnBaseManifestPath, getStylePackageDir, getStylesDir, getStylesRoot, styleIdToDirName } from "./paths";
 export {
   acquireAndApplyPreset,
   acquirePresetProject,

@@ -4,7 +4,15 @@ import { ControlType } from "./types";
 /** Caption mogrt dump — the only Styles source. */
 export const CONTROLS_FILE = "controls.json";
 
-export type ControlsKind = "checkbox" | "slider" | "angle" | "color" | "point" | "text" | "menu";
+export type ControlsKind =
+  | "checkbox"
+  | "slider"
+  | "angle"
+  | "color"
+  | "point"
+  | "text"
+  | "menu"
+  | "font-menu";
 
 export interface ControlsLeaf {
   name: string;
@@ -54,6 +62,9 @@ const KIND_TO_TYPE: Record<string, number> = {
   point: ControlType.Point,
   text: ControlType.Text,
   menu: ControlType.Menu,
+  "font-menu": ControlType.FontMenu,
+  fontmenu: ControlType.FontMenu,
+  font: ControlType.FontMenu,
 };
 
 export const isControlsDocument = (raw: unknown): raw is ControlsDocument => {

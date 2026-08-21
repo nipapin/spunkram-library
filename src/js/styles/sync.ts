@@ -2,6 +2,7 @@ import {
   downloadCaptionProject,
   fetchCaptionControls,
   fetchCaptionsCatalog,
+  fetchCaptionsCdnBaseManifest,
   flattenCatalog,
   hashArrayBuffer,
   pickProjectFile,
@@ -10,8 +11,10 @@ import {
 } from "./api";
 import { fs, path } from "../lib/cep/node";
 import {
+  loadCdnBaseManifest,
   loadLocalPackage,
   loadLocalState,
+  saveCdnBaseManifest,
   saveLocalPackage,
   saveLocalState,
 } from "./localStore";
@@ -296,7 +299,7 @@ const fingerprintsMatch = (
 export const refreshStylePackageIfRemoteChanged = async (
   styleId: string,
   options?: DownloadStyleOptions,
-): Promise<{ updated: boolean; updateAvailable: boolean }> => {
+): Promise<{ updated: boolean; updateAvailable: boolean; error?: boolean }> => {
   const existing = loadLocalPackage(styleId);
   if (!existing) return { updated: false, updateAvailable: false };
 
@@ -357,7 +360,7 @@ export const refreshStylePackageIfRemoteChanged = async (
     return { updated: true, updateAvailable: false };
   } catch {
     // Network / auth — keep local
-    return { updated: false, updateAvailable: false };
+    return { updated: false, updateAvailable: false, error: true };
   }
 };
 
@@ -383,12 +386,13 @@ const mapPool = async <T, R>(
  * При загрузке расширения / Refresh:
  * 1) GET /api/captions — сетка только из каталога
  * 2) локальные пакеты — кэш mogrt/aep для стилей, которые ещё есть на сервере
- * 3) user presets (Save as New) — отдельная секция Custom
+ * 3) user presets (Save as New) — отдельная секция Users
+ * 4) CDN `{Brand} Captions/Base/manifest.json` — если version изменилась, перекачать локальные проекты
  */
 export const syncCaptionStyles = async (options?: {
   checkRemoteUpdates?: boolean;
 }): Promise<StylesSyncResult> => {
-  // Default off: comparing every local .mogrt with R2 on boot blocked the grid.
+  // Default off: catalog first so the grid isn't blocked by mogrt re-downloads.
   const checkRemote = options?.checkRemoteUpdates === true;
   const localState = loadLocalState();
   const definitions: Record<string, MogrtDefinition> = {};
@@ -412,28 +416,55 @@ export const syncCaptionStyles = async (options?: {
     if (pkg) localById.set(item.id, pkg);
   }
 
-  // Compare local project files with R2 and replace when the remote copy changed.
+  // Cheap gate: only re-download projects when CDN Base/manifest.json version changed.
   if (checkRemote && catalog.length > 0) {
-    const hostAppId = csi.hostEnvironment?.appId;
-    const toCheck = catalog.filter((item) => localById.has(item.id));
-    await mapPool(toCheck, 2, async (item) => {
-      try {
-        const result = await refreshStylePackageIfRemoteChanged(item.id, {
-          files: item.files,
-          name: item.name,
-          hostAppId,
-          controlsUrl: item.controlsUrl,
-          previewImageUrl: item.previewImageUrl,
-          previewVideoUrl: item.previewVideoUrl,
+    const brand = getActiveBrand();
+    const remoteManifest = await fetchCaptionsCdnBaseManifest(brand);
+    const localManifest = loadCdnBaseManifest();
+    const versionChanged =
+      !!remoteManifest &&
+      !(localManifest?.brand === brand && localManifest.version === remoteManifest.version);
+
+    if (versionChanged && remoteManifest) {
+      const hadLocalSnapshot = !!localManifest?.version;
+      let persistRemote = true;
+
+      // First seen version: remember it, don't mass-redownload existing files.
+      // Later bumps: refresh every local project that is still in the catalog.
+      if (hadLocalSnapshot) {
+        const hostAppId = csi.hostEnvironment?.appId;
+        const toCheck = catalog.filter((item) => localById.has(item.id));
+        const results = await mapPool(toCheck, 2, async (item) => {
+          try {
+            const result = await refreshStylePackageIfRemoteChanged(item.id, {
+              files: item.files,
+              name: item.name,
+              hostAppId,
+              controlsUrl: item.controlsUrl,
+              previewImageUrl: item.previewImageUrl,
+              previewVideoUrl: item.previewVideoUrl,
+            });
+            if (result.updated) {
+              const pkg = loadLocalPackage(item.id);
+              if (pkg) localById.set(item.id, pkg);
+            }
+            return result;
+          } catch {
+            return { updated: false, updateAvailable: false, error: true };
+          }
         });
-        if (result.updated) {
-          const pkg = loadLocalPackage(item.id);
-          if (pkg) localById.set(item.id, pkg);
-        }
-      } catch {
-        // keep existing local package
+        // Keep the old local version so the next launch retries the bump.
+        persistRemote = !results.some((r) => r.error);
       }
-    });
+
+      if (persistRemote) {
+        saveCdnBaseManifest({
+          version: remoteManifest.version,
+          fetchedAt: new Date().toISOString(),
+          brand,
+        });
+      }
+    }
   }
 
   const presets: StylePreset[] = [];

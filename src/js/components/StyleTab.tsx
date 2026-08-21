@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { LayoutGrid } from "lucide-react";
 import { useConfiguration, isPresetDirty, isPresetValuesDirty } from "../../context/ConfigurationWrapper";
 import type { StylePreset } from "../styles";
 import { useStyleUndo } from "../hooks/useStyleUndo";
 import { PresetFields } from "./PresetFields";
+import { ChangePresetDialog } from "./ChangePresetDialog";
 import { friendlyErrorMessage } from "../utils/user-error";
 import "./StyleTab.scss";
 
@@ -61,6 +63,29 @@ export const StyleTab = () => {
   const { onChange } = useStyleUndo(selected ?? EMPTY_PRESET, updateSelectedPreset);
   const dirty = selected ? isPresetDirty(selected) : false;
   const valuesDirty = selected ? isPresetValuesDirty(selected) : false;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const otherPresets = presets.filter((p) => p.id !== selected?.id).length;
+
+  const changePreset = (
+    <button
+      type="button"
+      className="btn btn--ghost style-tab__change-preset"
+      disabled={otherPresets === 0}
+      onClick={() => setPickerOpen(true)}
+    >
+      <LayoutGrid size={13} />
+      Change Preset
+    </button>
+  );
+
+  const picker = selected ? (
+    <ChangePresetDialog
+      open={pickerOpen}
+      currentId={selected.id}
+      currentName={selected.name}
+      onClose={() => setPickerOpen(false)}
+    />
+  ) : null;
 
   if (stylesStatus === "loading" || stylesStatus === "idle") {
     return (
@@ -87,6 +112,8 @@ export const StyleTab = () => {
           <span className="style-tab__section-label">EDITING · {selected.name}</span>
           {selected.updateAvailable && <span className="style-tab__update-pill">Update available</span>}
         </div>
+        {changePreset}
+        {picker}
 
         <PresetFields
           value={selected}
@@ -133,6 +160,8 @@ export const StyleTab = () => {
         {definitionError ||
           "Style controls aren’t available for this caption (missing controls.json)."}
       </p>
+      {changePreset}
+      {picker}
     </div>
   );
 };

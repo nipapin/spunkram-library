@@ -36,13 +36,18 @@
 .confirm-dialog__actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   margin-top: 16px;
 
-  .btn--primary {
-    height: 36px;
+  .btn.btn--ghost,
+  .btn.btn--primary {
+    height: 32px;
+    min-width: 84px;
     padding: 0 14px;
     border-radius: var(--radius-md);
     font-size: 12px;
+    font-weight: 600;
+    box-shadow: none;
   }
 }

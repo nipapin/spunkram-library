@@ -30,21 +30,28 @@ const nameTableIds = {
 const readU16 = (buf: Buffer, off: number) => buf.readUInt16BE(off);
 const readU32 = (buf: Buffer, off: number) => buf.readUInt32BE(off);
 
-const readNameRecord = (
-  buf: Buffer,
-  stringOffset: number,
-  recordOffset: number,
-): string => {
-  const platformId = readU16(buf, recordOffset);
-  const encodingId = readU16(buf, recordOffset + 2);
-  const length = readU16(buf, recordOffset + 4);
-  const offset = readU16(buf, recordOffset + 6);
-  const start = stringOffset + offset;
-  const end = start + length;
-  if (start < 0 || end > buf.length) return "";
+/** Windows/Unicode name strings are UTF-16BE, not LE. */
+const decodeUtf16Be = (buf: Buffer, start: number, end: number): string => {
+  const len = end - start;
+  if (len < 2 || len % 2) return "";
+  const copy = Buffer.from(buf.subarray(start, end));
+  copy.swap16();
+  return copy.toString("utf16le").replace(/\0/g, "").trim();
+};
 
-  if (platformId === 3 || (platformId === 0 && encodingId === 1)) {
-    return buf.toString("utf16le", start, end).replace(/\0/g, "").trim();
+const decodeNameBytes = (
+  buf: Buffer,
+  start: number,
+  end: number,
+  platformId: number,
+  encodingId: number,
+): string => {
+  if (start < 0 || end > buf.length || end <= start) return "";
+  if (platformId === 3 || platformId === 0) {
+    if (encodingId === 0 && platformId === 3) {
+      return buf.toString("latin1", start, end).replace(/\0/g, "").trim();
+    }
+    return decodeUtf16Be(buf, start, end);
   }
   if (platformId === 1) {
     return buf.toString("latin1", start, end).replace(/\0/g, "").trim();
@@ -52,17 +59,41 @@ const readNameRecord = (
   return buf.toString("utf8", start, end).replace(/\0/g, "").trim();
 };
 
+const nameRecordScore = (platformId: number, encodingId: number, languageId: number): number => {
+  const unicode = encodingId === 1 || encodingId === 10;
+  if (platformId === 3 && unicode && languageId === 0x0409) return 100;
+  if (platformId === 3 && unicode) return 80;
+  if (platformId === 0 && unicode) return 50;
+  if (platformId === 1) return 20;
+  return 10;
+};
+
 const parseNameTable = (buf: Buffer, tableOffset: number): Record<number, string> => {
   const out: Record<number, string> = {};
+  const score: Record<number, number> = {};
   const count = readU16(buf, tableOffset + 2);
   const stringOffset = tableOffset + readU16(buf, tableOffset + 4);
   const recordBase = tableOffset + 6;
   for (let i = 0; i < count; i++) {
     const rec = recordBase + i * 12;
+    const platformId = readU16(buf, rec);
+    const encodingId = readU16(buf, rec + 2);
+    const languageId = readU16(buf, rec + 4);
     const nameId = readU16(buf, rec + 6);
-    if (out[nameId]) continue;
-    const value = readNameRecord(buf, stringOffset, rec);
-    if (value) out[nameId] = value;
+    const length = readU16(buf, rec + 8);
+    const offset = readU16(buf, rec + 10);
+    const nextScore = nameRecordScore(platformId, encodingId, languageId);
+    if ((score[nameId] ?? -1) >= nextScore) continue;
+    const value = decodeNameBytes(
+      buf,
+      stringOffset + offset,
+      stringOffset + offset + length,
+      platformId,
+      encodingId,
+    );
+    if (!value) continue;
+    out[nameId] = value;
+    score[nameId] = nextScore;
   }
   return out;
 };
@@ -203,30 +234,12 @@ const assembleCatalog = (
       faces: [...faces].sort(
         (a, b) =>
           styleSortKey(a.style) - styleSortKey(b.style) ||
-          a.style.localeCompare(b.style, undefined, { sensitivity: "base" }),
+          a.style.localeCompare(b.style, undefined, { numeric: true, sensitivity: "base" }),
       ),
     }))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
 
   return { families, byId };
-};
-
-/** Sync fallback (tests). Prefer `buildFontCatalogAsync` in the CEP panel. */
-export const buildFontCatalog = (): FontCatalog => {
-  const byId = new Map<string, FontFace>();
-  const familyMap = new Map<string, FontFace[]>();
-
-  for (const file of collectFontFiles()) {
-    for (const face of readFacesFromFile(file)) {
-      if (byId.has(face.id)) continue;
-      byId.set(face.id, face);
-      const list = familyMap.get(face.family) ?? [];
-      list.push(face);
-      familyMap.set(face.family, list);
-    }
-  }
-
-  return assembleCatalog(byId, familyMap);
 };
 
 /** Parse fonts in chunks so CEP/Premiere stay responsive. */
@@ -234,7 +247,7 @@ export const buildFontCatalogAsync = async (): Promise<FontCatalog> => {
   const byId = new Map<string, FontFace>();
   const familyMap = new Map<string, FontFace[]>();
   const files = collectFontFiles();
-  const chunk = 20;
+  const chunk = 6;
 
   for (let i = 0; i < files.length; i++) {
     for (const face of readFacesFromFile(files[i])) {
@@ -252,6 +265,38 @@ export const buildFontCatalogAsync = async (): Promise<FontCatalog> => {
 
 export const findFaceInCatalog = (catalog: FontCatalog, id: string): FontFace | null =>
   catalog.byId.get(id) ?? null;
+
+export const pickFaceForFamily = (
+  group: FontFamilyGroup | undefined,
+  preferredStyle?: string,
+): FontFace | null => {
+  if (!group?.faces.length) return null;
+  if (preferredStyle) {
+    const exact = group.faces.find((f) => f.style === preferredStyle);
+    if (exact) return exact;
+    const lower = preferredStyle.toLowerCase();
+    const fuzzy = group.faces.find((f) => f.style.toLowerCase() === lower);
+    if (fuzzy) return fuzzy;
+  }
+  return group.faces.find((f) => f.style === "Regular") ?? group.faces[0];
+};
+
+export const cssFontFamily = (family: string): string => {
+  const name = family.trim();
+  if (!name) return "inherit";
+  if (/^[a-zA-Z][\w-]*$/.test(name)) return name;
+  return `"${name.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+};
+
+/** Symbol/icon fonts turn their own name into dingbats — keep UI font for those. */
+const SYMBOL_FAMILY =
+  /^(wingdings|webdings|marlett|symbol|zapf dingbats|mt extra|ms outlook|segoe mdl2|segoe fluent icons|holomdl2|fabric mdl2|bookshelvesymbol)/i;
+
+export const canPreviewFamily = (family: string): boolean => {
+  const name = family.trim();
+  if (!name || SYMBOL_FAMILY.test(name)) return false;
+  return /[A-Za-z\u00C0-\u024F]/.test(name);
+};
 
 export const fallbackFaceFromId = (id: string): FontFace => {
   const trimmed = id.trim();

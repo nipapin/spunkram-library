@@ -1,6 +1,19 @@
 import { fs, path } from "../lib/cep/node";
-import { ensureDir, getLocalStatePath, getStylePackageDir, getStylesDir, getStylesRoot } from "./paths";
-import type { LocalStyleManifest, LocalStylePackage, StylesLocalState, StylePreset } from "./types";
+import {
+  ensureDir,
+  getCdnBaseManifestPath,
+  getLocalStatePath,
+  getStylePackageDir,
+  getStylesDir,
+  getStylesRoot,
+} from "./paths";
+import type {
+  LocalCdnBaseManifest,
+  LocalStyleManifest,
+  LocalStylePackage,
+  StylesLocalState,
+  StylePreset,
+} from "./types";
 import { EMPTY_DEFINITION } from "./types";
 
 export const LOCAL_STATE_VERSION = 1;
@@ -40,6 +53,7 @@ const writeJson = (filePath: string, data: unknown): boolean => {
 /** Fallback для браузерного vite-preview без CEP Node. */
 const MEMORY_KEY = "aitools-cep-styles-state";
 const MEMORY_PACKAGES_KEY = "aitools-cep-style-packages";
+const MEMORY_CDN_BASE_KEY = "aitools-cep-captions-cdn-base";
 
 type MemoryPackages = Record<string, { manifest: LocalStyleManifest }>;
 
@@ -101,6 +115,46 @@ export const saveLocalState = (state: StylesLocalState): void => {
     return;
   }
   writeJson(filePath, state);
+};
+
+const parseLocalCdnBaseManifest = (raw: unknown): LocalCdnBaseManifest | null => {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.version !== "string" || !o.version.trim()) return null;
+  return {
+    version: o.version.trim(),
+    fetchedAt: typeof o.fetchedAt === "string" ? o.fetchedAt : "",
+    brand: typeof o.brand === "string" ? o.brand : "",
+  };
+};
+
+const readMemoryCdnBaseManifest = (): LocalCdnBaseManifest | null => {
+  try {
+    const raw = localStorage.getItem(MEMORY_CDN_BASE_KEY);
+    return raw ? parseLocalCdnBaseManifest(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+};
+
+/** Last seen `{Brand} Captions/Base/manifest.json` from CDN. */
+export const loadCdnBaseManifest = (): LocalCdnBaseManifest | null => {
+  const filePath = getCdnBaseManifestPath();
+  if (!filePath) return readMemoryCdnBaseManifest();
+  return parseLocalCdnBaseManifest(readJson<unknown>(filePath));
+};
+
+export const saveCdnBaseManifest = (manifest: LocalCdnBaseManifest): void => {
+  const filePath = getCdnBaseManifestPath();
+  if (!filePath) {
+    try {
+      localStorage.setItem(MEMORY_CDN_BASE_KEY, JSON.stringify(manifest));
+    } catch {
+      /* ignore quota */
+    }
+    return;
+  }
+  writeJson(filePath, manifest);
 };
 
 export const listLocalPackageIds = (): string[] => {

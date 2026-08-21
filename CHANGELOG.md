@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Captions Styles: watch CDN `Base/manifest.json` and re-download local mogrt/aep projects when its `version` changes
+- Captions: write Segment Type by name as 0-based (Words=0, Custom=1); Lines / caption → Line Count; Characters / line → Chars Per Line
+- Styles: `font-menu` is a family + weight picker (not a slider), with OS font catalog like Figma/Adobe
+
 ### Fixed
 
+- Captions: Premiere places the caption mogrt on the last free video track and trims it to In/Out, so the ~1h template no longer overwrites the edit
 - Styles: Premiere delta-apply maps duplicate leaf names (e.g. Animated Fill) by definition `leafIndex`, not first match
 - Styles sliders with ranges ≤1 use step `0.01` so values like Pause Gap `0.35` keep thumb and fill aligned
 - Captions packer: spacing is empty text (`wordIndex: -1`); a space character was packed as a word

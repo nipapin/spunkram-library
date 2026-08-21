@@ -1,5 +1,8 @@
 import {
   buildFontCatalogAsync,
+  canPreviewFamily,
+  cssFontFamily,
+  pickFaceForFamily,
   type FontCatalog,
   type FontFace,
   findFaceInCatalog,
@@ -7,6 +10,7 @@ import {
 } from "./font-catalog";
 
 export type { FontCatalog, FontFace };
+export { canPreviewFamily, cssFontFamily, pickFaceForFamily };
 
 let cached: FontCatalog | null = null;
 let pending: Promise<FontCatalog> | null = null;

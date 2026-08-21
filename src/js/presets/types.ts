@@ -16,6 +16,8 @@ export const ControlType = {
   Text: 6,
   Group: 10,
   Menu: 13,
+  /** controls.json `font-menu` — PostScript family/style picker, not a slider. */
+  FontMenu: 14,
 } as const;
 
 export interface ClientControl {

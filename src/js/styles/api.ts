@@ -7,6 +7,7 @@ import type {
   CaptionCatalogEntry,
   CaptionCatalogResponse,
   CaptionProjectFile,
+  CaptionsCdnBaseManifest,
 } from "./types";
 
 export class CaptionApiError extends Error {
@@ -111,6 +112,8 @@ const CAPTIONS_CDN_PREFIX: Record<BrandId, string> = {
   gal: "Gal Captions",
   spunkram: "Spunkram Captions",
 };
+/** Folder that holds the catalog version file (`manifest.json`) on CDN. */
+export const CAPTIONS_CDN_VERSION_FOLDER = "Base";
 
 /** Sibling file next to a CDN thumb/preview URL (`thumb.png` → `controls.json`). */
 export const siblingPublicUrl = (
@@ -135,6 +138,32 @@ export const publicCaptionFileUrl = (
     fileName,
   ];
   return `${CAPTIONS_CDN_BASE}/${segs.map(encodeURIComponent).join("/")}`;
+};
+
+/** Public CDN URL for `{Brand} Captions/Base/manifest.json`. */
+export const captionsCdnBaseManifestUrl = (brand: BrandId): string =>
+  publicCaptionFileUrl(CAPTIONS_CDN_VERSION_FOLDER, "manifest.json", brand);
+
+/** GET CDN catalog version. Returns null on network / parse / CORS errors. */
+export const fetchCaptionsCdnBaseManifest = async (
+  brand: BrandId,
+): Promise<CaptionsCdnBaseManifest | null> => {
+  const url = captionsCdnBaseManifestUrl(brand);
+  try {
+    const response = await fetchWithTimeout(
+      url,
+      { method: "GET", headers: { Accept: "application/json" } },
+      CATALOG_TIMEOUT_MS,
+    );
+    if (!response.ok) return null;
+    const data = (await response.json()) as { version?: unknown };
+    if (typeof data.version !== "string") return null;
+    const version = data.version.trim();
+    if (!version) return null;
+    return { version };
+  } catch {
+    return null;
+  }
 };
 
 /** Public CDN URL for Styles `controls.json` — same host as thumb/preview. */

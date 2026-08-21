@@ -39,6 +39,12 @@ export const getLocalStatePath = (): string | null => {
   return root ? path.join(root, "styles-state.json") : null;
 };
 
+/** Локальная копия CDN `{Brand} Captions/Base/manifest.json`. */
+export const getCdnBaseManifestPath = (): string | null => {
+  const root = getStylesRoot();
+  return root ? path.join(root, "captions-base-manifest.json") : null;
+};
+
 export const ensureDir = (dir: string): boolean => {
   if (!isCep() || !fs.existsSync || !fs.mkdirSync) return false;
   try {

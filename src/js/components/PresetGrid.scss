@@ -5,6 +5,16 @@
   margin-bottom: 4px;
 }
 
+.preset-grid--picker {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.preset-grid--picker .preset-grid__sections {
+  min-height: 0;
+}
+
 .preset-grid::-webkit-scrollbar {
   display: none;
 }
@@ -127,7 +137,7 @@ button.preset-grid__tag-chip--active {
 }
 
 .preset-grid__count {
-  margin: 0;
+  margin: 4px 0 0;
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.07em;
@@ -241,11 +251,16 @@ button.preset-grid__tag-chip--active {
   border-color: var(--accent);
 }
 
-.preset-grid__fav {
+.preset-grid__card-actions {
   position: absolute;
   top: 6px;
   right: 6px;
   z-index: 2;
+  display: flex;
+  gap: 4px;
+}
+
+.preset-grid__fav {
   background: rgba(0, 0, 0, 0.45);
   border: 0;
   border-radius: 999px;
@@ -260,6 +275,10 @@ button.preset-grid__tag-chip--active {
 
 .preset-grid__fav--on {
   color: var(--accent);
+}
+
+.preset-grid__delete:hover {
+  color: var(--error, #ed553b);
 }
 
 .preset-grid__chip {
@@ -279,7 +298,7 @@ button.preset-grid__tag-chip--active {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
   padding: 5px 10px;
-  max-width: calc(100% - 40px);
+  max-width: calc(100% - 68px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

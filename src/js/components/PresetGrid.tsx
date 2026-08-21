@@ -1,25 +1,30 @@
-import { RefreshCw, Search, Star } from "lucide-react";
+import { RefreshCw, Search, Star, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useConfiguration } from "../../context/ConfigurationWrapper";
 import type { StylePreset } from "../styles";
+import { ConfirmDialog } from "./ConfirmDialog";
 import "./PresetGrid.scss";
+
+const USER_SECTION = "Users";
 
 const CaptionCard = ({
   p,
   selected,
   onSelect,
   onToggleFavorite,
+  onDelete,
 }: {
   p: StylePreset;
   selected: boolean;
   onSelect: () => void;
   onToggleFavorite: () => void;
+  onDelete?: () => void;
 }) => {
   const [hover, setHover] = useState(false);
   const thumb = p.previewImageUrl;
   const video = p.previewVideoUrl;
   const category =
-    p.tags?.[0] || (p.source === "user" ? "Custom" : p.categoryName) || null;
+    p.source === "user" ? USER_SECTION : p.tags?.[0] || p.categoryName || null;
 
   return (
     <div
@@ -28,16 +33,33 @@ const CaptionCard = ({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <button
-        type="button"
-        className={`preset-grid__fav ${p.favorite ? "preset-grid__fav--on" : ""}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleFavorite();
-        }}
-      >
-        <Star size={14} fill={p.favorite ? "currentColor" : "none"} />
-      </button>
+      <div className="preset-grid__card-actions">
+        {onDelete && (
+          <button
+            type="button"
+            className="preset-grid__fav preset-grid__delete"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            aria-label="Delete preset"
+            data-tooltip="Delete"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
+        <button
+          type="button"
+          className={`preset-grid__fav ${p.favorite ? "preset-grid__fav--on" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite();
+          }}
+          aria-label={p.favorite ? "Remove from favorites" : "Add to favorites"}
+        >
+          <Star size={14} fill={p.favorite ? "currentColor" : "none"} />
+        </button>
+      </div>
 
       <div className="preset-grid__media">
         {/* Keep thumb under video so hover never blanks the card when CDN video is slow. */}
@@ -64,12 +86,21 @@ const CaptionCard = ({
   );
 };
 
-export const PresetGrid = () => {
+export const PresetGrid = ({
+  excludeId,
+  onSelect,
+  variant = "page",
+}: {
+  excludeId?: string;
+  onSelect?: (id: string) => void;
+  variant?: "page" | "picker";
+} = {}) => {
   const {
     presets,
     selectedPresetId,
     selectPreset,
     toggleFavorite,
+    deletePreset,
     stylesStatus,
     stylesError,
     refreshingStyles,
@@ -78,6 +109,8 @@ export const PresetGrid = () => {
   const [search, setSearch] = useState("");
   const [favOnly, setFavOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<StylePreset | null>(null);
+  const picker = variant === "picker";
 
   const allTags = useMemo(() => {
     const set = new Set<string>();
@@ -91,6 +124,7 @@ export const PresetGrid = () => {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return presets.filter((p) => {
+      if (excludeId && p.id === excludeId) return false;
       if (favOnly && !p.favorite) return false;
       if (q && !p.name.toLowerCase().includes(q)) return false;
       if (tagFilter) {
@@ -99,14 +133,14 @@ export const PresetGrid = () => {
       }
       return true;
     });
-  }, [presets, search, favOnly, tagFilter]);
+  }, [presets, search, favOnly, tagFilter, excludeId]);
 
   const sections = useMemo(() => {
     const byName = (a: StylePreset, b: StylePreset) =>
       a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
     const map = new Map<string, StylePreset[]>();
     for (const p of visible) {
-      const key = p.source === "user" ? "Custom" : p.categoryName || "Other";
+      const key = p.source === "user" ? USER_SECTION : p.categoryName || "Other";
       const list = map.get(key) || [];
       list.push(p);
       map.set(key, list);
@@ -118,8 +152,13 @@ export const PresetGrid = () => {
 
   const loading = stylesStatus === "loading" || stylesStatus === "idle";
 
+  const pick = (id: string) => {
+    if (onSelect) onSelect(id);
+    else selectPreset(id);
+  };
+
   return (
-    <div className="preset-grid">
+    <div className={`preset-grid ${picker ? "preset-grid--picker" : ""}`}>
       <div className="preset-grid__toolbar">
         <div className="chip preset-grid__search">
           <Search size={14} />
@@ -138,16 +177,18 @@ export const PresetGrid = () => {
         >
           <Star size={16} fill={favOnly ? "currentColor" : "none"} color="currentColor" />
         </button>
-        <button
-          type="button"
-          className="preset-grid__icon-btn"
-          data-tooltip="Refresh catalog &amp; project files"
-          onClick={() => void refreshStyles()}
-          disabled={refreshingStyles}
-          aria-label="Refresh catalog and project files"
-        >
-          <RefreshCw size={15} className={refreshingStyles ? "preset-grid__spin" : undefined} />
-        </button>
+        {!picker && (
+          <button
+            type="button"
+            className="preset-grid__icon-btn"
+            data-tooltip="Refresh catalog &amp; project files"
+            onClick={() => void refreshStyles()}
+            disabled={refreshingStyles}
+            aria-label="Refresh catalog and project files"
+          >
+            <RefreshCw size={15} className={refreshingStyles ? "preset-grid__spin" : undefined} />
+          </button>
+        )}
       </div>
 
       {allTags.length > 0 && (
@@ -200,6 +241,12 @@ export const PresetGrid = () => {
         </div>
       )}
 
+      {!loading && presets.length > 0 && visible.length === 0 && (
+        <div className="preset-grid__state">
+          <p>{picker ? "No other captions" : "No captions match"}</p>
+        </div>
+      )}
+
       {!loading && sections.length > 0 && (
         <div className="preset-grid__sections thin-scroll">
           {sections.map(([category, items]) => (
@@ -210,9 +257,10 @@ export const PresetGrid = () => {
                   <CaptionCard
                     key={p.id}
                     p={p}
-                    selected={p.id === selectedPresetId}
-                    onSelect={() => selectPreset(p.id)}
+                    selected={!picker && p.id === selectedPresetId}
+                    onSelect={() => pick(p.id)}
                     onToggleFavorite={() => toggleFavorite(p.id)}
+                    onDelete={p.source === "user" ? () => setPendingDelete(p) : undefined}
                   />
                 ))}
               </div>
@@ -220,6 +268,18 @@ export const PresetGrid = () => {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Delete preset"
+        message={`Delete “${pendingDelete?.name ?? ""}”? This can’t be undone.`}
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (pendingDelete) deletePreset(pendingDelete.id);
+          setPendingDelete(null);
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 };

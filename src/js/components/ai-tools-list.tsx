@@ -28,10 +28,9 @@ export function AiToolsList({
 }) {
   const totalLeft = monthly + extra;
   const limitLabel = monthlyLimit != null ? String(monthlyLimit) : "—";
-  const monthlyPct =
-    monthlyLimit != null && monthlyLimit > 0
-      ? Math.max(0, Math.min(100, (Math.max(monthly, 0) / monthlyLimit) * 100))
-      : 0;
+  const capacity = Math.max(0, (monthlyLimit ?? 0) + extra);
+  const monthlyPct = capacity > 0 ? Math.max(0, Math.min(100, (Math.max(monthly, 0) / capacity) * 100)) : 0;
+  const extraPct = capacity > 0 ? Math.max(0, Math.min(100, (Math.max(extra, 0) / capacity) * 100)) : 0;
 
   return (
     <div className="ai-tools-scope ai-hub">
@@ -56,19 +55,22 @@ export function AiToolsList({
                   className="ai-hub__track"
                   role="progressbar"
                   aria-valuemin={0}
-                  aria-valuemax={monthlyLimit ?? undefined}
-                  aria-valuenow={monthly}
-                  aria-label={
-                    monthlyLimit != null
-                      ? `${monthly} of ${monthlyLimit} monthly generations left`
-                      : `${monthly} monthly generations left`
-                  }
+                  aria-valuemax={capacity || undefined}
+                  aria-valuenow={totalLeft}
+                  aria-label={`${monthly} monthly and ${extra} extra generations left`}
                 >
                   {monthlyPct > 0 ? (
                     <div
                       className="ai-hub__fill ai-hub__fill--monthly"
                       style={{ width: `${monthlyPct}%` }}
                       title={`${monthly} monthly`}
+                    />
+                  ) : null}
+                  {extraPct > 0 ? (
+                    <div
+                      className="ai-hub__fill ai-hub__fill--extra"
+                      style={{ width: `${extraPct}%` }}
+                      title={`${extra} extra`}
                     />
                   ) : null}
                 </div>

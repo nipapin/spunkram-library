@@ -1,9 +1,10 @@
 import { ChevronDown, CopyPlus, RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { StylePreset } from "../../context/ConfigurationWrapper";
 import {
   ControlType,
   buildUiTree,
+  fontIdFromValue,
   getControlValue,
   isColorArray,
   isPointValue,
@@ -16,7 +17,7 @@ import {
 } from "../presets";
 import { CEP_WRITTEN_SYSTEM_NAMES } from "../../shared/caption-system";
 import { rangeFillStyle } from "../utils/rangeFillStyle";
-import { getFontCatalog, resolveFontFace, type FontCatalog } from "../lib/utils/system-fonts";
+import { FontPicker } from "./FontPicker";
 import { ScrubNumber } from "./ScrubNumber";
 import { ColorField } from "./ColorField";
 import "./PresetFields.scss";
@@ -88,92 +89,7 @@ const Collapse = ({
 };
 
 const isFontControl = (control: ClientControl, label: string) =>
-  !!control.fonteditinfo || label === "Caption Font";
-
-const FontSelect = ({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-}) => {
-  const [catalog, setCatalog] = useState<FontCatalog | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    getFontCatalog().then((next) => {
-      if (!cancelled) setCatalog(next);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const current = useMemo(() => resolveFontFace(catalog, value), [catalog, value]);
-
-  const familyOptions = useMemo(() => {
-    if (!catalog) return current.family ? [current.family] : [];
-    const names = catalog.families.map((f) => f.name);
-    if (current.family && !names.includes(current.family)) return [current.family, ...names];
-    return names;
-  }, [catalog, current.family]);
-
-  const styleOptions = useMemo(() => {
-    if (!catalog) {
-      return current.id ? [{ id: current.id, style: current.style || current.id }] : [];
-    }
-    const group = catalog.families.find((f) => f.name === current.family);
-    const faces = group?.faces ?? [];
-    if (current.id && !faces.some((f) => f.id === current.id)) {
-      return [{ id: current.id, family: current.family, style: current.style || current.id }, ...faces];
-    }
-    return faces;
-  }, [catalog, current.family, current.id, current.style]);
-
-  const onFamilyChange = (family: string) => {
-    if (!catalog) return;
-    const group = catalog.families.find((f) => f.name === family);
-    const next =
-      group?.faces.find((f) => f.style === "Regular")?.id ??
-      group?.faces[0]?.id ??
-      (family === current.family ? current.id : "");
-    if (next) onChange(next);
-  };
-
-  const onStyleChange = (id: string) => {
-    if (id) onChange(id);
-  };
-
-  return (
-    <div className="preset-fields__font-row">
-      <select
-        className="preset-fields__select preset-fields__select--family"
-        value={current.family}
-        disabled={!catalog}
-        onChange={(e) => onFamilyChange(e.target.value)}
-      >
-        {!catalog && <option value={current.family}>{current.family || "Loading fonts…"}</option>}
-        {familyOptions.map((family) => (
-          <option key={family} value={family}>
-            {family}
-          </option>
-        ))}
-      </select>
-      <select
-        className="preset-fields__select preset-fields__select--style"
-        value={current.id}
-        disabled={!catalog || !styleOptions.length}
-        onChange={(e) => onStyleChange(e.target.value)}
-      >
-        {styleOptions.map((face) => (
-          <option key={face.id} value={face.id}>
-            {face.style}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-};
+  control.type === ControlType.FontMenu || !!control.fonteditinfo || label === "Caption Font";
 
 const ControlField = ({
   control,
@@ -270,6 +186,24 @@ const ControlField = ({
     );
   }
 
+  if (control.type === ControlType.FontMenu || isFontControl(control, label)) {
+    const id = fontIdFromValue(raw) || localizedText(raw);
+    return (
+      <div className="preset-fields__param preset-fields__param--font">
+        <span className="preset-fields__param-label">{label}</span>
+        <FontPicker
+          value={id}
+          onChange={(next) =>
+            onValue(
+              control.id,
+              control.type === ControlType.FontMenu ? next : withLocalizedText(raw, next),
+            )
+          }
+        />
+      </div>
+    );
+  }
+
   if (control.type === ControlType.Slider || control.type === ControlType.Angle) {
     const num = typeof raw === "number" ? raw : Number(raw) || 0;
     const hasRange = typeof control.min === "number" && typeof control.max === "number";
@@ -300,20 +234,13 @@ const ControlField = ({
     if ((CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(label)) return null;
     const text = localizedText(raw);
     return (
-      <div className="preset-fields__param preset-fields__param--font">
+      <div className="preset-fields__param">
         <span className="preset-fields__param-label">{label}</span>
-        {isFontControl(control, label) ? (
-          <FontSelect
-            value={text}
-            onChange={(next) => onValue(control.id, withLocalizedText(raw, next))}
-          />
-        ) : (
-          <input
-            className="preset-fields__select"
-            value={text}
-            onChange={(e) => onValue(control.id, withLocalizedText(raw, e.target.value))}
-          />
-        )}
+        <input
+          className="preset-fields__select"
+          value={text}
+          onChange={(e) => onValue(control.id, withLocalizedText(raw, e.target.value))}
+        />
       </div>
     );
   }

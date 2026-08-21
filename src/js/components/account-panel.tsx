@@ -275,10 +275,10 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
   const extraLeft = credits?.extraLeft ?? 0;
   const usedCount = credits?.used ?? 0;
   const limitLabel = generationLimit != null ? String(generationLimit) : "—";
+  const capacity = Math.max(0, (generationLimit ?? 0) + extraLeft);
   const monthlyPct =
-    generationLimit != null && generationLimit > 0
-      ? Math.min(100, Math.round((monthlyLeft / generationLimit) * 100))
-      : 0;
+    capacity > 0 ? Math.min(100, (Math.max(monthlyLeft, 0) / capacity) * 100) : 0;
+  const extraPct = capacity > 0 ? Math.min(100, (Math.max(extraLeft, 0) / capacity) * 100) : 0;
 
   return (
     <div className="account-spunkram">
@@ -387,11 +387,24 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
                   <div>
                     <p className="account-spunkram__price">{monthlyLeft + extraLeft}</p>
                     <p className="account-spunkram__sub">
-                      {monthlyLeft}/{limitLabel} monthly
-                      {extraLeft > 0 ? ` · ${extraLeft} extra` : ""}
+                      <span className="account-spunkram__legend-item">
+                        <span className="account-spunkram__dot account-spunkram__dot--monthly" aria-hidden />
+                        {monthlyLeft}/{limitLabel} monthly
+                      </span>
+                      {extraLeft > 0 ? (
+                        <span className="account-spunkram__legend-item">
+                          <span className="account-spunkram__dot account-spunkram__dot--extra" aria-hidden />
+                          {extraLeft} extra
+                        </span>
+                      ) : null}
                     </p>
                     <div className="account-spunkram__track">
-                      <div className="account-spunkram__fill" style={{ width: `${monthlyPct}%` }} />
+                      {monthlyPct > 0 ? (
+                        <div className="account-spunkram__fill account-spunkram__fill--monthly" style={{ width: `${monthlyPct}%` }} />
+                      ) : null}
+                      {extraPct > 0 ? (
+                        <div className="account-spunkram__fill account-spunkram__fill--extra" style={{ width: `${extraPct}%` }} />
+                      ) : null}
                     </div>
                     <div className="account-spunkram__usage">
                       <span>

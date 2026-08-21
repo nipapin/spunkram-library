@@ -149,6 +149,13 @@ export const getControlValue = (values: ControlValues, control: ClientControl): 
   return cloneValue(control.value as ControlValue);
 };
 
+/** PostScript id stored by font-menu / Caption Font. */
+export const fontIdFromValue = (value: ControlValue | undefined): string => {
+  if (typeof value === "string") return value;
+  if (isLocalizedStr(value)) return value.strDB?.[0]?.str ?? "";
+  return "";
+};
+
 /** Найти контрол по цепочке uiName, напр. ["Follow", "Background", "Fill"]. */
 export const findControlByNames = (
   definition: MogrtDefinition,
@@ -230,10 +237,15 @@ export const stylePropsFromValues = (
           .map((s) => s.trim())
           .filter(Boolean)
       : [];
+    const raw = current !== undefined ? current : cloneValue(control.value as ControlValue);
+    const value =
+      control.type === ControlType.FontMenu || isLocalizedStr(raw)
+        ? fontIdFromValue(raw) || raw
+        : raw;
     out.push({
       path: essentialPath.length ? essentialPath : nextPath,
       type: control.type,
-      value: current !== undefined ? current : cloneValue(control.value as ControlValue),
+      value,
       leafIndex,
       essentialName: control.essentialName,
       source: control.source,

@@ -1,0 +1,57 @@
+.change-preset-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.change-preset-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 440px;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px 12px 10px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  background: var(--bg-panel, #0e0c1a);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.change-preset-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.change-preset-dialog__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.change-preset-dialog__hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary, var(--text-dim));
+}
+
+.change-preset-dialog .preset-grid {
+  flex: 1;
+  min-height: 0;
+}
+
+.preset-grid--picker .preset-grid__sections {
+  max-height: none;
+}

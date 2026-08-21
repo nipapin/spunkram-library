@@ -15,6 +15,7 @@ export {
   defaultsFromDefinition,
   findControlByNames,
   findControlByAnyNames,
+  fontIdFromValue,
   getControlValue,
   indexControls,
   isColorArray,

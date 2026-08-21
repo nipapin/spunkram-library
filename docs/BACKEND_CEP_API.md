@@ -395,6 +395,26 @@ npm run release:patch  # from beta: promote to stable core; from stable: +patch 
 2. If remote version > local (`package.json` / manifest) → banner (beta labeled for testers)
 3. User clicks Update → download ZXP → unpack over `csi.getSystemPath("extension")` → `location.reload()`
 
+### 5.6 Captions catalog version (`Base/manifest.json`)
+
+Public R2 object (no auth). CEP uses it as a cheap signal to re-download cached caption **projects** (mogrt/aep), not the ZXP.
+
+| Brand | URL |
+|---|---|
+| Spunkram | `https://cdn.motionflow.pro/Spunkram%20Captions/Base/manifest.json` |
+| Gal | `https://cdn.motionflow.pro/Gal%20Captions/Base/manifest.json` |
+
+```json
+{ "version": "1.0.0" }
+```
+
+- CEP copies this to `%APPDATA%/spunkram-library/captions-base-manifest.json` (`fetchedAt` + `brand` added locally).
+- First seen version is stored without mass re-download.
+- When `version` changes, CEP re-checks every locally cached caption project via `POST /api/captions` (etag / content-hash still skip identical bytes).
+- Bump `version` whenever files under `{Brand} Captions/Base/` (or other caption projects) change on CDN. If you skip the bump, panels keep stale local projects.
+
+Client: `src/js/styles/api.ts` (`fetchCaptionsCdnBaseManifest`), `src/js/styles/sync.ts`. Paths: [`PATHS.md`](./PATHS.md).
+
 ---
 
 ## 6. Credits / generations

@@ -145,24 +145,11 @@
 }
 
 .preset-fields__param--font {
-  align-items: flex-start;
+  align-items: center;
 }
 
-.preset-fields__font-row {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  gap: 6px;
-}
-
-.preset-fields__select--family {
-  flex: 1.2;
-  min-width: 0;
-}
-
-.preset-fields__select--style {
-  flex: 1;
-  min-width: 0;
+.preset-fields__param--font .preset-fields__param-label {
+  align-self: center;
 }
 
 

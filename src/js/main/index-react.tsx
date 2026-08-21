@@ -8,9 +8,11 @@ import "@fontsource-variable/unbounded/wght.css";
 import "../globals.css";
 import { App } from "./main";
 import { ConfigurationWrapper } from "../../context/ConfigurationWrapper";
+import { getFontCatalog } from "../lib/utils/system-fonts";
 
 initBolt();
 installGlobalHandlers();
+void getFontCatalog();
 
 ReactDOM.createRoot(document.getElementById("app") as HTMLElement).render(
   <React.StrictMode>

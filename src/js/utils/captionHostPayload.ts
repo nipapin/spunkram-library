@@ -10,7 +10,10 @@ export type CaptionWordTiming = {
   timestamp: [number, number];
 };
 
-/** Segment Type в mogrt: 1 Words, 2 Custom (1-based, как menucontent). */
+/**
+ * Segment Type в mogrt — 0-based значение по имени (`Segment Type`):
+ * Words = 0, Custom = 1. Lines / caption → `Line Count`, Characters / line → `Chars Per Line`.
+ */
 export const segmentTypeIndex = (mode: GroupingMode): number => {
   if (mode === "words") return SEGMENT_TYPE_INDEX.words;
   return SEGMENT_TYPE_INDEX.custom;

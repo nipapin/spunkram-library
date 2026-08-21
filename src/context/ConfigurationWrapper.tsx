@@ -27,6 +27,7 @@ import type { GroupingMode } from "../js/utils/transcribe";
 import { csi } from "../js/lib/utils/bolt";
 import { Motionflow } from "../js/sdk";
 import * as panelStore from "../js/lib/userdata-store";
+import { getFontCatalog } from "../js/lib/utils/system-fonts";
 
 export type { StylePreset } from "../js/styles";
 export { isPresetDirty, isPresetValuesDirty, presetSwatchColors };
@@ -215,7 +216,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     setRefreshingStyles(true);
     setStylesStatus((s) => (s === "ready" ? s : "loading"));
     try {
-      // Catalog + local cache first so the grid isn't blocked by mogrt re-downloads.
+      // Catalog + local cache first; CDN Base/manifest.json version check runs in the background.
       applySyncResult(await syncCaptionStyles({ checkRemoteUpdates: false }));
       void syncCaptionStyles({ checkRemoteUpdates: true })
         .then(applySyncResult)
@@ -545,6 +546,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (booted.current) return;
     booted.current = true;
+    void getFontCatalog();
     void refreshStyles();
   }, [refreshStyles]);
 

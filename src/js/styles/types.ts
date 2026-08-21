@@ -74,6 +74,20 @@ export interface StylePreset {
   files?: CaptionCatalogEntry["files"];
 }
 
+/**
+ * CDN `{Brand} Captions/Base/manifest.json` — каталожная версия проектов.
+ * Локальная копия: AppData/spunkram-library/captions-base-manifest.json
+ */
+export interface CaptionsCdnBaseManifest {
+  version: string;
+}
+
+/** Сохранённый снимок CDN Base/manifest.json (чтобы ловить bump версии). */
+export interface LocalCdnBaseManifest extends CaptionsCdnBaseManifest {
+  fetchedAt: string;
+  brand: string;
+}
+
 /** manifest.json скачанного пакета в AppData/styles/{safeId}/ */
 export interface LocalStyleManifest {
   id: string;

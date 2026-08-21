@@ -218,9 +218,15 @@
   flex-shrink: 0;
 }
 
-.captions-tab__resegment-update {
-  margin-top: 12px;
-  height: 36px;
-  font-size: 12px;
+.captions-tab__resegment-update.btn.btn--primary {
+  margin-top: 10px;
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
   border-radius: 999px;
 }

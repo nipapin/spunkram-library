@@ -371,6 +371,7 @@
   }
 
   &__track {
+    display: flex;
     height: 6px;
     margin-top: 10px;
     overflow: hidden;
@@ -380,9 +381,39 @@
 
   &__fill {
     height: 100%;
-    border-radius: 999px;
-    background: var(--acc-cta);
+    border-radius: 0;
     transition: width 220ms ease;
+  }
+
+  &__fill--monthly {
+    background: #7c4dff;
+  }
+
+  &__fill--extra {
+    background: #22d3ee;
+  }
+
+  &__dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    border-radius: 999px;
+  }
+
+  &__dot--monthly {
+    background: #7c4dff;
+  }
+
+  &__dot--extra {
+    background: #22d3ee;
+  }
+
+  &__legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 10px;
   }
 
   &__usage {

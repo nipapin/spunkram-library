@@ -5,6 +5,8 @@
  *
  * Styles UI is the `groups` tree in controls.json.
  * Segment Type / Line Count / Chars Per Line stay CEP-written, not Styles.
+ * Segment Type is 0-based by name: Words=0, Custom=1 (Premiere MGT).
+ * Lines / caption → Line Count; Characters / line → Chars Per Line.
  */
 export const CAPTION_SYSTEM = {
   group: "Store hidden",
@@ -43,10 +45,13 @@ const buildCaptionBatchNames = (): string[] => {
 
 export const CAPTION_BATCH_NAMES: readonly string[] = buildCaptionBatchNames();
 
-/** Segment Type menucontent order (1-based, as in AE / definition value). */
+/**
+ * Segment Type — 0-based value written by display name (`Segment Type`).
+ * Words = 0, Custom = 1. Premiere MGT dropdown index; AE EP is 1-based (host adds 1).
+ */
 export const SEGMENT_TYPE_INDEX = {
-  words: 1,
-  custom: 2,
+  words: 0,
+  custom: 1,
 } as const;
 
 /** CEP fills these on create / resegment / live-edit. Not user style. */
