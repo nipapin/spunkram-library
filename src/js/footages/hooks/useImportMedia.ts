@@ -1,12 +1,13 @@
 import { useCallback } from "react";
-import { fs, path } from "../../lib/cep/node";
+import { fs, os, path } from "../../lib/cep/node";
 import { Motionflow } from "@/sdk";
-import { downloadStockAsset } from "@/lib/api/stock-api";
-import { resolveFootageDownloadDir } from "@/lib/utils/stock-paths";
+import { reloadJSX } from "../../lib/utils/bolt";
+import { runAeQueuedHostImport } from "../../utils/ae-queued-import";
+import { resolveFootageDownloadDirSilent } from "@/lib/utils/stock-paths";
 import { useFiltersContext } from "../context/FiltersContext";
 import { useProgressContext } from "../context/ProgressContext";
 import { incrementUsage } from "../utils/trial-usage";
-import type { MediaItem } from "../types";
+import type { ImageUrls, MediaItem } from "../types";
 
 type HostImportOutcome = { ok?: boolean; reason?: string } | null | undefined;
 
@@ -24,21 +25,84 @@ function mapImportError(reason?: string | null): string {
   if (reason === "IMPORT_FAILED") {
     return "Could not import footage. Try again.";
   }
+  if (reason === "PLACE_FAILED") {
+    return "Footage is in the project, but could not be added to the composition. Click the timeline and try again.";
+  }
   if (/host script returned no result/i.test(reason)) {
-    return "Open a composition in After Effects, then try again.";
+    return "After Effects did not apply the footage. Click the composition timeline and try again.";
   }
   return reason;
 }
 
-function hostImportError(
-  res: { ok: true; data?: unknown } | { ok: false; error?: string },
-): string | null {
-  if (!res.ok) return mapImportError(res.error);
-  const data = res.data as HostImportOutcome;
+function hostImportError(data: HostImportOutcome): string | null {
   if (data && typeof data === "object" && data.ok === false) {
     return mapImportError(data.reason);
   }
-  return null;
+  if (data && typeof data === "object" && data.ok === true) return null;
+  return mapImportError("Host script returned no result");
+}
+
+/** Direct CDN URL already on the gallery item — same source Spunkram Assets fetches. */
+function resolveSourceUrl(item: MediaItem): { url: string; duration: number } | null {
+  if (item.type === "video") {
+    const files = item.videoFiles ?? [];
+    if (item.resolution && files.length) {
+      const match = files.find((f) => `${f.width}x${f.height}` === item.resolution);
+      if (match?.link) return { url: match.link, duration: item.duration ?? 0 };
+    }
+    if (files.length) {
+      const best = [...files].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+      if (best?.link) return { url: best.link, duration: item.duration ?? 0 };
+    }
+    if (item.downloadUrl) return { url: item.downloadUrl, duration: item.duration ?? 0 };
+    return null;
+  }
+
+  const quality = (item.quality || "full") as keyof ImageUrls;
+  const url =
+    item.imageUrls?.[quality] || item.imageUrls?.full || item.downloadUrl || "";
+  if (!url) return null;
+  return { url, duration: item.duration ?? 5 };
+}
+
+/** Browser fetch (visible in CEP inspector Network) → write with Node fs. */
+async function fetchToFile(
+  url: string,
+  filePath: string,
+  onProgress: (pct: number) => void,
+): Promise<void> {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Download failed (${response.status})`);
+  }
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("ReadableStream not supported");
+
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    if (contentLength > 0) {
+      onProgress(Math.round((received / contentLength) * 100));
+    }
+  }
+
+  const merged = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  const dir = path.dirname(filePath);
+  if (typeof fs?.mkdirSync === "function" && !fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(filePath, Buffer.from(merged));
 }
 
 export function useImportMedia() {
@@ -48,60 +112,51 @@ export function useImportMedia() {
   const importMedia = useCallback(
     async (item: MediaItem) => {
       try {
-        const provider =
-          item.provider || (item.type === "video" ? "pexels" : "unsplash");
-        const downloadDir = await resolveFootageDownloadDir();
-        if (!downloadDir.ok) {
-          setError(downloadDir.message || "Failed to resolve download directory");
+        const source = resolveSourceUrl(item);
+        if (!source?.url) {
+          setError("This item has no download URL.");
           return;
         }
-        const filePath = path.join(downloadDir.dir, item.name);
 
         setPending(true);
         setProgress(0);
 
-        if (fs.existsSync(filePath)) {
-          const res = await Motionflow.importMedia(
-            filePath,
-            destination,
-            item.duration ?? 5,
-          );
-          const err = hostImportError(res);
-          if (err) {
-            setError(err);
-            return;
-          }
-          incrementUsage("gallery");
-          setProgress(100);
+        const downloadDir =
+          (await resolveFootageDownloadDirSilent()) || os.tmpdir();
+        if (!downloadDir) {
+          setError("Could not resolve a download folder.");
+          return;
+        }
+        const filePath = path.join(downloadDir, item.name);
+
+        if (!fs.existsSync(filePath)) {
+          await fetchToFile(source.url, filePath, setProgress);
+        }
+
+        if (!fs.existsSync(filePath)) {
+          setError("Download completed but file is missing.");
           return;
         }
 
-        const downloaded = await downloadStockAsset({
-          provider,
-          kind: item.type === "video" ? "video" : "image",
-          id: item.id,
-          fileName: item.name,
-          destDir: downloadDir.dir,
-          quality: item.quality,
-          resolution: item.resolution,
-          onProgress: ({ bytesReceived, totalBytes }) => {
-            if (totalBytes && totalBytes > 0) {
-              setProgress(Math.round((bytesReceived / totalBytes) * 100));
-            }
-          },
-        });
+        setProgress(95);
 
-        if (!downloaded.ok) {
-          setError(downloaded.message || "Download failed");
-          return;
-        }
+        await Motionflow.ready();
+        await reloadJSX();
 
-        const res = await Motionflow.importMedia(
-          downloaded.filePath,
-          destination,
-          item.duration ?? 5,
+        const dest: "project" | "timeline" =
+          destination === "timeline" ? "timeline" : "project";
+
+        const outcome = await runAeQueuedHostImport(
+          filePath,
+          dest,
+          source.duration,
+          (p, dest, dur, resultPath) =>
+            Motionflow.importMedia(p, dest, dur, resultPath).then((r) =>
+              r.ok ? { ok: true as const, data: r.data } : { ok: false as const, error: r.error },
+            ),
         );
-        const err = hostImportError(res);
+        console.log("[mf] importMedia", Motionflow.host, dest, outcome);
+        const err = hostImportError(outcome);
         if (err) {
           setError(err);
           return;

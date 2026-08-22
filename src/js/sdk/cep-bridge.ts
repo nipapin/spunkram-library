@@ -1,4 +1,4 @@
-import { evalTS, initBolt, reloadJSX, csi } from "../lib/utils/bolt";
+import { evalTS, reloadJSX, cepHostAppId, probeHostAppIdFromDom, evalES } from "../lib/utils/bolt";
 import { fs, os, path } from "../lib/cep/node";
 import type { MotionFlowBridge, MfHost } from "motionflow-sdk";
 
@@ -15,6 +15,20 @@ const readSidecar = (resultPath: string): unknown | undefined => {
   }
 };
 
+const isSidecarStarted = (data: unknown): boolean =>
+  !!data &&
+  typeof data === "object" &&
+  (data as { status?: string }).status === "started";
+
+const isSidecarFinal = (data: unknown): boolean => {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  if (d.status === "started") return false;
+  if (d.ok === true || d.ok === false) return true;
+  if (d.applied === true || d.applied === false) return true;
+  return false;
+};
+
 const waitForSidecar = async (
   resultPath: string,
   timeoutMs: number,
@@ -22,10 +36,17 @@ const waitForSidecar = async (
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const data = readSidecar(resultPath);
+    if (data !== undefined && isSidecarFinal(data)) return data;
+    if (isSidecarStarted(data)) {
+      await sleep(150);
+      continue;
+    }
     if (data !== undefined) return data;
     await sleep(250);
   }
-  return readSidecar(resultPath);
+  const last = readSidecar(resultPath);
+  if (last !== undefined && !isSidecarStarted(last)) return last;
+  return undefined;
 };
 
 /**
@@ -67,9 +88,34 @@ async function withHostJsonFile<T>(
     } catch (e) {
       runError = e;
     }
+    if (window.cep && cepHostAppId() === "AEFT") {
+      void evalES(
+        `(function(){
+        try {
+          app.scheduleTask(
+            "try{if($._mfRunQueuedApply)$._mfRunQueuedApply();}catch(e){}",
+            80,
+            false
+          );
+          return "scheduled";
+        } catch (e) {
+          return String(e && e.message != null ? e.message : e);
+        }
+      })()`,
+        true,
+      );
+    }
     if (!runError && out != null) {
       const sidecar = readSidecar(resultPath);
-      return (sidecar !== undefined ? sidecar : out) as T;
+      if (sidecar !== undefined && isSidecarFinal(sidecar)) {
+        return sidecar as T;
+      }
+      if (!isSidecarStarted(sidecar) && sidecar !== undefined) {
+        return sidecar as T;
+      }
+      if (!isSidecarStarted(out)) {
+        return out as T;
+      }
     }
     const sidecar = await waitForSidecar(resultPath, 3 * 60 * 1000);
     if (sidecar !== undefined) return sidecar as T;
@@ -93,7 +139,7 @@ async function withHostJsonFile<T>(
 export function createCepBridge(): MotionFlowBridge {
   return {
     getHost(): MfHost | null {
-      const id = csi.hostEnvironment?.appId;
+      const id = cepHostAppId();
       if (id === "AEFT") return "AE";
       if (id === "PPRO") return "PPRO";
       return null;
@@ -110,7 +156,17 @@ export function createCepBridge(): MotionFlowBridge {
 
     async loadHostScripts(): Promise<void> {
       if (!window.cep) return;
-      await initBolt(false);
+      await reloadJSX();
+      await probeHostAppIdFromDom();
+    },
+
+    async refreshHost(): Promise<"AE" | "PPRO" | null> {
+      if (!window.cep) return null;
+      await probeHostAppIdFromDom();
+      const id = cepHostAppId();
+      if (id === "AEFT") return "AE";
+      if (id === "PPRO") return "PPRO";
+      return null;
     },
 
     withJsonFile: withHostJsonFile,

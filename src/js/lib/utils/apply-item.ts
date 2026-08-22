@@ -9,7 +9,7 @@
  * After Effects:
  *   PROJECT (.aep) / FOOTAGE / AUDIO → host applyPackItem
  */
-import { csi } from "./bolt";
+import { cepHostAppId } from "./bolt";
 import { Motionflow } from "@/sdk";
 import { fs, path } from "../cep/node";
 import {
@@ -49,10 +49,6 @@ const REASON_MESSAGES: Record<string, string> = {
   TEXT_LAYER: "Select a text layer in the active composition.",
 };
 
-function friendlyReason(reason: string): string {
-  return REASON_MESSAGES[reason] || reason;
-}
-
 function durationSecondsForItem(item: PackTreeItem): number | undefined {
   const entry = item.group.preview?.[item.previewKey];
   const args = (entry?.custom_args as Record<string, unknown>) || {};
@@ -67,10 +63,34 @@ function durationSecondsForItem(item: PackTreeItem): number | undefined {
   return undefined;
 }
 
+function friendlyReason(reason: string): string {
+  return REASON_MESSAGES[reason] || reason;
+}
+
+function resolvePackEngine(settings: PackSettings | null, item: PackTreeItem): string {
+  const previewEntry = item.group.preview?.[item.previewKey];
+  const customArgs = (previewEntry?.custom_args as Record<string, unknown>) || {};
+  const changeEngine = customArgs.change_engine;
+  if (typeof changeEngine === "string" && changeEngine.trim()) return changeEngine.trim();
+  return settings?.main?.engine_pack || "_COMPOSER";
+}
+
+function resolveEngineRoute(engine: string): "composer" | "text_animator" | "photo_animator" {
+  const normalized = engine.toLowerCase().replace(/[\s_-]+/g, "");
+  if (normalized.includes("textanimator")) return "text_animator";
+  if (normalized.includes("neurophoto") || normalized.includes("photoanimator")) {
+    return "photo_animator";
+  }
+  return "composer";
+}
+
+function composerStatusToOutcome(status: unknown): ApplyItemOutcome {
+  if (status == null || status === "") return { ok: true };
+  return { ok: false, message: friendlyReason(String(status)) };
+}
+
 export function currentHostAppId(): HostAppId | null {
-  const id = csi.hostEnvironment?.appId;
-  if (id === "PPRO" || id === "AEFT") return id;
-  return null;
+  return cepHostAppId();
 }
 
 /** Resolve + apply a pack item to the active project/sequence. */
@@ -119,6 +139,7 @@ export async function applyPackItemToHost(
   const filePath = resolved.file;
 
   // Premiere FULL_PROJECT — native copy/paste chain (not simplified importFiles).
+  // Never run this path in After Effects — AE packs use applyComp + .aep.
   if (appId === "PPRO" && resolved.ctype === "FULL_PROJECT") {
     try {
       const templatesDir = resolvePackTemplatesPath(packFilePath, "PPRO");
@@ -207,6 +228,64 @@ export async function applyPackItemToHost(
           packOptions: (settings?.inside_option_sets as Record<string, unknown>) || {},
         }
       : undefined;
+
+  if (appId === "AEFT" && composerPayload) {
+    const engine = resolvePackEngine(settings, item);
+    const route = resolveEngineRoute(engine);
+    try {
+      await Motionflow.bindPack({
+        packInsideOptions: settings?.inside_option_sets,
+        packFileDir: path.dirname(packFilePath),
+        shortAppID: "AE",
+      });
+      await Motionflow.setEngine(engine);
+      await Motionflow.AE.setComposerRootFolder(BRAND.authorName);
+    } catch {
+      // bind / engine context is best-effort before apply
+    }
+
+    if (route === "text_animator") {
+      try {
+        const wrapped = await Motionflow.AE.addTextAnimator(
+          "APPLY",
+          composerPayload.argsObject,
+          composerPayload.extraArguments,
+          composerPayload.templatesDir,
+          composerPayload.packName,
+          composerPayload.packOptions,
+        );
+        if (!wrapped.ok) {
+          await reportSupportError("pack.apply_text_animator", wrapped.error, { item: item.name });
+          return { ok: false, message: wrapped.error };
+        }
+        return composerStatusToOutcome(wrapped.data);
+      } catch (e) {
+        await reportSupportError("pack.apply_text_animator", e, { item: item.name });
+        return { ok: false, message: e instanceof Error ? e.message : String(e) };
+      }
+    }
+
+    if (route === "photo_animator") {
+      try {
+        const wrapped = await Motionflow.AE.addPhotoAnimator(
+          "APPLY",
+          composerPayload.argsObject,
+          composerPayload.extraArguments,
+          composerPayload.templatesDir,
+          composerPayload.packName,
+          composerPayload.packOptions,
+        );
+        if (!wrapped.ok) {
+          await reportSupportError("pack.apply_photo_animator", wrapped.error, { item: item.name });
+          return { ok: false, message: wrapped.error };
+        }
+        return composerStatusToOutcome(wrapped.data);
+      } catch (e) {
+        await reportSupportError("pack.apply_photo_animator", e, { item: item.name });
+        return { ok: false, message: e instanceof Error ? e.message : String(e) };
+      }
+    }
+  }
 
   try {
     const wrapped = await Motionflow.applyPackItem({

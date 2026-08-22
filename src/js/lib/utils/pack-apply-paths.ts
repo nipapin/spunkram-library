@@ -142,6 +142,20 @@ export function resolveItemSourceFile(
   const templatesDir = resolvePackTemplatesPath(packFilePath, hostAppId);
 
   if (group.is_presets) {
+    if (hostAppId === "AEFT") {
+      const presetDir = path.join(templatesDir, ...item.pathSegments);
+      const stem = group.preview_name_instead_id ? item.name : item.previewKey;
+      const rawExt =
+        typeof customArgs.filetype === "string" && customArgs.filetype.trim()
+          ? customArgs.filetype.trim().replace(/^\./, "")
+          : "ffx";
+      const file = path.join(presetDir, `${stem}.${rawExt}`);
+      return {
+        ctype: "PROJECT",
+        file,
+        cacheName: `${sanitizeName(item.id)}.${rawExt}`,
+      };
+    }
     return { ctype: "UNSUPPORTED", file: "", cacheName: "" };
   }
 

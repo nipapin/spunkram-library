@@ -28,7 +28,7 @@ import {
 import type { ControlValues, MogrtDefinition } from "../js/presets";
 import type { GroupingMode } from "../js/utils/transcribe";
 import { csi } from "../js/lib/utils/bolt";
-import { Motionflow } from "../js/sdk";
+import { Motionflow, hostSdk } from "../js/sdk";
 import * as panelStore from "../js/lib/userdata-store";
 import { getFontCatalog, resolveFontFace } from "../js/lib/utils/system-fonts";
 
@@ -431,7 +431,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
 
       applyInFlight.current = true;
       lastPushedProps.current = { styleId, props: nextProps };
-      const hostApi = Motionflow.host === "AE" ? Motionflow.AE : Motionflow.PPRO;
+      const hostApi = hostSdk();
       return hostApi
         .applyCaptionStyleValues({ props, sequenceId, compId, trackIndex })
         .then((wrapped) => {
@@ -537,7 +537,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
           if (selectPresetGen.current !== gen) return;
           const nextPaths = getLocalStyleAssetPaths(target.styleId);
           applyPreparedAssets(nextPaths);
-          const hostApi = Motionflow.host === "AE" ? Motionflow.AE : Motionflow.PPRO;
+          const hostApi = hostSdk();
           if (Motionflow.host === "PPRO" && !nextPaths?.mogrt) {
             console.warn("[Styles] applyStyleProject skipped: no .mogrt for Premiere");
             setAcquireStatus("error");

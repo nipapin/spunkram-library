@@ -16,6 +16,7 @@ import { createPortal } from "react-dom";
 import { storageKey, BRAND } from "@brands";
 import { cn } from "@/lib/utils";
 import { Motionflow } from "@/sdk";
+import { runAeQueuedHostImport } from "@/utils/ae-queued-import";
 import { fs } from "@/lib/cep/node";
 import {
   downloadVoiceoverFile,
@@ -593,8 +594,24 @@ export const VoiceoverApp = ({
         return;
       }
 
-      const tryImport = async (path: string) =>
-        Motionflow.importVoiceoverAudio(path, destination, item.duration ?? 1);
+      const tryImport = async (importPath: string) => {
+        const outcome = await runAeQueuedHostImport(
+          importPath,
+          destination,
+          item.duration ?? 1,
+          (p, dest, dur, resultPath) =>
+            Motionflow.importVoiceoverAudio(p, dest, dur, resultPath).then((r) =>
+              r.ok ? { ok: true as const, data: r.data } : { ok: false as const, error: r.error },
+            ),
+        );
+        if (outcome && typeof outcome === "object" && outcome.ok === true) {
+          return { ok: true as const, data: outcome };
+        }
+        if (outcome && typeof outcome === "object" && outcome.ok === false) {
+          return { ok: true as const, data: outcome };
+        }
+        return { ok: false as const, error: "Could not import audio" };
+      };
 
       let wrapped = await tryImport(filePath);
       let outcome = wrapped.ok

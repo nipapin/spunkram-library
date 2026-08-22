@@ -1,4 +1,4 @@
-import { csi } from "./bolt";
+import { cepHostAppId } from "./bolt";
 import { storageKey } from "@brands";
 import type { InstalledPackMeta } from "./pack-types";
 
@@ -20,7 +20,7 @@ export function normalizePackHost(id: string | null | undefined): PackHostId | "
 
 /** Current CEP host as pack software_id (AE | PR). */
 export function currentPackHost(): PackHostId | null {
-  const appId = csi.hostEnvironment?.appId;
+  const appId = cepHostAppId();
   if (appId === "AEFT") return "AE";
   if (appId === "PPRO") return "PR";
   return null;

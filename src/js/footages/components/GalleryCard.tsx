@@ -195,6 +195,8 @@ export default memo(GalleryCard, (prev, next) => {
     prev.item === next.item &&
     prev.showOrientation === next.showOrientation &&
     prev.aspect === next.aspect &&
-    prev.masonry === next.masonry
+    prev.masonry === next.masonry &&
+    prev.onDownload === next.onDownload &&
+    prev.onImportUrl === next.onImportUrl
   );
 });

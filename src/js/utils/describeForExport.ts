@@ -107,7 +107,7 @@ export async function describeForExport(
   const probeRaw = await evalES(
     `(function(){
       var host = typeof $ !== "undefined" ? $ : window;
-      var api = host["${ns}"];
+      var api = (typeof host._mfPickApi === "function") ? host._mfPickApi() : host["${ns}"];
       var appName = "";
       var appId = "";
       var bt = "";
@@ -118,6 +118,10 @@ export async function describeForExport(
       try { hasRQ = !!(app && app.project && app.project.renderQueue); } catch (e4) {}
       var tempDir = "";
       try { tempDir = Folder.temp.fsName; } catch (e5) {}
+      var cepId = "";
+      var bound = "";
+      try { if (typeof $ !== "undefined" && $._mfCepAppId) cepId = String($._mfCepAppId); } catch (e6) {}
+      try { if (typeof $ !== "undefined" && $._mfHostKind) bound = String($._mfHostKind); } catch (e7) {}
       return JSON.stringify({
         hasNs: !!api,
         hasDescribe: !!(api && typeof api.describe === "function"),
@@ -125,7 +129,9 @@ export async function describeForExport(
         appId: appId,
         bt: bt,
         hasRQ: hasRQ,
-        tempDir: tempDir
+        tempDir: tempDir,
+        cepId: cepId,
+        bound: bound
       });
     })()`,
     true,
@@ -139,12 +145,15 @@ export async function describeForExport(
       appId?: string;
       bt?: string;
       hasRQ?: boolean;
+      bound?: string;
+      cepId?: string;
       tempDir?: string;
     };
     hostTemp = typeof probe.tempDir === "string" ? probe.tempDir : "";
+    console.log("[mf] describe probe", probe);
     if (!probe.hasDescribe) {
       throw new Error(
-        `Host describe is not loaded (app=${probe.appName || "?"} id=${probe.appId || "?"} bt=${probe.bt || "?"} ns=${probe.hasNs ? "yes" : "no"} rq=${probe.hasRQ ? "yes" : "no"}). Reload the panel.`,
+        `Host describe is not loaded (app=${probe.appName || "?"} id=${probe.appId || "?"} bt=${probe.bt || "?"} bound=${probe.bound || "?"} cep=${probe.cepId || "?"} ns=${probe.hasNs ? "yes" : "no"} rq=${probe.hasRQ ? "yes" : "no"}). Reload the panel.`,
       );
     }
   } catch (e) {
@@ -210,22 +219,17 @@ export async function describeForExport(
       }
 
       if (fromEval && fromEval.ok === false) {
-        const graceEnd = Date.now() + 2500;
-        while (Date.now() < graceEnd) {
+        // Empty eval is normal during AE render(). Only honor a real host fail shape.
+        const err = String(fromEval.error || "");
+        const emptyEval =
+          /no result/i.test(err) ||
+          /unexpected end of json/i.test(err) ||
+          /host script failed/i.test(err);
+        if (!emptyEval) {
           const late = readFresh();
-          if (isStarted(late)) break;
           if (isValidExport(late)) return normalize(late);
           if (isFailShape(late)) throw failFrom(late);
-          await sleep(200);
-        }
-        const late = readFresh();
-        if (isValidExport(late)) return normalize(late);
-        if (isFailShape(late)) throw failFrom(late);
-        if (!isStarted(late)) {
-          throw new Error(
-            fromEval.error ||
-              "Host script returned no result. Reload the panel and try again.",
-          );
+          throw new Error(err);
         }
       }
 

@@ -31,7 +31,9 @@ export default function ProgressBar() {
       onClick={() => setPending(false)}
     >
       <div className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-        <p className="mb-2 text-xs font-light text-foreground">Downloading...</p>
+        <p className="mb-2 text-xs font-light text-foreground">
+          {progress >= 100 ? "Importing into After Effects…" : "Downloading..."}
+        </p>
         <div className="h-1 w-full overflow-hidden rounded bg-secondary">
           {progress > 0 ? (
             <div

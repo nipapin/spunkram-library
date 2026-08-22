@@ -1,10 +1,121 @@
 import CSInterface, { CSEvent } from "../cep/csinterface";
 import Vulcan, { VulcanMessage } from "../cep/vulcan";
 import { ns } from "../../../shared/shared";
-import { fs } from "../cep/node";
+import { fs, os, path } from "../cep/node";
 
 export const csi = new CSInterface();
 export const vulcan = new Vulcan();
+
+function readCepAppId(): string {
+  try {
+    const fromEnv = csi.hostEnvironment?.appId;
+    if (fromEnv) return String(fromEnv);
+  } catch {
+    // hostEnvironment may be unset until getHostEnvironment()
+  }
+  try {
+    const fromFn = csi.getApplicationID();
+    if (fromFn) return String(fromFn);
+  } catch {
+    // getApplicationID throws when hostEnvironment is null
+  }
+  try {
+    const env = csi.getHostEnvironment();
+    if (env?.appId) return String(env.appId);
+  } catch {
+    // not in CEP
+  }
+  return "";
+}
+
+let cachedDomHostAppId: "AEFT" | "PPRO" | null = null;
+
+const normalizeCepHostId = (raw: string): "AEFT" | "PPRO" | null => {
+  const u = String(raw || "").toUpperCase();
+  if (u === "AEFT" || u.indexOf("AEFT") === 0) return "AEFT";
+  if (u === "PPRO" || u.indexOf("PPRO") === 0) return "PPRO";
+  return null;
+};
+
+/** Clear DOM host cache — call before reloading ExtendScript. */
+export function clearHostAppIdCache(): void {
+  cachedDomHostAppId = null;
+}
+
+/**
+ * Probe live ExtendScript DOM (AE renderQueue / PPro sequences).
+ * AE 24–25 can report PPRO via CSInterface — DOM wins over CEP appId.
+ */
+export async function probeHostAppIdFromDom(): Promise<"AEFT" | "PPRO" | null> {
+  if (!window.cep) return null;
+  try {
+    const raw = await evalES(
+      `(function(){
+        var out = { host: "" };
+        try {
+          var glob = typeof $ !== "undefined" ? $ : this;
+          if (glob && typeof glob.global !== "undefined" && typeof glob.global.CompItem !== "undefined") {
+            out.host = "AEFT";
+            return JSON.stringify(out);
+          }
+        } catch (e1) {}
+        try {
+          if (typeof app !== "undefined" && app && app.project && app.project.renderQueue) {
+            out.host = "AEFT";
+            return JSON.stringify(out);
+          }
+        } catch (e2) {}
+        try {
+          if (typeof app !== "undefined" && app && app.project && app.project.sequences) {
+            out.host = "PPRO";
+            return JSON.stringify(out);
+          }
+        } catch (e3) {}
+        try {
+          var g = typeof $ !== "undefined" ? $ : this;
+          var kind = String(g._mfHostKind || "");
+          if (kind.indexOf("aftereffects") >= 0) { out.host = "AEFT"; return JSON.stringify(out); }
+          if (kind.indexOf("premierepro") >= 0) { out.host = "PPRO"; return JSON.stringify(out); }
+        } catch (e4) {}
+        try {
+          var cep = String(g._mfCepAppId || "").toUpperCase();
+          if (cep.indexOf("AEFT") === 0) { out.host = "AEFT"; return JSON.stringify(out); }
+          if (cep.indexOf("PPRO") === 0) { out.host = "PPRO"; return JSON.stringify(out); }
+        } catch (e5) {}
+        return JSON.stringify(out);
+      })()`,
+      true,
+    );
+    const parsed = JSON.parse(String(raw || "").trim() || "{}") as { host?: string };
+    const fromDom = normalizeCepHostId(parsed.host || "");
+    if (fromDom) {
+      cachedDomHostAppId = fromDom;
+      return fromDom;
+    }
+  } catch {
+    // probe is best-effort
+  }
+  return null;
+}
+
+/** CEP host id: AEFT | PPRO. DOM probe (when cached) beats CSInterface. */
+export function cepHostAppId(): "AEFT" | "PPRO" | null {
+  if (cachedDomHostAppId) return cachedDomHostAppId;
+  return normalizeCepHostId(readCepAppId());
+}
+
+/** Stamp CSInterface appId onto `$` so ExtendScript does not trust BridgeTalk. */
+const stampAndBindHost = (): Promise<string> => {
+  const appId = readCepAppId().replace(/[^A-Za-z0-9]/g, "");
+  return evalES(
+    `(function(){
+      var g = typeof $ !== "undefined" ? $ : window;
+      g._mfCepAppId = "${appId}";
+      if (typeof g._mfBindHost === "function") g._mfBindHost("${appId}");
+    })()`,
+    true,
+  );
+};
 
 // jsx utils
 
@@ -23,10 +134,10 @@ export const evalES = (script: string, isGlobal = false): Promise<string> => {
   return new Promise(function (resolve, reject) {
     const pre = isGlobal
       ? ""
-      : `var host = typeof $ !== 'undefined' ? $ : window; host["${ns}"].`;
+      : `var host = typeof $ !== 'undefined' ? $ : window; var api = (typeof host._mfPickApi === "function" ? host._mfPickApi() : host["${ns}"]); api.`;
     const fullString = pre + script;
     csi.evalScript(
-      "try{" + fullString + "}catch(e){try{$.writeln('[cep] '+e);}catch(_w){}}",
+      "try{" + fullString + "}catch(e){try{$.writeln('[cep] '+e);}catch(_w){} JSON.stringify({evalESError:true,message:String(e&&e.message!=null?e.message:e)});}",
       (res: string) => {
         resolve(res);
       }
@@ -82,7 +193,7 @@ export const evalTS = <
     csi.evalScript(
       `try{
           var host = typeof $ !== 'undefined' ? $ : window;
-          var api = host["${ns}"];
+          var api = (typeof host._mfPickApi === "function") ? host._mfPickApi() : host["${ns}"];
           if (!api || typeof api.${functionName} !== "function") {
             throw new Error("Host function ${functionName} is not loaded. Reload the panel.");
           }
@@ -96,13 +207,13 @@ export const evalTS = <
         }`,
       (res: string) => {
         try {
-          //@ts-ignore
-          if (res === "undefined") return resolve();
+          if (res === "undefined") return resolve(undefined as ReturnType<Func>);
           // CEP returns "" when JSON.stringify(undefined) or after an AE alert().
           // JSON.parse("") → "Unexpected end of JSON input" in the panel.
           if (res == null || res === "") {
-            reject(new Error("Host script returned no result. Reload the panel and try again."));
-            return;
+            // AE render()/alert() often completes the callback with "".
+            // Sidecar is the real result — do not treat empty as a hard fail.
+            return resolve(undefined as ReturnType<Func>);
           }
           if (res === "EvalScript error.") {
             reject(new Error("Host script failed. Reload the panel and try again."));
@@ -145,23 +256,37 @@ export const evalTS = <
 export const evalFile = (file: string) => {
   return evalES(
     "typeof $ !== 'undefined' ? $.evalFile(\"" +
-      file +
-      '") : fl.runScript(FLfile.platformPathToURI("' +
-      file +
-      '"));',
+    file +
+    '") : fl.runScript(FLfile.platformPathToURI("' +
+    file +
+    '"));',
     true
   );
+};
+
+/** AE caches $.evalFile by path — always eval a unique temp copy. */
+const evalHostJsxFile = async (jsxSrc: string): Promise<string> => {
+  const dest = path.join(os.tmpdir(), `mf-jsx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.js`);
+  fs.copyFileSync(jsxSrc, dest);
+  const esPath = dest.replace(/\\/g, "/");
+  return evalES(`$.evalFile("${esPath}"); "ok";`, true);
 };
 
 /** Перечитать jsx/index.js в AE — иначе после правки ExtendScript остаётся старый код до рестарта панели. */
 export const reloadJSX = async (): Promise<string> => {
   if (!window.cep) return "";
+  clearHostAppIdCache();
   await initBolt(false);
   const extRoot = csi.getSystemPath("extension");
   const jsxSrc = `${extRoot}/jsx/index.js`;
   if (!fs.existsSync(jsxSrc)) return "";
-  return evalFile(jsxSrc.replace(/\\/g, "/"));
+  await stampAndBindHost();
+  const result = await evalHostJsxFile(jsxSrc);
+  await stampAndBindHost();
+  await probeHostAppIdFromDom();
+  return result;
 };
+
 
 /**
  * @function listenTS End-to-end Type-Safe ExtendScript to JavaScript Events
@@ -247,16 +372,43 @@ export const initBolt = (log = true): Promise<void> => {
   if (!window.cep) return Promise.resolve();
   if (boltInit) return boltInit;
   boltInit = (async () => {
+    console.log("[mf] CEP appId", cepHostAppId(), readCepAppId());
+    await stampAndBindHost();
     const extRoot = csi.getSystemPath("extension");
     const jsxSrc = `${extRoot}/jsx/index.js`;
     const jsxBinSrc = `${extRoot}/jsx/index.jsxbin`;
     if (fs.existsSync(jsxSrc)) {
-      if (log) console.log(jsxSrc);
-      await evalFile(jsxSrc.replace(/\\/g, "/"));
+      console.log("[mf] load JSX", jsxSrc);
+      await evalHostJsxFile(jsxSrc);
     } else if (fs.existsSync(jsxBinSrc)) {
-      if (log) console.log(jsxBinSrc);
+      console.log(jsxBinSrc);
       await evalFile(jsxBinSrc.replace(/\\/g, "/"));
     }
+    await stampAndBindHost();
+    const kind = await evalES(
+      `(function(){
+        var g = typeof $ !== "undefined" ? $ : this;
+        var out = {
+          kind: "",
+          cep: "",
+          hasPick: false,
+          hasAE: false,
+          hasPR: false,
+          hasKick: false
+        };
+        try { out.kind = String(g._mfHostKind || ""); } catch (e1) {}
+        try { out.cep = String(g._mfCepAppId || ""); } catch (e2) {}
+        try { out.hasPick = typeof g._mfPickApi === "function"; } catch (e3) {}
+        try { out.hasKick = typeof g._mfRunQueuedImport === "function"; } catch (e4) {}
+        try { out.hasAE = !!g["${ns}_AE"]; } catch (e5) {}
+        try { out.hasPR = !!g["${ns}_PPRO"]; } catch (e6) {}
+        return JSON.stringify(out);
+      })()`,
+      true,
+    );
+    console.log("[mf] ExtendScript bind", kind);
+    const probed = await probeHostAppIdFromDom();
+    console.log("[mf] host probe", probed, cepHostAppId(), readCepAppId());
     initializeCEP();
   })();
   return boltInit;

@@ -9,7 +9,7 @@ import "../globals.css";
 import { App } from "./main";
 import { ConfigurationWrapper } from "../../context/ConfigurationWrapper";
 import { getFontCatalog } from "../lib/utils/system-fonts";
-// describe-probe-20260822 cache bust
+// host-pick-20260822 cache bust
 
 enableSpectrum();
 installGlobalHandlers();

@@ -8,7 +8,7 @@ import {
   type DescribeType,
 } from "../../components/ProgressDialog";
 import { fs } from "../../lib/cep/node";
-import { csi } from "../../lib/utils/bolt";
+import { csi, cepHostAppId } from "../../lib/utils/bolt";
 import { Motionflow } from "@/sdk";
 import { hostSdk, sdkData } from "@/sdk/host-api";
 import { convertToMp3, detectSpeechStart } from "../../utils/ffmpeg";
@@ -115,7 +115,8 @@ const rebuildWords = (orig: CaptionsChunk[], text: string): CaptionsChunk[] => {
   });
 };
 
-const isAfterEffects = () => csi.hostEnvironment?.appId === "AEFT";
+const isAfterEffects = () => cepHostAppId() === "AEFT";
+const isPremiere = () => cepHostAppId() === "PPRO";
 
 export const CaptionsApp = ({
   generationsLeft = 0,
@@ -666,19 +667,19 @@ export const CaptionsApp = ({
   const pushLiveEdit = (_index: number, text: string, caption?: Caption) => {
     const hostRef = metaRef.current.hostRef;
     if (!hostRef) return;
-    const isPremiere = csi.hostEnvironment?.appId === "PPRO";
+    const premiere = isPremiere();
     const captionsRawData = caption
       ? patchCaptionsRawData(dataRef.current?.raw?.words, { ...caption, text }, text)
       : undefined;
     const captionChunks = captionsRawData ? captionsRawJsonToChunks(captionsRawData) : undefined;
     hostSdk()
       .updateCaptionText({
-      trackIndex: isPremiere ? (hostRef as { trackIndex: number }).trackIndex : undefined,
-      clipIndex: isPremiere ? 0 : undefined,
+      trackIndex: premiere ? (hostRef as { trackIndex: number }).trackIndex : undefined,
+      clipIndex: premiere ? 0 : undefined,
       sequenceId:
-        isPremiere && "sequenceId" in hostRef ? hostRef.sequenceId : undefined,
-      compId: !isPremiere ? (hostRef as { compId: number }).compId : undefined,
-      captionIndex: !isPremiere ? 0 : undefined,
+        premiere && "sequenceId" in hostRef ? hostRef.sequenceId : undefined,
+      compId: !premiere ? (hostRef as { compId: number }).compId : undefined,
+      captionIndex: !premiere ? 0 : undefined,
       text,
       captionChunks,
     })

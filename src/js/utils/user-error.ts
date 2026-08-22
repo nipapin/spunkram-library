@@ -1,5 +1,6 @@
 import { CaptionApiError, authErrorMessage } from "../styles/api";
 import { ChapterApiError } from "./chapters";
+import { cepHostAppId } from "../lib/utils/bolt";
 
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 const NETWORK_ERROR = "Network error. Check your connection and try again.";
@@ -237,7 +238,9 @@ export function friendlyErrorMessage(err: unknown): string {
     /NO_INOUT/i.test(msg) ||
     /no in\/out range/i.test(msg)
   ) {
-    return "Set In and Out points on the sequence, then try again.";
+    return cepHostAppId() === "AEFT"
+      ? "Set a Work Area on the composition, then try again."
+      : "Set In and Out points on the sequence, then try again.";
   }
   if (/set a work area/i.test(msg) || /NO_WORK_AREA/i.test(msg)) {
     return "Set a Work Area on the composition, then try again.";

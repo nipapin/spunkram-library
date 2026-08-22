@@ -65,14 +65,14 @@ function reportChapterApiError(action: string, e: unknown) {
 
 type ResultState = {
   titles: string[];
-  // редактируется как обычный текст, а не массив чипов
+  // ÑÐµÐ´Ð°ÐºÑÐ¸ÑÑÐµÑÑÑ ÐºÐ°Ðº Ð¾Ð±ÑÑÐ½ÑÐ¹ ÑÐµÐºÑÑ, Ð° Ð½Ðµ Ð¼Ð°ÑÑÐ¸Ð² ÑÐ¸Ð¿Ð¾Ð²
   description: string;
-  // редактируется как один текст через запятую, а не массив чипов
+  // ÑÐµÐ´Ð°ÐºÑÐ¸ÑÑÐµÑÑÑ ÐºÐ°Ðº Ð¾Ð´Ð¸Ð½ ÑÐµÐºÑÑ ÑÐµÑÐµÐ· Ð·Ð°Ð¿ÑÑÑÑ, Ð° Ð½Ðµ Ð¼Ð°ÑÑÐ¸Ð² ÑÐ¸Ð¿Ð¾Ð²
   tags: string;
   chapters: Chapter[];
-  // сдвиг рендера относительно таймлинии хоста (offset из describe) — нужен,
-  // чтобы маркеры на композиции/секвенции легли на реальные тайминги, а не
-  // на тайминги внутри рендеренного фрагмента
+  // ÑÐ´Ð²Ð¸Ð³ ÑÐµÐ½Ð´ÐµÑÐ° Ð¾ÑÐ½Ð¾ÑÐ¸ÑÐµÐ»ÑÐ½Ð¾ ÑÐ°Ð¹Ð¼Ð»Ð¸Ð½Ð¸Ð¸ ÑÐ¾ÑÑÐ° (offset Ð¸Ð· describe) â Ð½ÑÐ¶ÐµÐ½,
+  // ÑÑÐ¾Ð±Ñ Ð¼Ð°ÑÐºÐµÑÑ Ð½Ð° ÐºÐ¾Ð¼Ð¿Ð¾Ð·Ð¸ÑÐ¸Ð¸/ÑÐµÐºÐ²ÐµÐ½ÑÐ¸Ð¸ Ð»ÐµÐ³Ð»Ð¸ Ð½Ð° ÑÐµÐ°Ð»ÑÐ½ÑÐµ ÑÐ°Ð¹Ð¼Ð¸Ð½Ð³Ð¸, Ð° Ð½Ðµ
+  // Ð½Ð° ÑÐ°Ð¹Ð¼Ð¸Ð½Ð³Ð¸ Ð²Ð½ÑÑÑÐ¸ ÑÐµÐ½Ð´ÐµÑÐµÐ½Ð½Ð¾Ð³Ð¾ ÑÑÐ°Ð³Ð¼ÐµÐ½ÑÐ°
   offset: number;
 };
 
@@ -187,7 +187,7 @@ export const ChaptersApp = ({
   const [regeneratingDescription, setRegeneratingDescription] = useState(false);
   const [regeneratingTags, setRegeneratingTags] = useState(false);
   const [addingMarkers, setAddingMarkers] = useState(false);
-  // landing | results � ����� �����, ����� Back �� ��������� ������
+  // landing | results  ÿâíûé ýêðàí, ÷òîáû Back íå ñáðàñûâàë äàííûå
   const [screen, setScreen] = useState<"landing" | "results">("landing");
 
   const showError = (err: unknown) => {
@@ -201,9 +201,9 @@ export const ChaptersApp = ({
   const activeHistoryIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // когда выбран перевод, ВСЕ поля (title/description/tags/главы) генерируются
-  // на этом языке — не только транскрипт; читаем перед каждым вызовом, чтобы
-  // Regenerate одной секции сразу подхватывал текущий выбор языка в панели
+  // ÐºÐ¾Ð³Ð´Ð° Ð²ÑÐ±ÑÐ°Ð½ Ð¿ÐµÑÐµÐ²Ð¾Ð´, ÐÐ¡Ð Ð¿Ð¾Ð»Ñ (title/description/tags/Ð³Ð»Ð°Ð²Ñ) Ð³ÐµÐ½ÐµÑÐ¸ÑÑÑÑÑÑ
+  // Ð½Ð° ÑÑÐ¾Ð¼ ÑÐ·ÑÐºÐµ â Ð½Ðµ ÑÐ¾Ð»ÑÐºÐ¾ ÑÑÐ°Ð½ÑÐºÑÐ¸Ð¿Ñ; ÑÐ¸ÑÐ°ÐµÐ¼ Ð¿ÐµÑÐµÐ´ ÐºÐ°Ð¶Ð´ÑÐ¼ Ð²ÑÐ·Ð¾Ð²Ð¾Ð¼, ÑÑÐ¾Ð±Ñ
+  // Regenerate Ð¾Ð´Ð½Ð¾Ð¹ ÑÐµÐºÑÐ¸Ð¸ ÑÑÐ°Ð·Ñ Ð¿Ð¾Ð´ÑÐ²Ð°ÑÑÐ²Ð°Ð» ÑÐµÐºÑÑÐ¸Ð¹ Ð²ÑÐ±Ð¾Ñ ÑÐ·ÑÐºÐ° Ð² Ð¿Ð°Ð½ÐµÐ»Ð¸
   const outputLanguage = translateTo !== "off" ? translateTo : undefined;
 
   const persistTranscription = (next: TranscribeResult) => {
@@ -243,7 +243,7 @@ export const ChaptersApp = ({
     });
   };
 
-  /** New generation → prepend history and open results. */
+  /** New generation â prepend history and open results. */
   const commitNewGeneration = (nextResult: ResultState, nextTranscription: TranscribeResult) => {
     const id = newHistoryId();
     const item: ChaptersHistoryItem = {
@@ -275,17 +275,17 @@ export const ChaptersApp = ({
     if (signal.aborted) throw new Error("Cancelled");
   };
 
-  // временные файлы рендера (wav/avi + mp3) удаляем в самом конце flow:
-  // хост может держать хендл на только что отрендеренный файл, а удаление
-  // открытого файла на Windows оставляет его в "delete pending" и роняет
-  // следующий exportAsMediaDirect ("Unable To Delete Existing File")
+  // Ð²ÑÐµÐ¼ÐµÐ½Ð½ÑÐµ ÑÐ°Ð¹Ð»Ñ ÑÐµÐ½Ð´ÐµÑÐ° (wav/avi + mp3) ÑÐ´Ð°Ð»ÑÐµÐ¼ Ð² ÑÐ°Ð¼Ð¾Ð¼ ÐºÐ¾Ð½ÑÐµ flow:
+  // ÑÐ¾ÑÑ Ð¼Ð¾Ð¶ÐµÑ Ð´ÐµÑÐ¶Ð°ÑÑ ÑÐµÐ½Ð´Ð» Ð½Ð° ÑÐ¾Ð»ÑÐºÐ¾ ÑÑÐ¾ Ð¾ÑÑÐµÐ½Ð´ÐµÑÐµÐ½Ð½ÑÐ¹ ÑÐ°Ð¹Ð», Ð° ÑÐ´Ð°Ð»ÐµÐ½Ð¸Ðµ
+  // Ð¾ÑÐºÑÑÑÐ¾Ð³Ð¾ ÑÐ°Ð¹Ð»Ð° Ð½Ð° Windows Ð¾ÑÑÐ°Ð²Ð»ÑÐµÑ ÐµÐ³Ð¾ Ð² "delete pending" Ð¸ ÑÐ¾Ð½ÑÐµÑ
+  // ÑÐ»ÐµÐ´ÑÑÑÐ¸Ð¹ exportAsMediaDirect ("Unable To Delete Existing File")
   const cleanupTempAudio = (paths: (string | undefined)[]) => {
     for (const p of paths) {
       if (!p) continue;
       try {
         if (fs.existsSync(p)) fs.unlinkSync(p);
       } catch {
-        // файл ещё занят хостом — оставляем, temp почистит система
+        // ÑÐ°Ð¹Ð» ÐµÑÑ Ð·Ð°Ð½ÑÑ ÑÐ¾ÑÑÐ¾Ð¼ â Ð¾ÑÑÐ°Ð²Ð»ÑÐµÐ¼, temp Ð¿Ð¾ÑÐ¸ÑÑÐ¸Ñ ÑÐ¸ÑÑÐµÐ¼Ð°
       }
     }
   };
@@ -332,7 +332,7 @@ export const ChaptersApp = ({
       }
       throwIfCancelled(signal);
 
-      // чиним разорванные ИИ предложения перед суммаризацией
+      // ÑÐ¸Ð½Ð¸Ð¼ ÑÐ°Ð·Ð¾ÑÐ²Ð°Ð½Ð½ÑÐµ ÐÐ Ð¿ÑÐµÐ´Ð»Ð¾Ð¶ÐµÐ½Ð¸Ñ Ð¿ÐµÑÐµÐ´ ÑÑÐ¼Ð¼Ð°ÑÐ¸Ð·Ð°ÑÐ¸ÐµÐ¹
       const normalized = normalize(transcriptionResult);
       persistTranscription(normalized);
 
@@ -354,8 +354,8 @@ export const ChaptersApp = ({
       commitNewGeneration(nextResult, normalized);
       notifyCreditsChanged();
     } finally {
-      // wav/avi + mp3 — только когда flow полностью завершён (успех, ошибка
-      // или отмена), чтобы не дёргать файлы, которые хост ещё держит открытыми
+      // wav/avi + mp3 â ÑÐ¾Ð»ÑÐºÐ¾ ÐºÐ¾Ð³Ð´Ð° flow Ð¿Ð¾Ð»Ð½Ð¾ÑÑÑÑ Ð·Ð°Ð²ÐµÑÑÑÐ½ (ÑÑÐ¿ÐµÑ, Ð¾ÑÐ¸Ð±ÐºÐ°
+      // Ð¸Ð»Ð¸ Ð¾ÑÐ¼ÐµÐ½Ð°), ÑÑÐ¾Ð±Ñ Ð½Ðµ Ð´ÑÑÐ³Ð°ÑÑ ÑÐ°Ð¹Ð»Ñ, ÐºÐ¾ÑÐ¾ÑÑÐµ ÑÐ¾ÑÑ ÐµÑÑ Ð´ÐµÑÐ¶Ð¸Ñ Ð¾ÑÐºÑÑÑÑÐ¼Ð¸
       cleanupTempAudio([res.source, res.dest]);
     }
   };
@@ -381,7 +381,7 @@ export const ChaptersApp = ({
       await runGeneration(controller.signal);
     } catch (e) {
       if (e instanceof Error && e.message === "Cancelled") {
-        // quiet cancel � no toast
+        // quiet cancel  no toast
       } else {
         showError(e);
         if (!isSoftHostError(e)) reportChapterApiError("chapters.generate", e);
@@ -392,10 +392,10 @@ export const ChaptersApp = ({
     }
   };
 
-  // повторный вызов /api/generations/chapters по уже готовому транскрипту, без
-  // повторного рендера/транскрипции; каждая секция регенерируется независимо —
-  // точечный target на бэкенде не трогает остальные поля, но списывает 1
-  // генерацию пользователя (как и generateAll)
+  // Ð¿Ð¾Ð²ÑÐ¾ÑÐ½ÑÐ¹ Ð²ÑÐ·Ð¾Ð² /api/generations/chapters Ð¿Ð¾ ÑÐ¶Ðµ Ð³Ð¾ÑÐ¾Ð²Ð¾Ð¼Ñ ÑÑÐ°Ð½ÑÐºÑÐ¸Ð¿ÑÑ, Ð±ÐµÐ·
+  // Ð¿Ð¾Ð²ÑÐ¾ÑÐ½Ð¾Ð³Ð¾ ÑÐµÐ½Ð´ÐµÑÐ°/ÑÑÐ°Ð½ÑÐºÑÐ¸Ð¿ÑÐ¸Ð¸; ÐºÐ°Ð¶Ð´Ð°Ñ ÑÐµÐºÑÐ¸Ñ ÑÐµÐ³ÐµÐ½ÐµÑÐ¸ÑÑÐµÑÑÑ Ð½ÐµÐ·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ â
+  // ÑÐ¾ÑÐµÑÐ½ÑÐ¹ target Ð½Ð° Ð±ÑÐºÐµÐ½Ð´Ðµ Ð½Ðµ ÑÑÐ¾Ð³Ð°ÐµÑ Ð¾ÑÑÐ°Ð»ÑÐ½ÑÐµ Ð¿Ð¾Ð»Ñ, Ð½Ð¾ ÑÐ¿Ð¸ÑÑÐ²Ð°ÐµÑ 1
+  // Ð³ÐµÐ½ÐµÑÐ°ÑÐ¸Ñ Ð¿Ð¾Ð»ÑÐ·Ð¾Ð²Ð°ÑÐµÐ»Ñ (ÐºÐ°Ðº Ð¸ generateAll)
   const runSectionRegenerate = async <T,>(opts: {
     busy: boolean;
     setBusy: (v: boolean) => void;
@@ -509,13 +509,13 @@ export const ChaptersApp = ({
     persistResult({ ...result, chapters: [...result.chapters, createChapter(nextTime)] });
   };
 
-  // "Copy Description" в футере — цельный блок для поля Description на YouTube:
-  // текст описания + список таймкодов глав + теги в виде #хэштегов
+  // "Copy Description" Ð² ÑÑÑÐµÑÐµ â ÑÐµÐ»ÑÐ½ÑÐ¹ Ð±Ð»Ð¾Ðº Ð´Ð»Ñ Ð¿Ð¾Ð»Ñ Description Ð½Ð° YouTube:
+  // ÑÐµÐºÑÑ Ð¾Ð¿Ð¸ÑÐ°Ð½Ð¸Ñ + ÑÐ¿Ð¸ÑÐ¾Ðº ÑÐ°Ð¹Ð¼ÐºÐ¾Ð´Ð¾Ð² Ð³Ð»Ð°Ð² + ÑÐµÐ³Ð¸ Ð² Ð²Ð¸Ð´Ðµ #ÑÑÑÑÐµÐ³Ð¾Ð²
   const handleCopyDescription = () =>
     copyToClipboard(formatFullDescription(result.description, result.chapters, result.tags));
 
-  // маркеры ставим на реальные тайминги (time + offset рендера), без правила
-  // "первая глава = 00:00" — оно нужно только для текстового YouTube-формата
+  // Ð¼Ð°ÑÐºÐµÑÑ ÑÑÐ°Ð²Ð¸Ð¼ Ð½Ð° ÑÐµÐ°Ð»ÑÐ½ÑÐµ ÑÐ°Ð¹Ð¼Ð¸Ð½Ð³Ð¸ (time + offset ÑÐµÐ½Ð´ÐµÑÐ°), Ð±ÐµÐ· Ð¿ÑÐ°Ð²Ð¸Ð»Ð°
+  // "Ð¿ÐµÑÐ²Ð°Ñ Ð³Ð»Ð°Ð²Ð° = 00:00" â Ð¾Ð½Ð¾ Ð½ÑÐ¶Ð½Ð¾ ÑÐ¾Ð»ÑÐºÐ¾ Ð´Ð»Ñ ÑÐµÐºÑÑÐ¾Ð²Ð¾Ð³Ð¾ YouTube-ÑÐ¾ÑÐ¼Ð°ÑÐ°
   const handleAddMarkers = async () => {
     if (addingMarkers || !result.chapters.length) return false;
     setAddingMarkers(true);
@@ -525,7 +525,7 @@ export const ChaptersApp = ({
         .sort((a, b) => a.time - b.time)
         .map((c) => ({ time: c.time + result.offset, name: c.title.trim() || "Chapter" }));
       const res = await sdkData(hostSdk().addMarkers({ markers }));
-      return !!res;
+      return !!(res && typeof res === "object" && (res as { ok?: boolean }).ok === true);
     } catch (e) {
       showError(e);
       reportSupportError("chapters.add_markers", e);
@@ -535,7 +535,7 @@ export const ChaptersApp = ({
     }
   };
 
-  // Back — только UI; история на landing даёт снова открыть результат
+  // Back â ÑÐ¾Ð»ÑÐºÐ¾ UI; Ð¸ÑÑÐ¾ÑÐ¸Ñ Ð½Ð° landing Ð´Ð°ÑÑ ÑÐ½Ð¾Ð²Ð° Ð¾ÑÐºÑÑÑÑ ÑÐµÐ·ÑÐ»ÑÑÐ°Ñ
   const handleBack = () => {
     setScreen("landing");
   };
@@ -572,7 +572,7 @@ export const ChaptersApp = ({
     }
   };
 
-  // история (+ миграция старого одиночного результата); стартуем на landing
+  // Ð¸ÑÑÐ¾ÑÐ¸Ñ (+ Ð¼Ð¸Ð³ÑÐ°ÑÐ¸Ñ ÑÑÐ°ÑÐ¾Ð³Ð¾ Ð¾Ð´Ð¸Ð½Ð¾ÑÐ½Ð¾Ð³Ð¾ ÑÐµÐ·ÑÐ»ÑÑÐ°ÑÐ°); ÑÑÐ°ÑÑÑÐµÐ¼ Ð½Ð° landing
   useEffect(() => {
     let items = loadHistory();
     if (items.length === 0) {

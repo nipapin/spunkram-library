@@ -97,13 +97,15 @@ export const extendscriptConfig = (
 
   const watchRollup = async () => {
     const watcher = watch(config);
-    watcher.on("event", ({ result }: any) => {
-      if (result) {
+    watcher.on("event", (event: any) => {
+      if (event.code === "BUNDLE_END") {
         triggerHMR();
-        result.close();
+        event.result?.close();
+      }
+      if (event.code === "ERROR") {
+        console.error(event.error);
       }
     });
-    watcher.close();
   };
 
   if (isProduction) {
