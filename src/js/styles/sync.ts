@@ -30,6 +30,7 @@ import type {
 import { EMPTY_DEFINITION } from "./types";
 import { csi } from "../lib/utils/bolt";
 import { getActiveBrand } from "../lib/utils/brandTheme";
+import { getResolvedHostSync } from "../lib/utils/host-identity";
 import { defaultsFromDefinition, findControlByAnyNames, isColorArray, rgbaToHex } from "../presets";
 import type { ControlValues, MogrtDefinition } from "../presets/types";
 
@@ -177,7 +178,7 @@ export const downloadStylePackage = async (
   preset: StylePreset;
   definition: MogrtDefinition;
 }> => {
-  const hostAppId = options?.hostAppId ?? csi.hostEnvironment?.appId;
+  const hostAppId = options?.hostAppId ?? getResolvedHostSync() ?? csi.hostEnvironment?.appId;
   const fileFlags = options?.files ?? { mogrt: true, aep: true, definition: true };
   const file = options?.file ?? pickProjectFile(fileFlags, hostAppId);
   if (!file || file === "definition") {
@@ -303,7 +304,7 @@ export const refreshStylePackageIfRemoteChanged = async (
   const existing = loadLocalPackage(styleId);
   if (!existing) return { updated: false, updateAvailable: false };
 
-  const hostAppId = options?.hostAppId ?? csi.hostEnvironment?.appId;
+  const hostAppId = options?.hostAppId ?? getResolvedHostSync() ?? csi.hostEnvironment?.appId;
   const fileFlags = options?.files ?? { mogrt: true, aep: true, definition: true };
   const file = options?.file ?? pickProjectFile(fileFlags, hostAppId);
   if (!file || file === "definition") return { updated: false, updateAvailable: false };
@@ -435,7 +436,7 @@ export const syncCaptionStyles = async (options?: {
       // First seen version: remember it, don't mass-redownload existing files.
       // Later bumps: refresh every local project that is still in the catalog.
       if (hadLocalSnapshot) {
-        const hostAppId = csi.hostEnvironment?.appId;
+        const hostAppId = getResolvedHostSync() ?? csi.hostEnvironment?.appId;
         const toCheck = catalog.filter((item) => localById.has(item.id));
         const results = await mapPool(toCheck, 2, async (item) => {
           try {

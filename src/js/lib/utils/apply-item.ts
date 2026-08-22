@@ -17,6 +17,7 @@ import {
   resolvePackTemplatesPath,
   type HostAppId,
 } from "./pack-apply-paths";
+import { getResolvedHostSync } from "./host-identity";
 import {
   applyFullProjectViaCopyPaste,
   resolveFullProjectAssetsPath,
@@ -68,6 +69,11 @@ function durationSecondsForItem(item: PackTreeItem): number | undefined {
 }
 
 export function currentHostAppId(): HostAppId | null {
+  // Use resolved host from DOM probe (reliable in AE 24–25 where CSInterface
+  // can incorrectly report "PPRO" while inside After Effects).
+  const resolved = getResolvedHostSync();
+  if (resolved === "PPRO" || resolved === "AEFT") return resolved;
+  // Fallback to CSInterface if probe hasn't run yet
   const id = csi.hostEnvironment?.appId;
   if (id === "PPRO" || id === "AEFT") return id;
   return null;
