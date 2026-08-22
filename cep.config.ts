@@ -63,7 +63,7 @@ const config: CEP_Config = {
     ],
     allowSkipTSA: false,
     sourceMap: false,
-    jsxBin: "replace",
+    jsxBin: "off",
   },
   installModules: [],
   // audio-export.epr + Motionflow.dll / PTX / Premiere bridge at extension root bin/
