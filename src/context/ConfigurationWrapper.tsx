@@ -30,6 +30,7 @@ import type { GroupingMode } from "../js/utils/transcribe";
 import { csi } from "../js/lib/utils/bolt";
 import { Motionflow } from "../js/sdk";
 import * as panelStore from "../js/lib/userdata-store";
+import { getResolvedHostSync } from "../js/lib/utils/host-identity";
 import { getFontCatalog, resolveFontFace } from "../js/lib/utils/system-fonts";
 
 export type { StylePreset } from "../js/styles";
@@ -309,7 +310,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       // локальный пакет мог быть скачан под другой хост (AE → только project.aep):
       // для Premiere нужен именно mogrt — иначе перекачиваем пакет под текущий хост
       const localPaths = getLocalStyleAssetPaths(styleId);
-      const hostAppId = csi.hostEnvironment?.appId;
+      const hostAppId = getResolvedHostSync() ?? csi.hostEnvironment?.appId;
       const hasHostFile = hostAppId === "PPRO" ? !!localPaths?.mogrt : !!(localPaths?.aep || localPaths?.mogrt);
       if (existing && existing.source === "downloaded" && !existing.updateAvailable && hasHostFile) {
         applyPreparedAssets(localPaths);

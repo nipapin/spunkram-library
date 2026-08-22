@@ -1,6 +1,7 @@
 import { csi } from "./bolt";
 import { storageKey } from "@brands";
 import type { InstalledPackMeta } from "./pack-types";
+import { getResolvedHostSync } from "./host-identity";
 
 /** Catalog / pack software_id codes (not CEP appId). */
 export type PackHostId = "AE" | "PR";
@@ -20,6 +21,12 @@ export function normalizePackHost(id: string | null | undefined): PackHostId | "
 
 /** Current CEP host as pack software_id (AE | PR). */
 export function currentPackHost(): PackHostId | null {
+  // Use resolved host from DOM probe (reliable in AE 24–25 where CSInterface
+  // can incorrectly report "PPRO" while inside After Effects).
+  const resolved = getResolvedHostSync();
+  if (resolved === "AEFT") return "AE";
+  if (resolved === "PPRO") return "PR";
+  // Fallback to CSInterface if probe hasn't run yet
   const appId = csi.hostEnvironment?.appId;
   if (appId === "AEFT") return "AE";
   if (appId === "PPRO") return "PR";

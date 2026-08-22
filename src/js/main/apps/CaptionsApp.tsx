@@ -8,7 +8,7 @@ import {
   type DescribeType,
 } from "../../components/ProgressDialog";
 import { fs } from "../../lib/cep/node";
-import { csi } from "../../lib/utils/bolt";
+import { isAfterEffects, isPremierePro } from "../../lib/utils/host-identity";
 import { Motionflow } from "@/sdk";
 import { hostSdk, sdkData } from "@/sdk/host-api";
 import { convertToMp3, detectSpeechStart } from "../../utils/ffmpeg";
@@ -114,8 +114,6 @@ const rebuildWords = (orig: CaptionsChunk[], text: string): CaptionsChunk[] => {
     return { text: tok, timestamp: [ws, cursor] as [number, number] };
   });
 };
-
-const isAfterEffects = () => csi.hostEnvironment?.appId === "AEFT";
 
 export const CaptionsApp = ({
   generationsLeft = 0,
@@ -666,7 +664,7 @@ export const CaptionsApp = ({
   const pushLiveEdit = (_index: number, text: string, caption?: Caption) => {
     const hostRef = metaRef.current.hostRef;
     if (!hostRef) return;
-    const isPremiere = csi.hostEnvironment?.appId === "PPRO";
+    const isPremiere = isPremierePro();
     const captionsRawData = caption
       ? patchCaptionsRawData(dataRef.current?.raw?.words, { ...caption, text }, text)
       : undefined;

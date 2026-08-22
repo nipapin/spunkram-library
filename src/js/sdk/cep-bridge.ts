@@ -1,6 +1,7 @@
 import { evalTS, initBolt, reloadJSX, csi } from "../lib/utils/bolt";
 import { fs, os, path } from "../lib/cep/node";
 import type { MotionFlowBridge, MfHost } from "motionflow-sdk";
+import { getResolvedHostSync, isAfterEffects } from "../lib/utils/host-identity";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -93,9 +94,17 @@ async function withHostJsonFile<T>(
 export function createCepBridge(): MotionFlowBridge {
   return {
     getHost(): MfHost | null {
-      const id = csi.hostEnvironment?.appId;
-      if (id === "AEFT") return "AE";
-      if (id === "PPRO") return "PPRO";
+      // Use the resolved host from DOM probe (reliable in AE 24–25 where
+      // CSInterface can incorrectly report "PPRO" while inside After Effects).
+      // Falls back to CSInterface if probe hasn't run yet.
+      const resolved = getResolvedHostSync();
+      if (resolved === "AEFT") return "AE";
+      if (resolved === "PPRO") return "PPRO";
+      // Probe hasn't run yet — use synchronous fallback
+      if (isAfterEffects()) return "AE";
+      const cepId = csi.hostEnvironment?.appId;
+      if (cepId === "AEFT") return "AE";
+      if (cepId === "PPRO") return "PPRO";
       return null;
     },
 
