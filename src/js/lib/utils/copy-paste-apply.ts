@@ -174,12 +174,24 @@ export async function applyFullProjectViaCopyPaste(
     return { ok: false, message: `Project file missing: ${path.basename(args.projectPath)}` };
   }
 
-  const dllHint = path.join(extensionPath(), "bin", "win", "Motionflow.dll");
-  if (isWin() && !fs.existsSync(dllHint)) {
-    return {
-      ok: false,
-      message: "Motionflow.dll missing from extension bin/win — rebuild/reinstall the panel.",
-    };
+  // Check native library exists before proceeding
+  if (isWin()) {
+    const dllHint = path.join(extensionPath(), "bin", "win", "Motionflow.dll");
+    if (!fs.existsSync(dllHint)) {
+      return {
+        ok: false,
+        message: "Motionflow.dll missing from extension bin/win — rebuild/reinstall the panel.",
+      };
+    }
+  } else {
+    // Mac: the bundle lives under bin/mac/, not directly in the extension root
+    const bundleHint = path.join(extensionPath(), "bin", "mac", "Motionflow.bundle");
+    if (!fs.existsSync(bundleHint)) {
+      return {
+        ok: false,
+        message: "Motionflow.bundle missing from extension bin/mac — rebuild/reinstall the panel.",
+      };
+    }
   }
 
   let undoStarted = false;

@@ -138,7 +138,7 @@ export function DownloadManagerProvider({
 
     try {
       let result = preferCache
-        ? await installCachedPack(jobSnap.pack)
+        ? await installCachedPack(jobSnap.pack, { signal: controller.signal })
         : await downloadAndInstallOrUpdatePack(jobSnap.pack, installedMeta, {
             signal: controller.signal,
             onProgress: ({ bytesReceived, totalBytes }) => {

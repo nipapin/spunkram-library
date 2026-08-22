@@ -154,7 +154,7 @@ function GalleryCard({
         </CardChip>
       </div>
       <ShadowOverlay />
-      <AutorCredential hovered={hovered} user={item.user} />
+      <AutorCredential hovered={hovered} user={item.user} provider={item.provider} />
       <div
         className={cn(
           "absolute inset-x-0 bottom-0 flex w-full gap-1 p-2 transition-opacity",

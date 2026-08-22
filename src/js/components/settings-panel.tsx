@@ -11,7 +11,7 @@ import {
   type PrefSettings,
 } from "@/lib/api/preferences";
 import { selectFolder } from "@/lib/utils/bolt";
-import { notifyPackagesRescan, resolvePackagesInstallRoot, scanAndRegisterPacksAtRoot } from "@/lib/utils/pack-install";
+import { notifyPackagesRescan, removeAllInstalledPacks, resolvePackagesInstallRoot, scanAndRegisterPacksAtRoot } from "@/lib/utils/pack-install";
 import { version as EXTENSION_VERSION } from "../../shared/shared";
 import { fetchSpunkramVersions, isReleaseAdminEmail, type SpunkramVersionEntry } from "@/api/update";
 import { applyExtensionUpdate } from "@/utils/extension-update";
@@ -255,7 +255,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
   function removePackageFiles() {
     setBusy(true);
     setConfirm(null);
-    clearInstalledPackagesInPreferences();
+    removeAllInstalledPacks();
     try {
       clearAllActivePackStorageKeys((key) => panelStore.removeItem(key));
     } catch {
@@ -319,16 +319,6 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
               />
             </div>
           </div>
-        </section>
-
-        <section className="mb-3 glass-card rounded-[20px] p-3">
-          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Render Options</h3>
-          <ToggleRow
-            label="Use System Fonts"
-            hint="Reload required"
-            checked={asBool(prefs.useSystemFonts)}
-            onChange={(v) => patch({ useSystemFonts: v ? 1 : 0 })}
-          />
         </section>
 
         {isAdmin && (

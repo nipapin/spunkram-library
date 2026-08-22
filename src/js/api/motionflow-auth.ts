@@ -22,6 +22,7 @@ export const AUTH_ENDPOINTS = {
   me: "/api/cep/me",
   revokeDevice: "/api/cep/devices/revoke",
   subscribe: `${PUBLIC_AUTH_ORIGIN}${BRAND.sitePath}`,
+  store: `${PUBLIC_AUTH_ORIGIN}${BRAND.sitePath}/store`,
   manageSubscription: `${PUBLIC_AUTH_ORIGIN}/profile/subscriptions?${clientQuery()}`,
   contact: `${PUBLIC_AUTH_ORIGIN}${BRAND.sitePath}#contact`,
 } as const;
@@ -293,6 +294,10 @@ export function setSubscriptionUrls(urls: {
 export function openMotionflowSubscribe(): void {
   // Always the brand landing — ignore server subscribe_url (legacy /pricing).
   openLinkInBrowser(AUTH_ENDPOINTS.subscribe);
+}
+
+export function openMotionflowStore(): void {
+  openLinkInBrowser(AUTH_ENDPOINTS.store);
 }
 
 export function openMotionflowManageSubscription(): void {

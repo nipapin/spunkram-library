@@ -13,7 +13,6 @@ export type PrefSettings = {
   customStockLocation: string | null;
   useCurrentProjectLocation: number | boolean;
   audioVisualization: number;
-  useSystemFonts: number | boolean;
   useGPUSupports: number;
   useContinueAnyway: number;
   packSortFavorited: number;
@@ -69,7 +68,6 @@ export const DEFAULT_PREF_SETTINGS: PrefSettings = {
   customStockLocation: null,
   useCurrentProjectLocation: 0,
   audioVisualization: 2,
-  useSystemFonts: 0,
   useGPUSupports: 1,
   useContinueAnyway: 1,
   packSortFavorited: 0,

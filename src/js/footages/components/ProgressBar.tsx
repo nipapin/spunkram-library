@@ -1,10 +1,29 @@
+import { XCircle, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useProgressContext } from "../context/ProgressContext";
 
 export default function ProgressBar() {
-  const { progress, pending, setPending } = useProgressContext();
+  const { progress, pending, setPending, error, clearError } = useProgressContext();
 
-  if (!pending) return null;
+  if (!pending && !error) return null;
+
+  if (error) {
+    return createPortal(
+      <div className="pointer-events-none fixed bottom-3 left-1/2 z-[1100] flex w-[min(100%-1.25rem,360px)] -translate-x-1/2 items-start gap-2 rounded-xl border border-rose-400/35 bg-[#1a1014]/95 px-3 py-2.5 text-[12px] font-medium leading-snug shadow-xl backdrop-blur-md text-rose-100">
+        <XCircle className="mt-0.5 size-4 shrink-0 text-rose-300" />
+        <span className="min-w-0 flex-1 pt-px">{error}</span>
+        <button
+          type="button"
+          aria-label="Dismiss"
+          className="pointer-events-auto mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-white/45 transition-colors hover:bg-white/10 hover:text-white"
+          onClick={clearError}
+        >
+          <X className="size-3.5" strokeWidth={2.5} />
+        </button>
+      </div>,
+      document.body,
+    );
+  }
 
   return createPortal(
     <div

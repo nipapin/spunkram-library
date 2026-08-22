@@ -23,7 +23,7 @@ import { installPackFromFile } from "@/lib/utils/pack-install";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 import { normalizePackHost } from "@/lib/utils/pack-host";
 import { installPackFonts } from "@/lib/utils/pack-fonts";
-import { extractZipToFolder } from "@/lib/utils/pack-zip";
+import { extractZipToFolder, ExtractAbortedError } from "@/lib/utils/pack-zip";
 import {
   readLocalPackManifest,
   removeFilesNotInManifest,
@@ -333,9 +333,15 @@ function removeCachedPackZip(zipPath: string): void {
 async function installFromZipPath(
   zipPath: string,
   item?: CepMarketPackage,
+  opts?: { signal?: AbortSignal },
 ): Promise<DownloadAndInstallResult> {
-  const installed = await installPackFromFile(zipPath);
+  const installed = await installPackFromFile(zipPath, { signal: opts?.signal });
   if (!installed.ok) {
+    const isCancelled =
+      opts?.signal?.aborted || installed.message === "Installation cancelled";
+    if (isCancelled) {
+      return { ok: false, code: "ABORTED", message: "Installation cancelled" };
+    }
     return { ok: false, message: installed.message, cachedZipPath: zipPath };
   }
   const meta = item
@@ -351,12 +357,13 @@ async function installFromZipPath(
  */
 export async function installCachedPack(
   item: CepMarketPackage,
+  opts?: { signal?: AbortSignal },
 ): Promise<DownloadAndInstallResult> {
   const zipPath = resolveCachedPackZipPath(item);
   if (!hasCachedPackZip(item)) {
     return { ok: false, code: "NO_CACHE", message: "Cached pack zip not found." };
   }
-  return installFromZipPath(zipPath, item);
+  return installFromZipPath(zipPath, item, opts);
 }
 
 /**
@@ -384,7 +391,7 @@ export async function downloadAndInstallPack(
 
   if (opts?.preferCache && hasCachedPackZip(item)) {
     opts.onPhase?.("installing");
-    return installFromZipPath(destPath, item);
+    return installFromZipPath(destPath, item, { signal: opts.signal });
   }
 
   const token = getSessionToken();
@@ -462,7 +469,7 @@ export async function downloadAndInstallPack(
   }
 
   opts?.onPhase?.("installing");
-  return installFromZipPath(destPath, item);
+  return installFromZipPath(destPath, item, { signal: opts?.signal });
 }
 
 /** True when the catalog version is newer than the installed prefs entry. */
@@ -618,7 +625,7 @@ export async function downloadAndApplyPackDiff(
   opts?.onPhase?.("installing");
   try {
     const oldManifest = localManifest;
-    extractZipToFolder(destPath, packDir);
+    extractZipToFolder(destPath, packDir, { signal: opts?.signal });
     const newManifest = readLocalPackManifest(packDir) ?? oldManifest;
     removeFilesNotInManifest(packDir, oldManifest, newManifest);
     if (newManifest != null) writeLocalPackManifest(packDir, newManifest);
@@ -643,6 +650,9 @@ export async function downloadAndApplyPackDiff(
 
     return { ok: true, meta: updated };
   } catch (e) {
+    if (e instanceof ExtractAbortedError || opts?.signal?.aborted) {
+      return { ok: false, code: "ABORTED", message: "Installation cancelled" };
+    }
     return {
       ok: false,
       message: e instanceof Error ? e.message : String(e),

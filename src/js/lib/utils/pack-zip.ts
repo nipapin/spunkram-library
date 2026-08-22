@@ -153,8 +153,19 @@ function mkdirRecursive(dir: string): void {
   fs.mkdirSync(dir, { recursive: true });
 }
 
+export class ExtractAbortedError extends Error {
+  constructor() {
+    super("Extraction aborted");
+    this.name = "ExtractAbortedError";
+  }
+}
+
 /** Extract every entry of a zip file on disk into `destDir`, preserving structure. */
-export function extractZipToFolder(zipPath: string, destDir: string): string[] {
+export function extractZipToFolder(
+  zipPath: string,
+  destDir: string,
+  opts?: { signal?: AbortSignal },
+): string[] {
   const fd = fs.openSync(zipPath, "r");
   try {
     const fileSize = fs.fstatSync(fd).size;
@@ -164,6 +175,11 @@ export function extractZipToFolder(zipPath: string, destDir: string): string[] {
     const written: string[] = [];
 
     for (const entry of entries) {
+      // Check for abort signal before each file
+      if (opts?.signal?.aborted) {
+        throw new ExtractAbortedError();
+      }
+
       // Guard against zip-slip path traversal.
       const normalized = entry.name.replace(/\\/g, "/").replace(/^\/+/, "");
       if (normalized.split("/").includes("..")) continue;

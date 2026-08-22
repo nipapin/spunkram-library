@@ -416,6 +416,9 @@ export const syncCaptionStyles = async (options?: {
     if (pkg) localById.set(item.id, pkg);
   }
 
+  // Track styles that were updated during this sync for the updateAvailable flag.
+  const updatedStyleIds = new Set<string>();
+
   // Cheap gate: only re-download projects when CDN Base/manifest.json version changed.
   if (checkRemote && catalog.length > 0) {
     const brand = getActiveBrand();
@@ -447,6 +450,7 @@ export const syncCaptionStyles = async (options?: {
             if (result.updated) {
               const pkg = loadLocalPackage(item.id);
               if (pkg) localById.set(item.id, pkg);
+              updatedStyleIds.add(item.id);
             }
             return result;
           } catch {
@@ -475,6 +479,7 @@ export const syncCaptionStyles = async (options?: {
     const base = catalogToPreset(item, favorite, !!local);
 
     if (local) {
+      const wasUpdated = updatedStyleIds.has(item.id);
       const edit = localState.downloadedEdits[item.id];
       if (edit && edit.styleVersion === local.manifest.version) {
         presets.push({
@@ -486,14 +491,14 @@ export const syncCaptionStyles = async (options?: {
           preview: edit.preview ?? base.preview,
           styleVersion: local.manifest.version,
           source: "downloaded",
-          updateAvailable: false,
+          updateAvailable: wasUpdated,
         });
       } else {
         presets.push({
           ...base,
           styleVersion: local.manifest.version,
           source: "downloaded",
-          updateAvailable: false,
+          updateAvailable: wasUpdated,
         });
       }
     } else {

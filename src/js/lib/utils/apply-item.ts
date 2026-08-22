@@ -150,6 +150,30 @@ export async function applyPackItemToHost(
   const ctype =
     resolved.ctype === "FULL_PROJECT" ? "PROJECT" : resolved.ctype;
 
+  // Pre-flight for AUDIO/FOOTAGE: require active sequence/comp before importing.
+  // Without this, the host imports to project but doesn't place on timeline,
+  // silently returning "Applied" with no error.
+  if (ctype === "AUDIO" || ctype === "FOOTAGE") {
+    try {
+      const rangeResult = await Motionflow.getWorkRange();
+      if (!rangeResult.ok) {
+        return {
+          ok: false,
+          message: friendlyReason(appId === "PPRO" ? "NO_ACTIVE_SEQUENCE" : "COMP"),
+        };
+      }
+      const data = rangeResult.data as { ok?: boolean; reason?: string } | null;
+      if (data && typeof data === "object" && "ok" in data && data.ok === false) {
+        return {
+          ok: false,
+          message: friendlyReason(data.reason || (appId === "PPRO" ? "NO_ACTIVE_SEQUENCE" : "COMP")),
+        };
+      }
+    } catch {
+      // Work range check failed — proceed anyway and let applyPackItem decide.
+    }
+  }
+
   const previewEntry = item.group.preview?.[item.previewKey];
   const customArgs = (previewEntry?.custom_args as Record<string, unknown>) || {};
   const composerPayload =

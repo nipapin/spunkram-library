@@ -12,7 +12,7 @@ import {
   LEGACY_ACTIVE_PACK_STORAGE_KEY,
   type PackHostId,
 } from "@/lib/utils/pack-host";
-import { openMotionflowSubscribe } from "@/api/motionflow-auth";
+import { openMotionflowSubscribe, openMotionflowStore } from "@/api/motionflow-auth";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 import * as panelStore from "@/lib/userdata-store";
 import { useDownloadManager, type DownloadJob } from "@/lib/download-manager-context";
@@ -591,7 +591,7 @@ export function MarketPanel({
       <div className="shrink-0 px-2.5 pb-2.5 pt-1">
         <button
           type="button"
-          onClick={() => openMotionflowSubscribe()}
+          onClick={() => openMotionflowStore()}
           className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 text-xs font-medium text-foreground transition-colors hover:border-[#7c4dff]/40 hover:bg-[rgb(14,12,26)]"
         >
           <ExternalLink className="size-3.5" />
