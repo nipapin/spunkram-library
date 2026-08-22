@@ -1,15 +1,13 @@
 import { useCallback } from "react";
 import { fs, os, path } from "../../lib/cep/node";
 import { Motionflow } from "@/sdk";
-import { reloadJSX } from "../../lib/utils/bolt";
-import { runAeQueuedHostImport } from "../../utils/ae-queued-import";
+import { cepHostAppId } from "../../lib/utils/bolt";
+import { importAeStockFootage } from "../../utils/ae-queued-import";
 import { resolveFootageDownloadDirSilent } from "@/lib/utils/stock-paths";
 import { useFiltersContext } from "../context/FiltersContext";
 import { useProgressContext } from "../context/ProgressContext";
 import { incrementUsage } from "../utils/trial-usage";
 import type { ImageUrls, MediaItem } from "../types";
-
-type HostImportOutcome = { ok?: boolean; reason?: string } | null | undefined;
 
 function mapImportError(reason?: string | null): string {
   if (!reason) return "Could not import footage. Try again.";
@@ -32,14 +30,6 @@ function mapImportError(reason?: string | null): string {
     return "After Effects did not apply the footage. Click the composition timeline and try again.";
   }
   return reason;
-}
-
-function hostImportError(data: HostImportOutcome): string | null {
-  if (data && typeof data === "object" && data.ok === false) {
-    return mapImportError(data.reason);
-  }
-  if (data && typeof data === "object" && data.ok === true) return null;
-  return mapImportError("Host script returned no result");
 }
 
 /** Direct CDN URL already on the gallery item — same source Spunkram Assets fetches. */
@@ -140,26 +130,26 @@ export function useImportMedia() {
 
         setProgress(95);
 
-        await Motionflow.ready();
-        await reloadJSX();
-
         const dest: "project" | "timeline" =
           destination === "timeline" ? "timeline" : "project";
 
-        const outcome = await runAeQueuedHostImport(
-          filePath,
-          dest,
-          source.duration,
-          (p, dest, dur, resultPath) =>
-            Motionflow.importMedia(p, dest, dur, resultPath).then((r) =>
-              r.ok ? { ok: true as const, data: r.data } : { ok: false as const, error: r.error },
-            ),
-        );
-        console.log("[mf] importMedia", Motionflow.host, dest, outcome);
-        const err = hostImportError(outcome);
-        if (err) {
-          setError(err);
-          return;
+        const hostApp = cepHostAppId();
+
+        if (hostApp === "AEFT") {
+          const outcome = await importAeStockFootage(filePath, dest);
+          console.log("[mf] importAeStockFootage", dest, outcome);
+          if (!outcome.ok) {
+            setError(mapImportError(outcome.reason));
+            return;
+          }
+        } else {
+          await Motionflow.ready();
+          const outcome = await Motionflow.importMedia(filePath, dest, source.duration, "");
+          console.log("[mf] importMedia (Premiere)", dest, outcome);
+          if (!outcome.ok) {
+            setError(mapImportError(outcome.error));
+            return;
+          }
         }
         incrementUsage("gallery");
         setProgress(100);
