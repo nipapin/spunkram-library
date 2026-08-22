@@ -5,8 +5,8 @@
  * Path (Windows): %APPDATA%/Motionflow/Motionflow Library/panel-store.json
  * Path (macOS):   ~/Library/Application Support/Motionflow/Motionflow Library/panel-store.json
  */
-import { fs, path } from "@/lib/cep/node";
-import { panelUserDataDir, storageKey } from "@/lib/config/brand";
+import { fs, os, path } from "@/lib/cep/node";
+import { BRAND, storageKey } from "@brands";
 
 const STORE_VERSION = 1;
 const MIGRATED_FLAG = storageKey("__ls_migrated_v1__");
@@ -36,7 +36,12 @@ function hasLocalStorage(): boolean {
 
 /** Directory for Motionflow Library panel persistence. */
 export function getPanelUserDataDir(): string {
-  return panelUserDataDir();
+  if (typeof os?.homedir !== "function" || typeof path?.join !== "function") return "";
+  const base =
+    os.platform() === "win32"
+      ? path.join(os.homedir(), "AppData", "Roaming")
+      : path.join(os.homedir(), "Library", "Application Support");
+  return path.join(base, BRAND.panelCompany, BRAND.panelProduct);
 }
 
 export function getPanelStorePath(): string {

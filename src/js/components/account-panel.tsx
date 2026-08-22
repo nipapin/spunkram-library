@@ -9,6 +9,7 @@ import { fetchGenerationsStatus } from "@/api/credits";
 import { getUserSystemData } from "@/lib/api/usp";
 import { parseDeviceFingerprint } from "@/lib/api/market-api";
 import type { MotionflowAccountSession } from "@/lib/api/preferences";
+import { BRAND } from "@brands";
 import "./account-panel.scss";
 
 function formatDate(iso?: string): string | null {
@@ -269,7 +270,7 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
       : isFreeUser
         ? "Free"
         : "Inactive";
-  const displayName = auth.name || auth.email || "Spunkram user";
+  const displayName = auth.name || auth.email || `${BRAND.authorName} user`;
   const isCancelled = (subscription.status || "").toLowerCase().includes("cancel");
   const monthlyLeft = credits?.monthlyLeft ?? 0;
   const extraLeft = credits?.extraLeft ?? 0;

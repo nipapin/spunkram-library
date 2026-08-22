@@ -45,8 +45,8 @@ import {
   resolveAccessTier,
   resolveFreePackSlots,
   resolveGenerationLimit,
-  type MotionflowAccessTier,
-} from "@/lib/config/entitlements";
+  type AccessTier,
+} from "@brands";
 
 type AuthStatus = {
   subscribed: boolean;
@@ -73,10 +73,10 @@ type AuthContextValue = {
   authReady: boolean;
   subscription: AuthStatus;
   /**
-   * From server `/me` (fallback: derived from subscription + purchases).
-   * free = no Motionflow sub and no sold-item purchases.
+   * From server `/me`, mapped through this author's access model in brands.config.
+   * `free` = unpaid for this author (no sub; packs only count if the brand allows).
    */
-  accessTier: MotionflowAccessTier;
+  accessTier: AccessTier;
   isFreeUser: boolean;
   /** Monthly AI generation allotment from server entitlements (`null` until `/api/cep/me`). */
   generationLimit: number | null;
@@ -577,9 +577,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }),
     [subscription.tier, subscription.subscribed, subscription.purchases.length],
   );
+  const signedIn = Boolean(auth.token && (auth.id || auth.email));
   const isFreeUser = accessTier === "free";
-  const generationLimit = resolveGenerationLimit(subscription.aiGenerationsLimit);
-  const freePackSlots = resolveFreePackSlots(subscription.freePackSlots);
+  const generationLimit = signedIn
+    ? resolveGenerationLimit(subscription.aiGenerationsLimit, accessTier)
+    : null;
+  const freePackSlots = signedIn
+    ? resolveFreePackSlots(subscription.freePackSlots)
+    : null;
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -587,7 +592,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPrefs,
       updatePrefs,
       auth,
-      signedIn: Boolean(auth.token && (auth.id || auth.email)),
+      signedIn,
       authReady,
       subscription,
       accessTier,

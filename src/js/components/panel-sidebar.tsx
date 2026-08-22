@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { ChevronRight, Folder, Layers, Film, Music, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePanelUI } from "@/lib/panel-ui-context";
-import { storageKey } from "@/lib/config/brand";
+import { storageKey } from "@brands";
 import * as panelStore from "@/lib/userdata-store";
 import type { PackTreeIcon, PackTreeNode } from "@/lib/utils/pack-types";
 import "./panel-sidebar.scss";

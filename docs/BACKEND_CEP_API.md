@@ -307,16 +307,16 @@ CEP client: `src/js/lib/api/stock-api.ts`.
 
 ---
 
-## 5. Extension update + ffmpeg (public)
+## 5. Extension update + ffmpeg
 
 Used by the CEP panel for auto-update and runtime ffmpeg download.
 
 ### 5.1 `GET /api/cep/update`
 
-Returns the Spunkram release manifest.
+Returns the Spunkram release manifest. **Bearer required** (signed-in CEP user). Anonymous → `401`.
 
-- **Stable (everyone):** R2 `public/downloads/spunkram/latest.json`
-- **Beta (allowlisted only):** if `Authorization: Bearer …` resolves to a beta-tester email (`basepackagehelp@gmail.com`, or `SPUNKRAM_BETA_EMAILS`), and `beta.json` is newer than stable, that manifest is returned instead (`channel: "beta"`).
+- **Stable (any signed-in user):** R2 `public/downloads/spunkram/latest.json`
+- **Beta (allowlisted only):** if the user is a beta-tester (`basepackagehelp@gmail.com`, or `SPUNKRAM_BETA_EMAILS`), and `beta.json` is newer than stable, that manifest is returned instead (`channel: "beta"`).
 
 ```json
 {
@@ -382,6 +382,8 @@ node --env-file=.env scripts/upload-spunkram-zxp.mjs --zxp=./dist/zxp/com.spunkr
 node --env-file=.env scripts/upload-spunkram-zxp.mjs --zxp=./x.zxp --version=0.1.1-beta.1 --channel=beta
 ```
 
+After R2 upload the script calls **`POST /api/cep/update/notify`** with `Authorization: Bearer <CEP_RELEASE_TOKEN>` (same `mfcep_…` device token as a signed-in panel). The server checks the user, then publishes Redis `cep:extension`. Override URL with `CEP_UPDATE_NOTIFY_URL`. Notify failure does not fail the release.
+
 CEP:
 
 ```bash
@@ -391,7 +393,7 @@ npm run release:patch  # from beta: promote to stable core; from stable: +patch 
 
 ### 5.5 CEP client behaviour
 
-1. After sign-in → `GET /api/cep/update` (Bearer when available)
+1. After sign-in → `GET /api/cep/update` (Bearer required)
 2. If remote version > local (`package.json` / manifest) → banner (beta labeled for testers)
 3. User clicks Update → download ZXP → unpack over `csi.getSystemPath("extension")` → `location.reload()`
 

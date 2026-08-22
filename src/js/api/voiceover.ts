@@ -7,6 +7,7 @@ import { apiUrl, GENERATIONS_ENDPOINTS, VOICEOVER_ENDPOINTS } from "./config";
 import { getUserIdentity } from "./user";
 import { cepHttpRequest } from "@/lib/api/cep-http";
 import { fs, os, path } from "@/lib/cep/node";
+import { BRAND } from "@brands";
 import { downloadToFile } from "@/utils/download-file";
 
 export type VoiceoverVoice = {
@@ -145,7 +146,7 @@ export async function generateVoiceover(input: {
 /** Download remote audio (or resolve local path) into AppData for host import. */
 export async function downloadVoiceoverFile(
   audioUrl: string,
-  fileName = "spunkram-voiceover.wav",
+  fileName = `${BRAND.id}-voiceover.wav`,
 ): Promise<{ path?: string; error?: string }> {
   try {
     if (audioUrl.startsWith("file://") || /^[A-Za-z]:[\\/]/.test(audioUrl) || audioUrl.startsWith("/")) {
@@ -162,12 +163,12 @@ export async function downloadVoiceoverFile(
         typeof os?.platform === "function" && os.platform() === "darwin"
           ? path.join(os.homedir(), "Library", "Application Support")
           : path.join(os.homedir(), "AppData", "Roaming");
-      dir = path.join(roaming, "Spunkram", "Spunkram Library", "voiceover");
+      dir = path.join(roaming, BRAND.prefsCompany, BRAND.prefsProduct, "voiceover");
     } catch {
       dir = "";
     }
     if (!dir && typeof os?.tmpdir === "function") {
-      dir = path.join(os.tmpdir(), "spunkram-voiceover");
+      dir = path.join(os.tmpdir(), `${BRAND.id}-voiceover`);
     }
     if (!dir || typeof fs?.mkdirSync !== "function") {
       return { error: "File system unavailable" };

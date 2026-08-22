@@ -2,7 +2,7 @@
 
 Цель: в коде, UI и host-путях **один продукт — Motionflow**. Старые имена (Spunkram, Atom, Aniom, AtomExt) не добавляем в новый код.
 
-Единый конфиг: [`src/js/lib/config/brand.ts`](../../src/js/lib/config/brand.ts) (`BRAND`).
+Единый конфиг: [`brands.config.ts`](../../brands.config.ts) (`BRAND`).
 
 ---
 
@@ -41,8 +41,8 @@
 
 ## Чеклист для нового кода
 
-- [ ] Строки UI → `BRAND.name` / `BRAND.productName`
-- [ ] Storage keys → `storageKey("…")` из `brand.ts`
+- [ ] Строки UI → `BRAND.authorName` / `BRAND.displayName`
+- [ ] Storage keys → `storageKey("…")` из `brands.config.ts`
 - [ ] Packs → `BRAND.packExtension` / `PACKAGE_FILE_EXTENSIONS`
 - [ ] Host bins → `BRAND.stylesBin`, `BRAND.captionsBin`
 - [ ] SDK imports → `import { Motionflow } from "@/sdk"`

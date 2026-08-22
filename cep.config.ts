@@ -1,9 +1,10 @@
 import type { CEP_Config } from "vite-cep-plugin";
+import { DEFAULT_BRAND, getBrand, resolveBrand } from "./brands.config";
 import { version } from "./package.json";
 
-const id = "com.spunkramlibrary.cep";
-
-const displayName = "Spunkram Library";
+const brand = getBrand(resolveBrand(process.env.APP_BRAND ?? DEFAULT_BRAND));
+const id = brand.extensionId;
+const displayName = brand.displayName;
 
 const config: CEP_Config = {
   version,
@@ -16,8 +17,8 @@ const config: CEP_Config = {
   extensionManifestVersion: 6.0,
   requiredRuntimeVersion: 9.0,
   hosts: [
-    { name: "AEFT", version: "[23.0,99.9]" },
-    { name: "PPRO", version: "[23.0,99.9]" },
+    { name: "AEFT", version: "[25.0,99.9]" },
+    { name: "PPRO", version: "[25.0,99.9]" },
   ],
 
   type: "Panel",
@@ -40,7 +41,7 @@ const config: CEP_Config = {
     {
       mainPath: "./main/index.html",
       name: "main",
-      panelDisplayName: displayName,
+      panelDisplayName: brand.panelDisplayName,
       autoVisible: true,
       width: 600,
       height: 650,

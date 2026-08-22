@@ -2,6 +2,7 @@ import { fs, os, path } from "../lib/cep/node";
 import { csi } from "../lib/utils/bolt";
 import { extractZipToFolder } from "../lib/utils/pack-zip";
 import { downloadToFile, type DownloadProgress } from "./download-file";
+import { BRAND } from "@brands";
 
 export type ExtensionUpdateProgress = {
   phase: "download" | "extract" | "apply" | "reload";
@@ -335,7 +336,7 @@ export async function applyExtensionUpdate(
     throw new Error("Extension path unavailable");
   }
 
-  const workDir = path.join(os.tmpdir(), `spunkram-update-${Date.now()}`);
+  const workDir = path.join(os.tmpdir(), `${BRAND.id}-update-${Date.now()}`);
   fs.mkdirSync(workDir, { recursive: true });
   const zxpPath = path.join(workDir, "update.zxp");
   const extractDir = path.join(workDir, "extracted");

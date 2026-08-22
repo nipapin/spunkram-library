@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { Scissors, Video, Sparkles, ShoppingBag, User, Loader2 } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { useAuth } from "@/lib/auth-context";
+import { BRAND } from "@brands";
 import { useNotifications } from "@/lib/notifications-context";
 import { useDownloadManager } from "@/lib/download-manager-context";
 import "./panel-header.scss";
@@ -117,7 +118,7 @@ export function PanelHeader({
         title="Extension settings"
         onClick={onOpenSettings}
       >
-        <img src={logo} alt="Spunkram logo" width={38} height={38} />
+        <img src={logo} alt={`${BRAND.authorName} logo`} width={38} height={38} />
       </button>
 
       <nav ref={navRef} className="panel-header__nav">

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ArrowUpCircle, Info, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@brands";
 
 type Props = {
   version: string;
@@ -88,7 +89,7 @@ export function UpdateBanner({
           <div className="min-w-0 flex-1">
             <p className="text-[12px] font-semibold leading-tight text-foreground">
               {busy
-                ? "Updating Spunkram"
+                ? `Updating ${BRAND.authorName}`
                 : channel === "beta"
                   ? "Beta update available"
                   : "Update available"}

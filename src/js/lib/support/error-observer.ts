@@ -125,7 +125,7 @@ type ReportPayload = {
   };
   os: string;
   locale?: string;
-  client: "spunkram-cep";
+  client: string;
   occurred_at: string;
   extra?: SupportExtra;
 };

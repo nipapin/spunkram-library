@@ -1,15 +1,7 @@
-import {
-  DEFAULT_BRAND,
-  resolveBrand,
-  type BrandId,
-} from "../../../../brands.config";
+import { activeBrandId, DEFAULT_BRAND, type BrandId } from "@brands";
 
-declare const __APP_BRAND__: string | undefined;
-
-/** Build-time brand from Vite define — Spunkram Library is always spunkram. */
-export const BUILD_BRAND: BrandId = resolveBrand(
-  typeof __APP_BRAND__ !== "undefined" ? __APP_BRAND__ : "spunkram",
-);
+/** Build-time brand from Vite define (`APP_BRAND` / `brands.config.ts`). */
+export const BUILD_BRAND: BrandId = activeBrandId();
 
 export const canSwitchBrandAtRuntime = false;
 

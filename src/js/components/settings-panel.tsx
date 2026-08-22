@@ -12,7 +12,7 @@ import {
 } from "@/lib/api/preferences";
 import { selectFolder } from "@/lib/utils/bolt";
 import { notifyPackagesRescan, resolvePackagesInstallRoot, scanAndRegisterPacksAtRoot } from "@/lib/utils/pack-install";
-import { EXTENSION_VERSION } from "@/lib/config/masked";
+import { version as EXTENSION_VERSION } from "../../shared/shared";
 import { fetchSpunkramVersions, isReleaseAdminEmail, type SpunkramVersionEntry } from "@/api/update";
 import { applyExtensionUpdate } from "@/utils/extension-update";
 import { friendlyErrorMessage } from "@/utils/user-error";

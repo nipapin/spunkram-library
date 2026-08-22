@@ -1,5 +1,5 @@
-import { fs, path } from "@/lib/cep/node";
-import { preferencesJsonPath } from "@/lib/config/brand";
+import { fs, os, path } from "@/lib/cep/node";
+import { BRAND } from "@brands";
 
 export type PrefSettings = {
   portablePackageInstallation: number;
@@ -80,6 +80,19 @@ export const DEFAULT_PREF_SETTINGS: PrefSettings = {
 
 function cepFsAvailable(): boolean {
   return typeof fs?.existsSync === "function" && typeof fs?.readFileSync === "function";
+}
+
+function roamingAppDataDir(): string {
+  if (typeof os?.homedir !== "function" || typeof path?.join !== "function") return "";
+  return os.platform() === "win32"
+    ? path.join(os.homedir(), "AppData", "Roaming")
+    : path.join(os.homedir(), "Library", "Application Support");
+}
+
+export function preferencesJsonPath(): string {
+  const base = roamingAppDataDir();
+  if (!base) return "";
+  return path.join(base, BRAND.prefsCompany, BRAND.prefsProduct, "preferences.json");
 }
 
 /** Prefer an existing prefs file; fall back to primary Motionflow path. */

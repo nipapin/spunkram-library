@@ -32,6 +32,7 @@ import {
 } from "@/lib/utils/pack-manifest";
 import { version as EXTENSION_VERSION } from "../../shared/shared";
 import type { MotionflowPurchase } from "@/api/motionflow-auth";
+import { BRAND } from "@brands";
 import {
   buildPackEntitlementContext,
   installedPackMatchesMarketItem,
@@ -80,7 +81,7 @@ function authHeaders(): Record<string, string> {
 }
 
 function defaultSubscribeUrl(): string {
-  return `${SITE_ORIGIN}/pricing?client=spunkram-cep`;
+  return `${SITE_ORIGIN}/pricing?client=${BRAND.apiClient}`;
 }
 
 /** Trim + drop a leading `v` so catalog `1.0.0` matches pack-file `v1.0.0`. */
@@ -292,7 +293,7 @@ function resolvePackCacheDir(): string {
   const prefPath = resolvePreferencesPath();
   const base = prefPath
     ? path.dirname(prefPath)
-    : path.join(os.tmpdir(), "spunkram-library");
+    : path.join(os.tmpdir(), BRAND.appDataFolder);
   const dir = path.join(base, "pack-cache");
   if (typeof fs?.existsSync === "function" && !fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });

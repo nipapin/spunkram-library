@@ -24,6 +24,7 @@ import {
 import type { PackSettings, PackTreeItem } from "./pack-types";
 import { INSTANCE_GROUP_JOIN_CHAR } from "./pack-types";
 import { reportSupportError } from "@/api/support";
+import { BRAND } from "@brands";
 import { currentPackHost, normalizePackHost } from "./pack-host";
 
 export type ApplyItemOutcome =
@@ -122,7 +123,7 @@ export async function applyPackItemToHost(
     try {
       const templatesDir = resolvePackTemplatesPath(packFilePath, "PPRO");
       const assetsPath = resolveFullProjectAssetsPath(templatesDir, item);
-      const packName = settings?.main?.name || "Spunkram";
+      const packName = settings?.main?.name || BRAND.authorName;
       const result = await applyFullProjectViaCopyPaste({
         projectPath: filePath,
         assetsPath,
@@ -178,7 +179,7 @@ export async function applyPackItemToHost(
             name: item.name,
           },
           templatesDir: resolvePackTemplatesPath(packFilePath, "AEFT"),
-          packName: settings?.main?.name || "Motionflow",
+          packName: settings?.main?.name || BRAND.authorName,
           packOptions: (settings?.inside_option_sets as Record<string, unknown>) || {},
         }
       : undefined;
@@ -188,7 +189,7 @@ export async function applyPackItemToHost(
       ctype: ctype as "PROJECT" | "MOGRT" | "AUDIO" | "FOOTAGE",
       filePath,
       itemName: item.name,
-      binName: "Spunkram Assets",
+      binName: BRAND.assetsBin,
       durationSeconds: durationSecondsForItem(item),
       composer: composerPayload,
     });

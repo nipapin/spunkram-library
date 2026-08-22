@@ -11,6 +11,7 @@ import {
 } from "../api/preferences";
 import { selectFolderAsync } from "./bolt";
 import { Motionflow } from "@/sdk";
+import { BRAND } from "@brands";
 import { fs, path } from "../cep/node";
 
 export function hasConfiguredAssetsPath(): boolean {
@@ -43,7 +44,7 @@ export async function ensureAssetsPathChosen(): Promise<
 
   const folder = await selectFolderAsync(
     "",
-    "Choose where Spunkram should download footage",
+    `Choose where ${BRAND.authorName} should download footage`,
   );
   if (!folder) {
     return {

@@ -1,4 +1,4 @@
-import { PACKAGE_FILE_EXTENSIONS } from "../config/brand";
+import { PACKAGE_FILE_EXTENSIONS } from "@brands";
 
 /** Pack file extensions accepted from Motionflow Market. */
 export const PACKAGE_FILETYPES = [...PACKAGE_FILE_EXTENSIONS] as const;

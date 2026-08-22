@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { BRAND } from "@brands";
 import { readPrefSettings } from "@/lib/api/preferences";
 import { resolvePackEntitlementContextForScan } from "@/api/cep-market";
 import { selectFolder } from "@/lib/utils/bolt";
@@ -119,7 +120,7 @@ export function PackagesPathGateProvider({ children }: { children: ReactNode }) 
               Choose packages install folder
             </h3>
             <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-              Before installing a pack, pick where Spunkram should store packs.
+              Before installing a pack, pick where {BRAND.authorName} should store packs.
               They are saved under AE/ or PR/ inside this folder. Existing packs
               in that folder are detected automatically. You can change it later
               in Settings.

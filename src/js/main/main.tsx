@@ -65,7 +65,7 @@ import type { InstalledPackMeta, PackSettings, PackTreeItem, PackTreeNode } from
 import { revokePreviewObjectUrls } from "@/lib/utils/pack-preview";
 import { cn } from "@/lib/utils";
 import * as panelStore from "@/lib/userdata-store";
-import { storageKey } from "@/lib/config/brand";
+import { storageKey } from "@brands";
 import { friendlyErrorMessage } from "@/utils/user-error";
 import "./main.scss";
 

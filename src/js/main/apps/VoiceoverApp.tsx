@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { createPortal } from "react-dom";
-import { storageKey } from "@/lib/config/brand";
+import { storageKey, BRAND } from "@brands";
 import { cn } from "@/lib/utils";
 import { Motionflow } from "@/sdk";
 import { fs } from "@/lib/cep/node";
@@ -350,7 +350,7 @@ function HistoryItemCard({
     let cancelled = false;
     void downloadVoiceoverFile(
       item.audioUrl,
-      item.fileName || "spunkram-voiceover.wav",
+      item.fileName || `${BRAND.id}-voiceover.wav`,
     ).then((dl) => {
       if (!cancelled && dl.path) onLocalPath(item.id, dl.path);
     });
@@ -551,7 +551,7 @@ export const VoiceoverApp = ({
 
     const dl = await downloadVoiceoverFile(
       data.audio_url,
-      data.file_name || "spunkram-voiceover.wav",
+      data.file_name || `${BRAND.id}-voiceover.wav`,
     );
     if (dl.path) updateLocalPath(item.id, dl.path);
     else if (dl.error) {
@@ -573,7 +573,7 @@ export const VoiceoverApp = ({
         if (!item.audioUrl) return null;
         const dl = await downloadVoiceoverFile(
           item.audioUrl,
-          item.fileName || "spunkram-voiceover.wav",
+          item.fileName || `${BRAND.id}-voiceover.wav`,
         );
         if (!dl.path) {
           const msg = dl.error || "Could not download audio";

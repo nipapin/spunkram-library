@@ -1,5 +1,5 @@
 import { CAPTIONS_ENDPOINTS, apiUrl, getUserIdentity, type UserIdentity } from "../api";
-import type { BrandId } from "../../../brands.config";
+import { getBrand, type BrandId } from "@brands";
 import { CONTROLS_FILE, normalizeDefinition } from "../presets/controlsSchema";
 import type { MogrtDefinition } from "../presets/types";
 import type {
@@ -108,10 +108,7 @@ export const resolveMediaUrl = (url: string | null | undefined): string | null =
 };
 
 const CAPTIONS_CDN_BASE = "https://cdn.motionflow.pro";
-const CAPTIONS_CDN_PREFIX: Record<BrandId, string> = {
-  gal: "Gal Captions",
-  spunkram: "Spunkram Captions",
-};
+const captionsCdnPrefix = (brand: BrandId): string => getBrand(brand).captionsCdnPrefix;
 /** Folder that holds the catalog version file (`manifest.json`) on CDN. */
 export const CAPTIONS_CDN_VERSION_FOLDER = "Base";
 
@@ -133,7 +130,7 @@ export const publicCaptionFileUrl = (
   brand: BrandId,
 ): string => {
   const segs = [
-    CAPTIONS_CDN_PREFIX[brand],
+    captionsCdnPrefix(brand),
     ...styleId.replace(/\\/g, "/").split("/").filter((p) => p && p !== "." && p !== ".."),
     fileName,
   ];
@@ -188,7 +185,7 @@ export const resolveControlsUrl = (
 const controlsApiFallbackUrl = (cdnUrl: string, brand: BrandId): string | null => {
   try {
     const pathname = decodeURIComponent(new URL(cdnUrl).pathname).replace(/^\//, "");
-    const prefix = `${CAPTIONS_CDN_PREFIX[brand]}/`;
+    const prefix = `${captionsCdnPrefix(brand)}/`;
     if (!pathname.startsWith(prefix)) return null;
     const rest = pathname
       .slice(prefix.length)

@@ -4,6 +4,7 @@ import {
 } from "../../../shared/shared";
 import { getUserSystemData } from "@/lib/api/usp";
 import { csi } from "@/lib/utils/bolt";
+import { BRAND } from "@brands";
 
 export type SupportHostMeta = {
   appId: string;
@@ -18,7 +19,7 @@ export type SupportErrorMeta = {
   os: string;
   locale?: string;
   occurred_at: string;
-  client: "spunkram-cep";
+  client: string;
 };
 
 const HOST_NAMES: Record<string, string> = {
@@ -68,6 +69,6 @@ export function collectSupportMeta(): SupportErrorMeta {
         ? navigator.language
         : undefined,
     occurred_at: new Date().toISOString(),
-    client: "spunkram-cep",
+    client: BRAND.apiClient,
   };
 }

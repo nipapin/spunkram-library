@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { FogBackground } from "@/components/fog-background";
 import logo from "@/assets/logo.png";
+import { BRAND } from "@brands";
 import type { MotionflowAccountSession } from "@/lib/api/preferences";
 
 const ACCENT_PILL = "pill-brand";
@@ -60,16 +61,16 @@ export function LoginScreen() {
       <div className="relative z-10 flex w-full max-w-xs flex-col items-center gap-4">
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="flex size-16 items-center justify-center rounded-full bg-gradient-to-b from-primary to-primary/70 shadow-[0_0_20px_2px] shadow-primary/50 ring-1 ring-inset ring-white/15">
-            <img src={logo} alt="Spunkram" width={48} height={48} className="size-11 object-contain" />
+            <img src={logo} alt={BRAND.authorName} width={48} height={48} className="size-11 object-contain" />
           </div>
           <div>
             <h1 className="font-headline text-lg font-semibold tracking-tight drop-shadow-[0_1px_8px_rgba(0,0,0,0.65)]">
-              {showChooser ? "Choose an account" : "Welcome to Spunkram"}
+              {showChooser ? "Choose an account" : `Welcome to ${BRAND.authorName}`}
             </h1>
             <p className="mt-1 max-w-xs text-[11px] text-muted-foreground drop-shadow-[0_1px_6px_rgba(0,0,0,0.55)]">
               {showChooser
                 ? "Continue with a saved Motionflow account, or add another."
-                : "Sign in with your Motionflow account to use the Spunkram extension — packs, subscriptions, and AI tools."}
+                : `Sign in with your Motionflow account to use the ${BRAND.authorName} extension — packs, subscriptions, and AI tools.`}
             </p>
           </div>
         </div>
@@ -174,7 +175,7 @@ export function LoginScreen() {
               )}
             >
               <LogIn className="size-3.5" />
-              Sign in to Spunkram
+              Sign in to {BRAND.authorName}
               <ExternalLink className="size-3 opacity-70" />
             </button>
           )}

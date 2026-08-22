@@ -1,5 +1,5 @@
 import config from "../../cep.config";
-import { BRAND } from "../js/lib/config/brand-core";
+import { BRAND } from "../../brands.config";
 
 export const ns = config.id;
 export const company = config.zxp.org;

@@ -8,7 +8,7 @@ import path from "path";
 import fs from "fs";
 import { createRequire } from "module";
 import { extendscriptConfig } from "./vite.es.config";
-import { BRAND } from "./src/js/lib/config/brand-core";
+import { DEFAULT_BRAND, getBrand, resolveBrand } from "./brands.config";
 
 const require = createRequire(import.meta.url);
 const hostPkgRoot = path.dirname(require.resolve("motionflow-host/package.json"));
@@ -135,11 +135,14 @@ const config: CepOptions = {
 
 if (action) runAction(config, action);
 
+const appBrandId = resolveBrand(process.env.APP_BRAND ?? DEFAULT_BRAND);
+const brand = getBrand(appBrandId);
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), cep(config), stripCepDebugForZxpPlugin(), copyMotionflowBinPlugin()],
   define: {
-    __APP_BRAND__: JSON.stringify("spunkram"),
+    __APP_BRAND__: JSON.stringify(appBrandId),
     // Inline so panel JS never touches bare `process` (CEP CEF / ExtendScript).
     "process.env.ZXP_PACKAGE": JSON.stringify(process.env.ZXP_PACKAGE || ""),
     "process.env.ZIP_PACKAGE": JSON.stringify(process.env.ZIP_PACKAGE || ""),
@@ -148,6 +151,7 @@ export default defineConfig({
     alias: [
       { find: "@esTypes", replacement: hostPkgRoot },
       { find: "@", replacement: path.resolve(__dirname, "src/js") },
+      { find: "@brands", replacement: path.resolve(__dirname, "brands.config.ts") },
     ],
   },
   root,
@@ -233,7 +237,7 @@ extendscriptConfig(
   isPackage,
   {
     namespace: cepConfig.id,
-    captionsBin: BRAND.captionsBin,
-    stylesBin: BRAND.stylesBin,
+    captionsBin: brand.captionsBin,
+    stylesBin: brand.stylesBin,
   },
 );

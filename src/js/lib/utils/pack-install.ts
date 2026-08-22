@@ -11,7 +11,7 @@ import {
   resolvePreferencesPath,
   savePreferencesFile,
 } from "../api/preferences";
-import { BRAND, packExtensionLabel } from "@/lib/config/brand";
+import { BRAND, packExtensionLabel } from "@brands";
 import { initPackageAsync, initPackageSync, parsePackageFileFormat } from "./pack";
 import type { InstalledPackMeta } from "./pack-types";
 import { extractZipToFolder } from "./pack-zip";
@@ -429,7 +429,7 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
       packFilePath = found;
       installLog("extract.pack_found", { packFilePath });
     } else if (!parsePackageFileFormat(sourcePath)) {
-      return { ok: false, message: `Pick a ${packExtensionLabel()}, legacy .spunkram, or .zip file.` };
+      return { ok: false, message: `Pick a ${packExtensionLabel()}, .${BRAND.legacyPackExtension}, or .zip file.` };
     }
 
     const pack = await initPackageAsync(packFilePath);

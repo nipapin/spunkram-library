@@ -1,8 +1,9 @@
 import { cepProcessEnv, fs, os, path } from "../lib/cep/node";
+import { BRAND } from "@brands";
 
 const isCep = () => typeof window !== "undefined" && typeof (window as Window & { cep?: unknown }).cep !== "undefined";
 
-/** Корень: %APPDATA%/spunkram-library (Win) или ~/Library/Application Support/spunkram-library (Mac). */
+/** Корень: %APPDATA%/{brand} (Win) или ~/Library/Application Support/{brand} (Mac). */
 export const getStylesRoot = (): string | null => {
   if (!isCep() || !os.homedir || !path.join) return null;
   try {
@@ -11,7 +12,7 @@ export const getStylesRoot = (): string | null => {
       platform === "darwin"
         ? path.join(os.homedir(), "Library", "Application Support")
         : cepProcessEnv().APPDATA || path.join(os.homedir(), "AppData", "Roaming");
-    return path.join(base, "spunkram-library");
+    return path.join(base, BRAND.appDataFolder);
   } catch {
     return null;
   }

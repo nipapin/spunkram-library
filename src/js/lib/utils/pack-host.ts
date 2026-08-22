@@ -1,5 +1,5 @@
 import { csi } from "./bolt";
-import { storageKey } from "../config/brand";
+import { storageKey } from "@brands";
 import type { InstalledPackMeta } from "./pack-types";
 
 /** Catalog / pack software_id codes (not CEP appId). */

@@ -28,7 +28,7 @@ export const VOICEOVER_ENDPOINTS = {
   voices: "/api/cep/voiceover/voices",
 } as const;
 
-/** Public — Spunkram extension update manifest + ffmpeg CDN URLs (Bearer unlocks beta). */
+/** Signed-in CEP — Spunkram extension update manifest (Bearer required; beta allowlist unlocks beta.json). */
 export const UPDATE_ENDPOINT = "/api/cep/update" as const;
 /** Admin — full list of uploaded ZXP versions */
 export const UPDATE_VERSIONS_ENDPOINT = "/api/cep/update/versions" as const;

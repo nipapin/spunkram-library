@@ -1,5 +1,5 @@
 import { fs } from "../cep/node";
-import { preferencesJsonPath } from "../config/brand";
+import { resolvePreferencesPath } from "../api/preferences";
 import { resolvePackPreviewsPath } from "./pack-folders";
 import type {
   InstalledPackMeta,
@@ -196,7 +196,7 @@ export function resolvePackAssetsPath(packFilePath: string): string {
 
 /** Default `preferences.json` location for Motionflow CEP. */
 export function getPreferencesCandidates(): string[] {
-  const prefPath = preferencesJsonPath();
+  const prefPath = resolvePreferencesPath();
   return prefPath ? [prefPath] : [];
 }
 

@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import * as panelStore from "@/lib/userdata-store";
-import { storageKey } from "@/lib/config/brand";
+import { storageKey } from "@brands";
 import { friendlyErrorMessage } from "@/utils/user-error";
 
 export const THUMB_SIZE_MIN = 1;

@@ -2,12 +2,12 @@
  * Motionflow CEP auth — device-code browser flow.
  *
  * Contract: docs/BACKEND_CEP_API.md
- * CEP sends only `client: spunkram-cep`. Author / sold_items stay on the server.
+ * CEP sends only `client` from brand config. Author / sold_items stay on the server.
  */
 import { apiUrl } from "./config";
 import { cepHttpRequest } from "@/lib/api/cep-http";
 import { getUserSystemData, getUserSystemPrint } from "@/lib/api/usp";
-import { BRAND } from "@/lib/config/brand";
+import { BRAND } from "@brands";
 import { openLinkInBrowser } from "@/lib/utils/bolt";
 
 const PUBLIC_AUTH_ORIGIN = "https://motionflow.pro";
@@ -21,22 +21,22 @@ export const AUTH_ENDPOINTS = {
   token: "/api/cep/auth/token",
   me: "/api/cep/me",
   revokeDevice: "/api/cep/devices/revoke",
-  subscribe: `${PUBLIC_AUTH_ORIGIN}/spunkram`,
+  subscribe: `${PUBLIC_AUTH_ORIGIN}${BRAND.sitePath}`,
   manageSubscription: `${PUBLIC_AUTH_ORIGIN}/profile/subscriptions?${clientQuery()}`,
-  contact: `${PUBLIC_AUTH_ORIGIN}/spunkram#contact`,
+  contact: `${PUBLIC_AUTH_ORIGIN}${BRAND.sitePath}#contact`,
 } as const;
 
-/** Browser confirm page — Spunkram site (login modal → Allow/Deny). */
+/** Browser confirm page — author site (login modal → Allow/Deny). */
 export function verificationUrlForCode(code: string, fromApi?: string): string {
   const params = new URLSearchParams({ code, client: BRAND.apiClient });
-  const fallback = `${PUBLIC_AUTH_ORIGIN}/spunkram?${params.toString()}`;
+  const fallback = `${PUBLIC_AUTH_ORIGIN}${BRAND.sitePath}?${params.toString()}`;
   if (!fromApi) return fallback;
   try {
     const url = new URL(fromApi);
     if (url.origin !== PUBLIC_AUTH_ORIGIN) return fallback;
-    // Prefer /spunkram even if an older API still returns /cep/login.
+    // Prefer the brand landing even if an older API still returns /cep/login.
     if (url.pathname.includes("/cep/login")) {
-      url.pathname = "/spunkram";
+      url.pathname = BRAND.sitePath;
     }
     if (!url.searchParams.has("client")) url.searchParams.set("client", BRAND.apiClient);
     if (!url.searchParams.has("code")) url.searchParams.set("code", code);
@@ -291,7 +291,7 @@ export function setSubscriptionUrls(urls: {
 }
 
 export function openMotionflowSubscribe(): void {
-  // Always Spunkram pricing page — ignore server subscribe_url (legacy /pricing).
+  // Always the brand landing — ignore server subscribe_url (legacy /pricing).
   openLinkInBrowser(AUTH_ENDPOINTS.subscribe);
 }
 

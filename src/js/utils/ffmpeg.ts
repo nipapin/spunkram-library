@@ -1,4 +1,5 @@
 import { cepProcessEnv, child_process, fs, os, path } from "../lib/cep/node";
+import { BRAND } from "@brands";
 import { downloadToFile } from "./download-file";
 
 /** Public CDN URLs — no auth. Mirrors next-app R2 keys under public/downloads/ffmpeg/. */
@@ -25,14 +26,14 @@ export function getFfmpegBinDir(): string {
       os.homedir(),
       "Library",
       "Application Support",
-      "Spunkram",
+      BRAND.prefsCompany,
       "bin",
       "mac",
     );
   }
   const appData =
     cepProcessEnv().APPDATA || path.join(os.homedir(), "AppData", "Roaming");
-  return path.join(appData, "Spunkram", "bin", "win");
+  return path.join(appData, BRAND.prefsCompany, "bin", "win");
 }
 
 export function getFfmpegPath(): string {
