@@ -80,6 +80,10 @@ export type CaptionPackToken = {
 
 const MS = 1000;
 const LUT_SECONDS = 1800;
+/** Keep LUT layers few so data batches stay small. */
+const MAX_LUT_SEC = (CAPTION_BATCH_COUNT - 1) * LUT_SECONDS;
+/** One token must not paint the whole timeline if end is wrong / huge. */
+const MAX_OVERLAP_SEC = 5;
 const LUT_HOLD_PAD = 1;
 const INDEXED_LOOKUP_PREFIX = "v4lut~";
 const INDEXED_BATCH_PREFIX = "v4~";
@@ -169,6 +173,10 @@ export const splitEqual = (str: string | null | undefined, n: number): string[] 
 /**
  * v4 layers for captions_batch_01..15: lookup by second, then data batches
  * with row offsets. Must match captions.jsx packToChunkLayers.
+ *
+ * Hot path: join instead of +=, clamp overlap span, skip spacing in the
+ * per-second overlap lists, cap timeline so a bad end time cannot allocate
+ * a multi-hour LUT. Wire format is unchanged (v4lut~ / v4~ / lastAt|ids).
  */
 export const packToChunkLayers = (
   captions: CaptionPackToken[] | null | undefined,
@@ -177,6 +185,8 @@ export const packToChunkLayers = (
   const n = list.length;
   const rows: string[] = [];
   const starts: number[] = [];
+  const ends: number[] = [];
+  const isWord: boolean[] = [];
   let wcount = 0;
   let lastSec = 0;
   let i: number;
@@ -185,16 +195,20 @@ export const packToChunkLayers = (
     const text = packTokenText(list[i]);
     const startMs = toMs(list[i].start);
     const endMs = toMs(list[i].end);
-    const wordIndex = text === "" ? -1 : wcount;
-    if (text !== "") wcount++;
+    const word = text !== "";
+    const wordIndex = word ? wcount : -1;
+    if (word) wcount++;
     rows.push(startMs + "~" + endMs + "~" + wordIndex + "~" + escapeRowText(text));
     starts.push(startMs);
+    ends.push(endMs);
+    isWord.push(word);
     let sec = Math.floor(startMs / MS);
     if (sec > lastSec) lastSec = sec;
     sec = Math.floor(endMs / MS + LUT_HOLD_PAD);
     if (sec > lastSec) lastSec = sec;
   }
   if (lastSec < 0) lastSec = 0;
+  if (lastSec > MAX_LUT_SEC - 1) lastSec = MAX_LUT_SEC - 1;
   const secCount = n ? lastSec + 1 : 0;
 
   let lutCount = secCount ? Math.ceil(secCount / LUT_SECONDS) || 1 : 1;
@@ -202,11 +216,11 @@ export const packToChunkLayers = (
   if (lutCount > CAPTION_BATCH_COUNT - 1) lutCount = CAPTION_BATCH_COUNT - 1;
   const dataCount = CAPTION_BATCH_COUNT - lutCount;
 
-  const overlaps: string[] = [];
-  const lastAt: number[] = [];
+  const overlaps: number[][] = new Array(secCount);
+  const lastAt: number[] = new Array(secCount);
   for (i = 0; i < secCount; i++) {
-    overlaps.push("");
-    lastAt.push(-1);
+    overlaps[i] = [];
+    lastAt[i] = -1;
   }
   let last = -1;
   let capI = 0;
@@ -220,14 +234,15 @@ export const packToChunkLayers = (
     lastAt[s] = last;
   }
   for (i = 0; i < n; i++) {
+    if (!isWord[i]) continue;
     let a = Math.floor(starts[i] / MS);
-    let b = Math.floor(toMs(list[i].end) / MS + LUT_HOLD_PAD);
+    let b = Math.floor(ends[i] / MS + LUT_HOLD_PAD);
     if (a < 0) a = 0;
+    if (a >= secCount) continue;
+    if (b > a + MAX_OVERLAP_SEC) b = a + MAX_OVERLAP_SEC;
     if (b >= secCount) b = secCount - 1;
-    const token = String(i);
-    for (s = a; s <= b; s++) {
-      overlaps[s] = overlaps[s] ? overlaps[s] + "," + token : token;
-    }
+    if (b < a) continue;
+    for (s = a; s <= b; s++) overlaps[s].push(i);
   }
 
   const chunks: string[] = [];
@@ -235,13 +250,14 @@ export const packToChunkLayers = (
     const from = i * LUT_SECONDS;
     let to = i === lutCount - 1 ? secCount : from + LUT_SECONDS;
     if (to > secCount) to = secCount;
-    let lutBody = "";
+    const lutParts: string[] = new Array(Math.max(0, to - from));
     for (let j = from; j < to; j++) {
-      if (j > from) lutBody += ";";
-      let entry = String(lastAt[j]) + "|";
-      if (overlaps[j]) entry += overlaps[j];
-      lutBody += entry;
+      const ov = overlaps[j];
+      lutParts[j - from] = ov.length
+        ? lastAt[j] + "|" + ov.join(",")
+        : lastAt[j] + "|";
     }
+    const lutBody = lutParts.join(";");
     if (i === 0) {
       chunks.push(INDEXED_LOOKUP_PREFIX + n + "~" + lutCount + ";;;" + lutBody);
     } else {
@@ -258,20 +274,15 @@ export const packToChunkLayers = (
     }
     let endIndex = startIndex + per;
     if (endIndex > n) endIndex = n;
-    const offsets: number[] = [];
-    let payload = "";
+    const slice = rows.slice(startIndex, endIndex);
+    const offsets: number[] = new Array(slice.length);
     let off = 0;
-    for (i = startIndex; i < endIndex; i++) {
-      offsets.push(off);
-      payload += rows[i];
-      off += rows[i].length;
-      if (i < endIndex - 1) {
-        payload += "@";
-        off += 1;
-      }
+    for (i = 0; i < slice.length; i++) {
+      offsets[i] = off;
+      off += slice[i].length + (i < slice.length - 1 ? 1 : 0);
     }
     chunks.push(
-      INDEXED_BATCH_PREFIX + startIndex + "~" + offsets.join(",") + BATCH_SEP + payload,
+      INDEXED_BATCH_PREFIX + startIndex + "~" + offsets.join(",") + BATCH_SEP + slice.join("@"),
     );
   }
 
