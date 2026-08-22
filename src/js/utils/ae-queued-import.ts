@@ -22,6 +22,87 @@ export function ensureAsciiImportPath(filePath: string): string {
   return dest;
 }
 
+const STOCK_FOLDER_NAME = "Spunkram Stock Assets";
+
+/**
+ * Direct AE stock footage import — no queue, no sidecar, no polling.
+ * Single evalES: importFile → folder placement → optional timeline add.
+ * @see https://ae-scripting.docsforadobe.dev/general/project/#projectimportfile
+ */
+export async function importAeStockFootage(
+  filePath: string,
+  destination: "project" | "timeline",
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const importPath = esPath(ensureAsciiImportPath(filePath));
+  const folderName = STOCK_FOLDER_NAME;
+  const addToTimeline = destination === "timeline";
+
+  const script = `(function(){
+    try {
+      var f = new File("${importPath}");
+      if (!f.exists) {
+        return JSON.stringify({ ok: false, reason: "SOURCE_MISSING" });
+      }
+      var opts = new ImportOptions(f);
+      if (!opts.canImportAs(ImportAsType.FOOTAGE)) {
+        return JSON.stringify({ ok: false, reason: "IMPORT_FAILED" });
+      }
+      var item = app.project.importFile(opts);
+      if (!item) {
+        return JSON.stringify({ ok: false, reason: "IMPORT_FAILED" });
+      }
+
+      var folder = null;
+      for (var i = 1; i <= app.project.numItems; i++) {
+        var it = app.project.item(i);
+        if (it instanceof FolderItem && it.name === "${folderName}") {
+          folder = it;
+          break;
+        }
+      }
+      if (!folder) {
+        folder = app.project.items.addFolder("${folderName}");
+      }
+      item.parentFolder = folder;
+
+      if (${addToTimeline}) {
+        var comp = app.project.activeItem;
+        if (!(comp instanceof CompItem)) {
+          return JSON.stringify({ ok: false, reason: "NO_ACTIVE_COMP" });
+        }
+        var layer = comp.layers.add(item);
+        layer.startTime = comp.time;
+      }
+
+      return JSON.stringify({ ok: true });
+    } catch (e) {
+      return JSON.stringify({
+        ok: false,
+        reason: String(e && e.message != null ? e.message : e)
+      });
+    }
+  })()`;
+
+  try {
+    const raw = await evalES(script, true);
+    const trimmed = String(raw || "").trim();
+    if (!trimmed) {
+      return { ok: false, reason: "Host script returned no result" };
+    }
+    const parsed = JSON.parse(trimmed) as { ok?: boolean; reason?: string; evalESError?: boolean };
+    if (parsed.evalESError) {
+      return { ok: false, reason: parsed.reason || "ExtendScript error" };
+    }
+    if (parsed.ok === true) {
+      return { ok: true };
+    }
+    return { ok: false, reason: parsed.reason || "Unknown error" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, reason: msg };
+  }
+}
+
 function readSidecarFile(
   filePath: string,
   startedAt: number,
@@ -36,10 +117,6 @@ function readSidecarFile(
   } catch {
     return undefined;
   }
-}
-
-function isStarted(data: HostImportOutcome): boolean {
-  return !!data && typeof data === "object" && data.status === "started";
 }
 
 function isFinal(data: HostImportOutcome): boolean {
@@ -134,7 +211,9 @@ function readImportSidecar(
 }
 
 /**
- * Run AE queued import (stock / voiceover) with scheduleTask kick + sidecar poll.
+ * Run AE queued import with scheduleTask kick + sidecar poll.
+ * NOTE: Stock footage now uses `importAeStockFootage` (direct evalES).
+ * This function is kept for voiceover audio which still uses the SDK path.
  */
 export async function runAeQueuedHostImport(
   filePath: string,
