@@ -9,7 +9,7 @@ import { incrementUsage } from "../utils/trial-usage";
 import type { MediaItem } from "../types";
 
 export function useImportMedia() {
-  const { setProgress, setPending } = useProgressContext();
+  const { setProgress, setPending, setError } = useProgressContext();
   const { destination } = useFiltersContext();
 
   const importMedia = useCallback(
@@ -19,7 +19,7 @@ export function useImportMedia() {
           item.provider || (item.type === "video" ? "pexels" : "unsplash");
         const downloadDir = await resolveFootageDownloadDir();
         if (!downloadDir.ok) {
-          console.error("import error", downloadDir.message);
+          setError(downloadDir.message || "Failed to resolve download directory");
           return;
         }
         const filePath = path.join(downloadDir.dir, item.name);
@@ -33,7 +33,10 @@ export function useImportMedia() {
             destination,
             item.duration ?? 5,
           );
-          if (!res.ok) throw new Error(res.error);
+          if (!res.ok) {
+            setError(res.error || "Import failed");
+            return;
+          }
           incrementUsage("gallery");
           setProgress(100);
           return;
@@ -45,6 +48,8 @@ export function useImportMedia() {
           id: item.id,
           fileName: item.name,
           destDir: downloadDir.dir,
+          quality: item.quality,
+          resolution: item.resolution,
           onProgress: ({ bytesReceived, totalBytes }) => {
             if (totalBytes && totalBytes > 0) {
               setProgress(Math.round((bytesReceived / totalBytes) * 100));
@@ -52,24 +57,31 @@ export function useImportMedia() {
           },
         });
 
-        if (!downloaded.ok) throw new Error(downloaded.message);
+        if (!downloaded.ok) {
+          setError(downloaded.message || "Download failed");
+          return;
+        }
 
         const res = await Motionflow.importMedia(
           downloaded.filePath,
           destination,
           item.duration ?? 5,
         );
-        if (!res.ok) throw new Error(res.error);
+        if (!res.ok) {
+          setError(res.error || "Import failed");
+          return;
+        }
         incrementUsage("gallery");
         setProgress(100);
       } catch (error) {
-        console.error("import error", error);
+        const message = error instanceof Error ? error.message : String(error);
+        setError(message || "Import failed");
       } finally {
         setPending(false);
         setProgress(0);
       }
     },
-    [setPending, setProgress, destination],
+    [setPending, setProgress, setError, destination],
   );
 
   return { importMedia };

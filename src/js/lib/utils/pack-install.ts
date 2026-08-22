@@ -14,7 +14,7 @@ import {
 import { BRAND, packExtensionLabel } from "@brands";
 import { initPackageAsync, initPackageSync, parsePackageFileFormat } from "./pack";
 import type { InstalledPackMeta } from "./pack-types";
-import { extractZipToFolder } from "./pack-zip";
+import { extractZipToFolder, ExtractAbortedError } from "./pack-zip";
 import { installPackFonts } from "./pack-fonts";
 import { reportSupportError, reportSupportInfo } from "@/api/support";
 import { currentPackHost, normalizePackHost, type PackHostId } from "./pack-host";
@@ -382,7 +382,10 @@ export type InstallPackResult =
  * bundling one). Copies the pack + its sibling asset/template folders into
  * the managed packages root, then registers it in preferences.json.
  */
-export async function installPackFromFile(sourcePath: string): Promise<InstallPackResult> {
+export async function installPackFromFile(
+  sourcePath: string,
+  opts?: { signal?: AbortSignal },
+): Promise<InstallPackResult> {
   if (!cepFsAvailable() || !fs.existsSync(sourcePath)) {
     return { ok: false, message: "File not found." };
   }
@@ -415,11 +418,18 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
       );
       const extractStarted = Date.now();
       installLog("extract.begin", { stagingDir });
-      const written = extractZipToFolder(sourcePath, stagingDir);
-      installLog("extract.done", {
-        files: written.length,
-        ms: Date.now() - extractStarted,
-      });
+      try {
+        const written = extractZipToFolder(sourcePath, stagingDir, { signal: opts?.signal });
+        installLog("extract.done", {
+          files: written.length,
+          ms: Date.now() - extractStarted,
+        });
+      } catch (e) {
+        if (e instanceof ExtractAbortedError || opts?.signal?.aborted) {
+          return { ok: false, message: "Installation cancelled" };
+        }
+        throw e;
+      }
       cleanupStagingDir = stagingDir;
       const found = findPackFileRecursive(stagingDir);
       if (!found) {
@@ -523,6 +533,44 @@ export async function installPackFromFile(sourcePath: string): Promise<InstallPa
       }
     }
   }
+}
+
+/** Remove all installed packs: preferences entries + managed folders (only inside install root). */
+export function removeAllInstalledPacks(): { removed: number; errors: string[] } {
+  const result = { removed: 0, errors: [] as string[] };
+  try {
+    const prefs = loadPreferencesFile();
+    const packages = Array.isArray(prefs.packages)
+      ? (prefs.packages as InstalledPackMeta[])
+      : [];
+    const baseRoot = path.normalize(resolvePackagesInstallRoot(null));
+
+    for (const meta of packages) {
+      if (!meta.path) continue;
+      const packDir = path.normalize(path.dirname(meta.path));
+      if (
+        cepFsAvailable() &&
+        (packDir === baseRoot || packDir.startsWith(baseRoot + path.sep)) &&
+        fs.existsSync(packDir)
+      ) {
+        try {
+          fs.rmSync(packDir, { recursive: true, force: true });
+          result.removed++;
+        } catch (e) {
+          result.errors.push(
+            `${meta.name || packDir}: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
+    }
+
+    prefs.packages = [];
+    if ("Packages" in prefs) prefs.Packages = [];
+    savePreferencesFile(prefs);
+  } catch (e) {
+    result.errors.push(e instanceof Error ? e.message : String(e));
+  }
+  return result;
 }
 
 /** Remove an installed pack: preferences entry + its managed folder (only inside our install root). */

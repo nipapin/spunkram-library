@@ -1,23 +1,29 @@
 import { MediaAuthor } from "../types";
 import { csi } from "../../lib/utils/bolt";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@brands";
 
 interface AutorCredentialProps {
   hovered?: boolean;
   user: MediaAuthor;
+  provider?: "unsplash" | "pexels";
 }
 
-const utm = `?utm_source=${encodeURIComponent("Gal Toolkit MAX")}&utm_medium=referral`;
+const utm = `?utm_source=${encodeURIComponent(BRAND.displayName)}&utm_medium=referral`;
 
-export default function AutorCredential({ hovered, user }: AutorCredentialProps) {
+export default function AutorCredential({ hovered, user, provider = "unsplash" }: AutorCredentialProps) {
+  const providerName = provider === "pexels" ? "Pexels" : "Unsplash";
+  const providerUrl = provider === "pexels" ? "https://pexels.com" : "https://unsplash.com";
+  const mediaLabel = provider === "pexels" ? "Video by" : "Photo by";
+
   const handleOpenProfile = (e: React.MouseEvent) => {
     e.stopPropagation();
     csi.openURLInDefaultBrowser(`${user.url}${utm}`);
   };
 
-  const handleOpenUnsplash = (e: React.MouseEvent) => {
+  const handleOpenProvider = (e: React.MouseEvent) => {
     e.stopPropagation();
-    csi.openURLInDefaultBrowser(`https://unsplash.com${utm}`);
+    csi.openURLInDefaultBrowser(`${providerUrl}${utm}`);
   };
 
   return (
@@ -27,7 +33,7 @@ export default function AutorCredential({ hovered, user }: AutorCredentialProps)
         hovered && "-translate-y-[30px]",
       )}
     >
-      <span className="text-[8px] font-extralight text-muted-foreground">Photo by</span>
+      <span className="text-[8px] font-extralight text-muted-foreground">{mediaLabel}</span>
       <br />
       <button
         type="button"
@@ -39,10 +45,10 @@ export default function AutorCredential({ hovered, user }: AutorCredentialProps)
       {" on "}
       <button
         type="button"
-        onClick={handleOpenUnsplash}
+        onClick={handleOpenProvider}
         className="cursor-pointer text-[9px] underline"
       >
-        Unsplash
+        {providerName}
       </button>
     </p>
   );

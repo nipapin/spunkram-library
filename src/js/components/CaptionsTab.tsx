@@ -80,10 +80,8 @@ export const CaptionsTab = ({
     updateTranslateTo,
   } = useConfiguration();
 
-  // Sentences убран из UI — мигрируем сохранённый sentence → words
-  useEffect(() => {
-    if (mode === "sentence") updateMode("words");
-  }, [mode, updateMode]);
+  // Sentence mode is hidden from the mode picker but still works for existing data.
+  // Don't auto-migrate: split/merge operations require sentence-level backing data.
 
   // текущие настройки уже применены к хосту — кнопка Update не имеет смысла.
   // Для custom сравниваем ещё и lines/characters, не только mode (иначе смена

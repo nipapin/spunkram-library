@@ -92,9 +92,18 @@ export const useWorkRangeCost = (enabled = true): WorkRangeCostState => {
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVis);
+
+    // Poll periodically to catch In/Out or Work Area changes while panel is focused.
+    // This keeps the cost/N label in sync when the user modifies markers in the host.
+    const POLL_INTERVAL_MS = 3000;
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, POLL_INTERVAL_MS);
+
     return () => {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
+      clearInterval(poll);
     };
   }, [enabled, refresh]);
 

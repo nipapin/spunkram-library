@@ -11,7 +11,7 @@ import {
   type PrefSettings,
 } from "@/lib/api/preferences";
 import { selectFolder } from "@/lib/utils/bolt";
-import { notifyPackagesRescan, resolvePackagesInstallRoot, scanAndRegisterPacksAtRoot } from "@/lib/utils/pack-install";
+import { notifyPackagesRescan, removeAllInstalledPacks, resolvePackagesInstallRoot, scanAndRegisterPacksAtRoot } from "@/lib/utils/pack-install";
 import { version as EXTENSION_VERSION } from "../../shared/shared";
 import { fetchSpunkramVersions, isReleaseAdminEmail, type SpunkramVersionEntry } from "@/api/update";
 import { applyExtensionUpdate } from "@/utils/extension-update";
@@ -255,7 +255,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
   function removePackageFiles() {
     setBusy(true);
     setConfirm(null);
-    clearInstalledPackagesInPreferences();
+    removeAllInstalledPacks();
     try {
       clearAllActivePackStorageKeys((key) => panelStore.removeItem(key));
     } catch {

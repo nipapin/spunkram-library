@@ -427,6 +427,13 @@ export const CaptionsApp = ({
         "This style has no .mogrt file for Premiere Pro. Select a style with Premiere support and try again.",
       );
     }
+    // AE pre-flight: ensure the selected style has an .aep asset, or the default
+    // captions flow can still proceed without one. Fail before spending credits.
+    if (isAfterEffects() && selected && !activeAepPath && !activeMogrtPath) {
+      throw new Error(
+        "This style has no .aep file for After Effects. Select a style with After Effects support and try again.",
+      );
+    }
     // Premiere: пользовательский .epr из Settings, иначе бандленный WAV-пресет;
     // AE игнорирует параметр
     const effectivePresetPath = audioPresetPath || getBundledAudioPresetPath() || undefined;
@@ -893,6 +900,31 @@ export const CaptionsApp = ({
   };
 
   useEffect(() => {
+    // Rehydrate caption state from storage on panel remount
+    const storedData = panelStore.getItem(STORAGE_KEY);
+    if (storedData) {
+      try {
+        const parsed = JSON.parse(storedData) as TranscribeResult;
+        if (parsed?.chunk || parsed?.words) {
+          setData(parsed);
+          setScreen("editor");
+          skipSessionSaveRef.current = true;
+        }
+      } catch {
+        // ignore corrupt
+      }
+    }
+    const storedCustom = panelStore.getItem(CUSTOM_SEGMENTS_KEY);
+    if (storedCustom) {
+      try {
+        const parsed = JSON.parse(storedCustom) as CaptionsChunk[];
+        if (Array.isArray(parsed)) {
+          setCustomSegments(parsed);
+        }
+      } catch {
+        // ignore
+      }
+    }
     const storedMeta = panelStore.getItem(META_KEY);
     if (storedMeta) {
       try {

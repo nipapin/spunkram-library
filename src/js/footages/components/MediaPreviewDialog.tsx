@@ -46,7 +46,7 @@ export default function MediaPreviewDialog({
         ) : (
           <>
             <ShadowOverlay />
-            <AutorCredential user={media.user} />
+            <AutorCredential user={media.user} provider={media.provider} />
             <img
               src={media.preview}
               alt={media.alt}

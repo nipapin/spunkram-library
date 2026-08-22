@@ -59,6 +59,10 @@ export type MediaItem = {
     links?: {
         download_location?: string;
     };
+    /** Image quality: full, regular, small, thumb. Used for download request. */
+    quality?: string;
+    /** Video resolution (e.g., "1920x1080"). Used for download request. */
+    resolution?: string;
 };
 
 export type FetchMediaParams = {

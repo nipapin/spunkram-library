@@ -150,12 +150,18 @@ export function stockDownloadUrl(opts: {
   provider: StockProvider;
   kind: "image" | "video";
   id: string;
+  /** Image quality: full, regular, small, thumb. Passed to proxy for quality selection. */
+  quality?: string;
+  /** Video resolution (e.g., "1920x1080"). Passed to proxy for quality selection. */
+  resolution?: string;
 }): string {
   const search = new URLSearchParams({
     provider: opts.provider,
     kind: opts.kind,
     id: opts.id,
   });
+  if (opts.quality) search.set("quality", opts.quality);
+  if (opts.resolution) search.set("resolution", opts.resolution);
   return apiUrl(`${STOCK_DOWNLOAD_ENDPOINT}?${search.toString()}`);
 }
 
@@ -165,6 +171,10 @@ export async function downloadStockAsset(opts: {
   id: string;
   fileName: string;
   destDir?: string;
+  /** Image quality: full, regular, small, thumb. */
+  quality?: string;
+  /** Video resolution (e.g., "1920x1080"). */
+  resolution?: string;
   onProgress?: (p: {
     bytesReceived: number;
     totalBytes: number | null;
@@ -181,6 +191,8 @@ export async function downloadStockAsset(opts: {
     provider: opts.provider,
     kind: opts.kind,
     id: opts.id,
+    quality: opts.quality,
+    resolution: opts.resolution,
   });
 
   try {

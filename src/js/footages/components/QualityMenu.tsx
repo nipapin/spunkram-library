@@ -35,16 +35,19 @@ export default function QualityMenu({
 
   const handleImageQualitySelect = (quality: ImageQuality) => {
     const ext = getExtension(item.name, ".jpg");
-    // Proxy always returns the licensed full asset; label is informational.
-    onImport({ ...item, name: `${item.id}_${quality}${ext}` });
+    // Pass quality to download proxy for correct resolution selection.
+    onImport({ ...item, name: `${item.id}_${quality}${ext}`, quality });
     onClose();
   };
 
   const handleVideoQualitySelect = (file: VideoFile) => {
     const ext = getExtension(item.name, ".mp4");
+    const resolution = `${file.width}x${file.height}`;
+    // Pass resolution to download proxy for correct quality selection.
     onImport({
       ...item,
-      name: `${item.id}_${file.width}x${file.height}${ext}`,
+      name: `${item.id}_${resolution}${ext}`,
+      resolution,
     });
     onClose();
   };

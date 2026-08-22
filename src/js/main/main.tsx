@@ -26,6 +26,7 @@ import { fetchGenerationsStatus } from "@/api/credits";
 import {
   applyExtensionUpdate,
   finalizePendingNativeUpdate,
+  hasPendingNativeUpdate,
 } from "@/utils/extension-update";
 import { ensureFfmpeg } from "@/utils/ffmpeg";
 import { openMarketUrl, resolvePackEntitlementContextForScan } from "@/api/cep-market";
@@ -417,7 +418,7 @@ function EditingWorkspace({
   onOpenAccount: () => void;
 }) {
   const { showFavoritesOnly, favoriteIds, focusMode } = usePanelUI();
-  const { signedIn, subscription, market } = useAuth();
+  const { signedIn, subscription, market, isFreeUser } = useAuth();
 
   const entitlementCtx = useMemo(
     () =>
@@ -471,9 +472,10 @@ function EditingWorkspace({
   }, [tree, category, query, showFavoritesOnly, favoriteIds]);
 
   // Subscribers / owned / purchased packs only — verified against market + /me.
+  // When user isn't entitled to the pack, all items are locked.
   const isLocked = useCallback(
-    (item: PackTreeItem) => !canApply && (packRequiresPurchase || !!item.group.premium),
-    [canApply, packRequiresPurchase],
+    (item: PackTreeItem) => !canApply,
+    [canApply],
   );
 
   return (
@@ -481,7 +483,9 @@ function EditingWorkspace({
       {!canApply && signedIn && packRequiresPurchase && (
         <PurchaseGateBanner onOpenAccount={onOpenAccount} />
       )}
-      {!canApply && !signedIn && <FreePlanBanner onOpenAccount={onOpenAccount} />}
+      {signedIn && isFreeUser && !packRequiresPurchase && (
+        <FreePlanBanner onOpenAccount={onOpenAccount} />
+      )}
       <PanelToolbar
         tutorialsOpen={tutorialsOpen}
         onToggleTutorials={() => setTutorialsOpen(!tutorialsOpen)}
@@ -534,6 +538,7 @@ function AppShell() {
   const [nav, setNav] = useState(() =>
     readInstallablePackages().length === 0 ? "market" : "editing",
   );
+  const [prevNav, setPrevNav] = useState<string | null>(null);
   const [tutorialsOpen, setTutorialsOpen] = useState(false);
   const [tree, setTree] = useState<PackTreeNode[]>([]);
   const [category, setCategory] = useState("");
@@ -545,6 +550,7 @@ function AppShell() {
   const [hasInstalledPacks, setHasInstalledPacks] = useState(
     () => readInstallablePackages().length > 0,
   );
+  const [hasUserNavigated, setHasUserNavigated] = useState(false);
   const [monthlyGens, setMonthlyGens] = useState(0);
   const [extraGens, setExtraGens] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -555,6 +561,7 @@ function AppShell() {
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateProgress, setUpdateProgress] = useState<string | undefined>();
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [hasPendingNatives, setHasPendingNatives] = useState(false);
 
   const applyPack = useCallback((meta: InstalledPackMeta) => {
     revokePreviewObjectUrls();
@@ -630,6 +637,15 @@ function AppShell() {
     return () => window.removeEventListener(PACKAGES_RESCAN_EVENT, onRescan);
   }, [reloadPackList]);
 
+  // G-04: Auto-switch to Editing when packs become available and user hasn't navigated.
+  // On first paint host may be null → readInstallablePackages returns []. Once host
+  // environment is ready and packs are found, land on Editing rather than Market.
+  useEffect(() => {
+    if (hasInstalledPacks && nav === "market" && !hasUserNavigated && !settingsOpen) {
+      setNav("editing");
+    }
+  }, [hasInstalledPacks, nav, hasUserNavigated, settingsOpen]);
+
   // Prefetch market catalog once signed in (Market tab / notifications).
   useEffect(() => {
     if (!authReady || !signedIn) return;
@@ -650,6 +666,7 @@ function AppShell() {
   useEffect(() => {
     try {
       const { remaining } = finalizePendingNativeUpdate();
+      setHasPendingNatives(remaining.length > 0);
       if (remaining.length > 0) {
         showStatus(
           "Restart Premiere Pro / After Effects to finish the native plugin update.",
@@ -662,6 +679,8 @@ function AppShell() {
         "[spunkram] pending native finalize failed:",
         err instanceof Error ? err.message : err,
       );
+      // Check if there are still pending updates even after error
+      setHasPendingNatives(hasPendingNativeUpdate());
     }
   }, [showStatus]);
 
@@ -727,6 +746,7 @@ function AppShell() {
         }
       });
       if (result.pendingNatives.length > 0) {
+        setHasPendingNatives(true);
         setUpdateProgress("Reloading… Restart host to finish natives.");
         showStatus(
           "Panel updated. Restart Premiere Pro / After Effects to finish the native plugin update.",
@@ -813,6 +833,7 @@ function AppShell() {
     if (id === "editing" && !hasInstalledPacks) return;
     setSettingsOpen(false);
     setNav(id);
+    setHasUserNavigated(true);
     if (id === "editing") {
       setTutorialsOpen(false);
       setShowFavoritesOnly(false);
@@ -824,6 +845,7 @@ function AppShell() {
   }
 
   function openSettings() {
+    setPrevNav(nav);
     setSettingsOpen(true);
     setNav("settings");
   }
@@ -881,6 +903,14 @@ function AppShell() {
         />
       ) : null}
 
+      {hasPendingNatives && !showUpdateBanner && (
+        <div className="mx-2.5 mt-2 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-200">
+          <span className="flex-1">
+            Native plugin update pending. Restart the host application to complete.
+          </span>
+        </div>
+      )}
+
       <DownloadFloat />
 
       {settingsOpen || nav === "settings" ? (
@@ -888,7 +918,8 @@ function AppShell() {
           <SettingsPanel
             onBack={() => {
               setSettingsOpen(false);
-              setNav((prev) => (prev === "settings" ? defaultWorkspaceNav() : prev));
+              setNav(prevNav || defaultWorkspaceNav());
+              setPrevNav(null);
             }}
           />
         </section>
