@@ -5,6 +5,7 @@ import {
   canPreviewFamily,
   cssFontFamily,
   getFontCatalog,
+  subscribeFontCatalog,
   pickFaceForFamily,
   resolveFontFace,
   type FontCatalog,
@@ -94,8 +95,12 @@ export const FontPicker = ({
     getFontCatalog().then((next) => {
       if (!cancelled) setCatalog(next);
     });
+    const unsub = subscribeFontCatalog((next) => {
+      if (!cancelled) setCatalog(next);
+    });
     return () => {
       cancelled = true;
+      unsub();
     };
   }, []);
 

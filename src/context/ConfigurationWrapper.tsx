@@ -17,8 +17,11 @@ import {
 } from "../js/styles";
 import { friendlyErrorMessage } from "../js/utils/user-error";
 import {
+  ControlType,
   defaultsFromDefinition,
   diffStyleProps,
+  findFontControl,
+  fontIdFromValue,
   stylePropsFromValues,
   type StylePropPayload,
 } from "../js/presets";
@@ -27,10 +30,23 @@ import type { GroupingMode } from "../js/utils/transcribe";
 import { csi } from "../js/lib/utils/bolt";
 import { Motionflow } from "../js/sdk";
 import * as panelStore from "../js/lib/userdata-store";
-import { getFontCatalog } from "../js/lib/utils/system-fonts";
+import { getFontCatalog, resolveFontFace } from "../js/lib/utils/system-fonts";
 
 export type { StylePreset } from "../js/styles";
 export { isPresetDirty, isPresetValuesDirty, presetSwatchColors };
+
+type CaptionHostRef = { sequenceId?: string; compId?: number; trackIndex?: number };
+
+const readCaptionHostRef = (): CaptionHostRef | null => {
+  try {
+    const raw = panelStore.getItem("aitools-cep-caption-meta");
+    if (!raw) return null;
+    const meta = JSON.parse(raw) as { hostRef?: CaptionHostRef };
+    return meta.hostRef || null;
+  } catch {
+    return null;
+  }
+};
 
 interface IConfigurationValue {
   mode: GroupingMode;
@@ -71,6 +87,8 @@ interface IConfigurationValue {
   ensureDefinitionLoaded: (styleId: string) => Promise<MogrtDefinition>;
   /** Применить values выбранного пресета к caption MOGRT на таймлайне (full push). */
   applySelectedPresetToHost: () => Promise<void>;
+  /** Подставить шрифт с клипа (systemName mogrt) в Typography без записи обратно в хост. */
+  syncSelectedPresetFontFromHost: (fontId: string) => void;
 }
 
 const defaultValue: IConfigurationValue = {
@@ -108,6 +126,7 @@ const defaultValue: IConfigurationValue = {
   ensureStyleDownloaded: async () => {},
   ensureDefinitionLoaded: async () => ({ clientControls: [] }),
   applySelectedPresetToHost: async () => {},
+  syncSelectedPresetFontFromHost: () => {},
 };
 
 const STORAGE_KEY = "aitools-cep-config";
@@ -180,6 +199,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   definitionsRef.current = definitions;
   const presetsRef = useRef(presets);
   presetsRef.current = presets;
+  const selectedPresetIdRef = useRef(selectedPresetId);
+  selectedPresetIdRef.current = selectedPresetId;
   const definitionLoadsRef = useRef(new Map<string, Promise<MogrtDefinition>>());
 
   const updateMode = (value: GroupingMode) => setMode(value);
@@ -326,6 +347,44 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     [applyPreparedAssets, ensureDefinitionLoaded, presets],
   );
 
+  const syncSelectedPresetFontFromHost = useCallback((rawId: string) => {
+    const trimmed = String(rawId || "").trim();
+    if (!trimmed) return;
+
+    const write = (fontId: string) => {
+      const presetId = selectedPresetIdRef.current;
+      const selected = presetsRef.current.find((p) => p.id === presetId);
+      if (!selected) return;
+      const definition = definitionsRef.current[selected.styleId];
+      const control = findFontControl(definition);
+      if (!control) return;
+      const current = fontIdFromValue(selected.values[control.id]);
+      if (current.toLowerCase() === fontId.toLowerCase()) return;
+      const nextValue =
+        control.type === ControlType.FontMenu
+          ? fontId
+          : { strDB: [{ localeString: "en_US", str: fontId }] };
+      setPresets((prev) =>
+        prev.map((p) => {
+          if (p.id !== presetId) return p;
+          return {
+            ...p,
+            values: { ...p.values, [control.id]: nextValue },
+            origin: {
+              ...p.origin,
+              values: { ...p.origin.values, [control.id]: nextValue },
+            },
+          };
+        }),
+      );
+    };
+
+    void getFontCatalog().then((catalog) => {
+      const face = resolveFontFace(catalog, trimmed);
+      write(face.id || trimmed);
+    });
+  }, []);
+
   const applyValuesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const applyInFlight = useRef(false);
   const pendingStyleApply = useRef<{
@@ -359,22 +418,15 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       let sequenceId: string | undefined;
       let compId: number | undefined;
       let trackIndex: number | undefined;
-      try {
-        const raw = panelStore.getItem("aitools-cep-caption-meta");
-        if (raw) {
-          const meta = JSON.parse(raw) as {
-            hostRef?: { sequenceId?: string; compId?: number; trackIndex?: number };
-          };
-          sequenceId = meta.hostRef?.sequenceId;
-          if (typeof meta.hostRef?.compId === "number") {
-            compId = meta.hostRef.compId;
-          }
-          if (typeof meta.hostRef?.trackIndex === "number") {
-            trackIndex = meta.hostRef.trackIndex;
-          }
+      const hostRef = readCaptionHostRef();
+      if (hostRef) {
+        sequenceId = hostRef.sequenceId;
+        if (typeof hostRef.compId === "number") {
+          compId = hostRef.compId;
         }
-      } catch {
-        // ignore
+        if (typeof hostRef.trackIndex === "number") {
+          trackIndex = hostRef.trackIndex;
+        }
       }
 
       applyInFlight.current = true;
@@ -382,6 +434,12 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       const hostApi = Motionflow.host === "AE" ? Motionflow.AE : Motionflow.PPRO;
       return hostApi
         .applyCaptionStyleValues({ props, sequenceId, compId, trackIndex })
+        .then((wrapped) => {
+          if (wrapped && wrapped.ok) {
+            const data = wrapped.data as { fontId?: string } | null;
+            if (data?.fontId) syncSelectedPresetFontFromHost(data.fontId);
+          }
+        })
         .catch((err) => {
           console.warn("[Styles] applyCaptionStyleValues failed", err);
         })
@@ -399,7 +457,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         })
         .then(() => undefined);
     },
-    [definitions],
+    [definitions, syncSelectedPresetFontFromHost],
   );
 
   /** Пушим values в caption-клипы: debounce + один in-flight evalScript, только дельта. */
@@ -428,15 +486,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   const applySelectedPresetToHost = useCallback(async (): Promise<void> => {
     const selected = presets.find((p) => p.id === selectedPresetId);
     if (!selected) return;
-
-    try {
-      const raw = panelStore.getItem("aitools-cep-caption-meta");
-      if (!raw) return;
-      const meta = JSON.parse(raw) as { hostRef?: unknown };
-      if (!meta.hostRef) return;
-    } catch {
-      return;
-    }
+    if (!readCaptionHostRef()) return;
 
     const definition = await ensureDefinitionLoaded(selected.styleId);
     if (!definition?.clientControls?.length) return;
@@ -449,8 +499,11 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     await flushStyleValuesToHost(selected.styleId, values, true, definition);
   }, [presets, selectedPresetId, ensureDefinitionLoaded, flushStyleValuesToHost]);
 
-  /** Выбор в UI + подгрузка controls.json для Styles. aep/mogrt — на Transcribe. */
+  const selectPresetGen = useRef(0);
+
+  /** Выбор в UI. applyToHost: смена пресета в редакторе — импорт mogrt/aep и замена projectItem. */
   const selectPreset = (id: string, opts?: { applyToHost?: boolean }) => {
+    const previous = presets.find((p) => p.id === selectedPresetId);
     setSelectedPresetId(id);
     setAcquireStatus("idle");
     const target = presets.find((p) => p.id === id);
@@ -464,16 +517,81 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       setMogrtPath("");
       setAepPath("");
     }
-    void ensureDefinitionLoaded(target.styleId).then((definition) => {
-      if (!definition?.clientControls?.length) return;
-      if (opts?.applyToHost === false) return;
-      const values = Object.keys(target.values || {}).length
-        ? target.values
-        : defaultsFromDefinition(definition);
-      if (Object.keys(values).length) {
-        pushStyleValuesToHost(target.styleId, values, { full: true, definition });
+
+    const applyToHost = opts?.applyToHost !== false;
+    const gen = ++selectPresetGen.current;
+
+    void (async () => {
+      try {
+        const definition = await ensureDefinitionLoaded(target.styleId);
+        if (selectPresetGen.current !== gen) return;
+        if (!applyToHost) return;
+
+        const hostRef = readCaptionHostRef();
+        if (!hostRef) return;
+
+        const sameSource = previous?.styleId === target.styleId;
+        if (!sameSource) {
+          setAcquireStatus("downloading");
+          await ensureStyleDownloaded(target.styleId);
+          if (selectPresetGen.current !== gen) return;
+          const nextPaths = getLocalStyleAssetPaths(target.styleId);
+          applyPreparedAssets(nextPaths);
+          const hostApi = Motionflow.host === "AE" ? Motionflow.AE : Motionflow.PPRO;
+          if (Motionflow.host === "PPRO" && !nextPaths?.mogrt) {
+            console.warn("[Styles] applyStyleProject skipped: no .mogrt for Premiere");
+            setAcquireStatus("error");
+            return;
+          }
+          if (Motionflow.host === "AE" && !nextPaths?.aep && !nextPaths?.mogrt) {
+            console.warn("[Styles] applyStyleProject skipped: no .aep for After Effects");
+            setAcquireStatus("error");
+            return;
+          }
+          setAcquireStatus("applying");
+          const catalog = presets.find((p) => p.styleId === target.styleId && p.source !== "user");
+          const wrapped = await hostApi.applyStyleProject({
+            styleId: target.styleId,
+            styleName: catalog?.name || target.name,
+            aepPath: nextPaths?.aep,
+            mogrtPath: nextPaths?.mogrt,
+            sequenceId: hostRef.sequenceId,
+            trackIndex: hostRef.trackIndex,
+            compId: hostRef.compId,
+          });
+          if (selectPresetGen.current !== gen) return;
+          if (!wrapped.ok) {
+            console.warn("[Styles] applyStyleProject failed", wrapped.error);
+            setAcquireStatus("error");
+            return;
+          }
+          const result = wrapped.data as { applied?: boolean; reason?: string; fontId?: string } | null;
+          if (result && result.applied === false) {
+            console.warn("[Styles] applyStyleProject", result.reason);
+            setAcquireStatus("error");
+            return;
+          }
+          if (result?.fontId) syncSelectedPresetFontFromHost(result.fontId);
+        }
+
+        if (!definition?.clientControls?.length) {
+          setAcquireStatus("ready");
+          return;
+        }
+        const values = Object.keys(target.values || {}).length
+          ? target.values
+          : defaultsFromDefinition(definition);
+        if (Object.keys(values).length) {
+          lastPushedProps.current = null;
+          pushStyleValuesToHost(target.styleId, values, { full: true, definition });
+        }
+        setAcquireStatus("ready");
+      } catch (err) {
+        if (selectPresetGen.current !== gen) return;
+        console.warn("[Styles] selectPreset apply failed", err);
+        setAcquireStatus("error");
       }
-    });
+    })();
   };
 
   const updateSelectedPreset = (patch: Partial<StylePreset>) => {
@@ -546,7 +664,9 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (booted.current) return;
     booted.current = true;
-    void getFontCatalog();
+    window.setTimeout(() => {
+      void getFontCatalog();
+    }, 0);
     void refreshStyles();
   }, [refreshStyles]);
 
@@ -599,6 +719,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         ensureStyleDownloaded,
         ensureDefinitionLoaded,
         applySelectedPresetToHost,
+        syncSelectedPresetFontFromHost,
       }}
     >
       {children}

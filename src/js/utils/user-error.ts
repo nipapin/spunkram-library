@@ -263,6 +263,13 @@ export function friendlyErrorMessage(err: unknown): string {
   if (/ffmpeg/i.test(msg)) {
     return "Could not convert audio. Try again, or reinstall the extension.";
   }
+  if (
+    /unexpected end of json/i.test(msg) ||
+    /host script returned (no result|invalid data)/i.test(msg) ||
+    /host script failed/i.test(msg)
+  ) {
+    return msg;
+  }
 
   if (looksLikeInternalError(msg)) return GENERIC_ERROR;
   return msg;

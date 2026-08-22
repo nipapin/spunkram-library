@@ -249,7 +249,7 @@ export const withHostJsonFile = async <T>(
   });
   fs.writeFileSync(filePath, asciiJson, "utf8");
   try {
-    return await run(filePath);
+    return await run(filePath.replace(/\\/g, "/"));
   } finally {
     try {
       fs.unlinkSync(filePath);

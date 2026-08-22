@@ -652,15 +652,19 @@ function AppShell() {
     void refreshMarket();
   }, [authReady, signedIn, refreshMarket]);
 
-  // Prefetch ffmpeg into userdata on panel start (not on first Captions use).
+  // Prefetch ffmpeg after the shell is up so unzip/download cannot freeze Loading.
   useEffect(() => {
-    ensureFfmpeg().catch((err) => {
-      console.warn(
-        "[spunkram] ffmpeg download failed:",
-        err instanceof Error ? err.message : err,
-      );
-    });
-  }, []);
+    if (!authReady) return;
+    const timer = window.setTimeout(() => {
+      ensureFfmpeg().catch((err) => {
+        console.warn(
+          "[spunkram] ffmpeg download failed:",
+          err instanceof Error ? err.message : err,
+        );
+      });
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [authReady]);
 
   // Promote Motionflow.dll (etc.) written as *.pending-update while host held the lock.
   useEffect(() => {

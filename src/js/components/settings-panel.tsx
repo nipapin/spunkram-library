@@ -149,8 +149,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
       setPointerStable(data.current.stable);
       setPointerBeta(data.current.beta);
       const preferred =
-        data.versions.find((v) => v.version === data.current.beta) ||
-        data.versions.find((v) => v.version !== EXTENSION_VERSION) ||
+        data.versions.find((v) => v.version === EXTENSION_VERSION) ||
         data.versions[0];
       if (preferred) setSelectedVersion(preferred.version);
     });

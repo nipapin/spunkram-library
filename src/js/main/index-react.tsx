@@ -1,7 +1,7 @@
 import "../polyfill-cep-process";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { initBolt } from "../lib/utils/bolt";
+import { enableSpectrum, initBolt } from "../lib/utils/bolt";
 import { installGlobalHandlers } from "@/api/support";
 import "@fontsource-variable/geist/wght.css";
 import "@fontsource-variable/unbounded/wght.css";
@@ -9,10 +9,10 @@ import "../globals.css";
 import { App } from "./main";
 import { ConfigurationWrapper } from "../../context/ConfigurationWrapper";
 import { getFontCatalog } from "../lib/utils/system-fonts";
+// describe-probe-20260822 cache bust
 
-initBolt();
+enableSpectrum();
 installGlobalHandlers();
-void getFontCatalog();
 
 ReactDOM.createRoot(document.getElementById("app") as HTMLElement).render(
   <React.StrictMode>
@@ -21,3 +21,14 @@ ReactDOM.createRoot(document.getElementById("app") as HTMLElement).render(
     </ConfigurationWrapper>
   </React.StrictMode>
 );
+
+const afterFirstPaint = () => {
+  initBolt();
+  void getFontCatalog();
+};
+
+if (typeof requestAnimationFrame === "function") {
+  requestAnimationFrame(() => setTimeout(afterFirstPaint, 0));
+} else {
+  setTimeout(afterFirstPaint, 0);
+}

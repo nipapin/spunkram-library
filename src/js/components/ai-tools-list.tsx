@@ -26,11 +26,12 @@ export function AiToolsList({
   /** @deprecated Local fake extras removed — quota is server-owned. */
   onBuyExtra?: (amount: number) => void;
 }) {
+  const showExtra = !isFreeUser;
   const totalLeft = monthly + extra;
   const limitLabel = monthlyLimit != null ? String(monthlyLimit) : "—";
-  const capacity = Math.max(0, (monthlyLimit ?? 0) + extra);
-  const monthlyPct = capacity > 0 ? Math.max(0, Math.min(100, (Math.max(monthly, 0) / capacity) * 100)) : 0;
-  const extraPct = capacity > 0 ? Math.max(0, Math.min(100, (Math.max(extra, 0) / capacity) * 100)) : 0;
+  const monthlyCap = Math.max(0, monthlyLimit ?? 0);
+  const monthlyPct =
+    monthlyCap > 0 ? Math.max(0, Math.min(100, (Math.max(monthly, 0) / monthlyCap) * 100)) : 0;
 
   return (
     <div className="ai-tools-scope ai-hub">
@@ -55,22 +56,15 @@ export function AiToolsList({
                   className="ai-hub__track"
                   role="progressbar"
                   aria-valuemin={0}
-                  aria-valuemax={capacity || undefined}
-                  aria-valuenow={totalLeft}
-                  aria-label={`${monthly} monthly and ${extra} extra generations left`}
+                  aria-valuemax={monthlyCap || undefined}
+                  aria-valuenow={monthly}
+                  aria-label={`${monthly} of ${limitLabel} subscription generations left`}
                 >
                   {monthlyPct > 0 ? (
                     <div
                       className="ai-hub__fill ai-hub__fill--monthly"
                       style={{ width: `${monthlyPct}%` }}
-                      title={`${monthly} monthly`}
-                    />
-                  ) : null}
-                  {extraPct > 0 ? (
-                    <div
-                      className="ai-hub__fill ai-hub__fill--extra"
-                      style={{ width: `${extraPct}%` }}
-                      title={`${extra} extra`}
+                      title={`${monthly}/${limitLabel} monthly`}
                     />
                   ) : null}
                 </div>
@@ -82,11 +76,13 @@ export function AiToolsList({
                     {isFreeUser ? "" : " · resets each month"}
                   </span>
                   <div className="ai-hub__legend-right">
-                    <span className="ai-hub__legend-item">
-                      <span className="ai-hub__dot ai-hub__dot--extra" aria-hidden />
-                      <InfinityIcon className="size-3" />
-                      {extra} extra
-                    </span>
+                    {showExtra ? (
+                      <span className="ai-hub__legend-item">
+                        <span className="ai-hub__dot ai-hub__dot--extra" aria-hidden />
+                        <InfinityIcon className="size-3" />
+                        {extra} extra
+                      </span>
+                    ) : null}
                     <button
                       type="button"
                       className="ai-hub-btn ai-hub-btn--primary ai-hub-btn--tiny"

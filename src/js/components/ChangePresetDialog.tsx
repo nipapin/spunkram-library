@@ -44,7 +44,7 @@ export const ChangePresetDialog = ({
               Change Preset
             </p>
             <p className="change-preset-dialog__hint">
-              Edits to {currentName || "the current preset"} stay on that style.
+              Edits to {currentName || "the current preset"} stay on that style. The selected caption clip switches to the new template.
             </p>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">

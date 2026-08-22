@@ -16,6 +16,8 @@ export {
   findControlByNames,
   findControlByAnyNames,
   fontIdFromValue,
+  findFontControl,
+  isFontControl,
   getControlValue,
   indexControls,
   isColorArray,

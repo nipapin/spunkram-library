@@ -42,21 +42,29 @@ export function getFfmpegPath(): string {
   return path.join(getFfmpegBinDir(), binary);
 }
 
-function extractMacFfmpeg(binDir: string, binaryPath: string, zipPath: string): void {
-  const result = child_process.spawnSync("unzip", ["-o", zipPath, "-d", binDir]);
-  if (result.status !== 0) {
-    const stderr = result.stderr?.toString().trim();
-    throw new Error(`Failed to extract ffmpeg${stderr ? `: ${stderr}` : ""}`);
-  }
-  if (!fs.existsSync(binaryPath)) {
-    throw new Error(`ffmpeg missing from archive after extraction: ${binaryPath}`);
-  }
-  fs.chmodSync(binaryPath, 0o755);
-  try {
-    fs.unlinkSync(zipPath);
-  } catch {
-    /* keep zip if unlink fails */
-  }
+function extractMacFfmpeg(binDir: string, binaryPath: string, zipPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = child_process.spawn("unzip", ["-o", zipPath, "-d", binDir]);
+    let stderr = "";
+    child.stderr.on("data", function (chunk) {
+      stderr += String(chunk);
+    });
+    child.on("error", function (err) { reject(err); });
+    child.on("close", function (code) {
+      if (code !== 0) {
+        var detail = stderr.trim();
+        reject(new Error(detail ? ("Failed to extract ffmpeg: " + detail) : "Failed to extract ffmpeg"));
+        return;
+      }
+      if (!fs.existsSync(binaryPath)) {
+        reject(new Error("ffmpeg missing from archive after extraction: " + binaryPath));
+        return;
+      }
+      fs.chmodSync(binaryPath, 0o755);
+      try { fs.unlinkSync(zipPath); } catch (e) {}
+      resolve();
+    });
+  });
 }
 
 let ensurePromise: Promise<string> | null = null;
@@ -102,7 +110,7 @@ export async function ensureFfmpeg(
         }),
     });
     onProgress?.({ phase: "extract", bytesReceived: 0, totalBytes: null });
-    extractMacFfmpeg(binDir, binaryPath, zipPath);
+    await extractMacFfmpeg(binDir, binaryPath, zipPath);
     return binaryPath;
   })().finally(() => {
     ensurePromise = null;

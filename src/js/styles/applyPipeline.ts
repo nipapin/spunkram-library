@@ -124,8 +124,8 @@ export const acquirePresetProject = async (
 };
 
 /**
- * Применить скачанный проект в AE / Premiere.
- * JSX пока-заглушка — { applied: false, reason: "not_implemented" }.
+ * Import the caption .mogrt/.aep and replace the selected clip/layer source.
+ * Style values are applied afterwards via applyCaptionStyleValues.
  */
 export const applyPresetProjectInHost = async (
   prepared: PreparedPresetProject,

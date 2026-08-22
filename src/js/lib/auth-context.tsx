@@ -552,16 +552,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Ensure vault migration runs, then hydrate active session.
-      refreshSavedAccounts();
-      const stored = readMotionflowAuth();
-      if (stored.token) {
-        syncAiIdentity(stored);
-        await refreshProfile(stored.token, {
-          removeAccountIdOnUnauthorized: stored.id,
-        });
+      try {
+        refreshSavedAccounts();
+        const stored = readMotionflowAuth();
+        if (stored.token) {
+          syncAiIdentity(stored);
+          const hydrate = refreshProfile(stored.token, {
+            removeAccountIdOnUnauthorized: stored.id,
+          });
+          const cap = new Promise<void>((resolve) => {
+            setTimeout(resolve, 8000);
+          });
+          await Promise.race([hydrate.then(() => undefined).catch(() => undefined), cap]);
+        }
+      } catch {
+        /* still show UI */
+      } finally {
+        if (!cancelled) setAuthReady(true);
       }
-      if (!cancelled) setAuthReady(true);
     })();
     return () => {
       cancelled = true;

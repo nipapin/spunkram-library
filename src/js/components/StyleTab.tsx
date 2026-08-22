@@ -28,6 +28,7 @@ export const StyleTab = () => {
     definitions,
     stylesStatus,
     ensureDefinitionLoaded,
+    acquireStatus,
   } = useConfiguration();
 
   const selected = presets.find((p) => p.id === selectedPresetId) ?? presets[0];
@@ -70,7 +71,7 @@ export const StyleTab = () => {
     <button
       type="button"
       className="btn btn--ghost style-tab__change-preset"
-      disabled={otherPresets === 0}
+      disabled={otherPresets === 0 || acquireStatus === "downloading" || acquireStatus === "applying"}
       onClick={() => setPickerOpen(true)}
     >
       <LayoutGrid size={13} />
@@ -114,6 +115,14 @@ export const StyleTab = () => {
         </div>
         {changePreset}
         {picker}
+        {(acquireStatus === "downloading" || acquireStatus === "applying") && (
+          <p className="style-tab__hint">
+            {acquireStatus === "downloading" ? "Downloading style…" : "Applying style…"}
+          </p>
+        )}
+        {acquireStatus === "error" && (
+          <p className="style-tab__hint">Couldn’t apply this style to the selected caption.</p>
+        )}
 
         <PresetFields
           value={selected}
@@ -162,6 +171,14 @@ export const StyleTab = () => {
       </p>
       {changePreset}
       {picker}
+      {(acquireStatus === "downloading" || acquireStatus === "applying") && (
+        <p className="style-tab__hint">
+          {acquireStatus === "downloading" ? "Downloading style…" : "Applying style…"}
+        </p>
+      )}
+      {acquireStatus === "error" && (
+        <p className="style-tab__hint">Couldn’t apply this style to the selected caption.</p>
+      )}
     </div>
   );
 };

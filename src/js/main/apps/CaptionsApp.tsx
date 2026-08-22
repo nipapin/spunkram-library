@@ -8,7 +8,7 @@ import {
   type DescribeType,
 } from "../../components/ProgressDialog";
 import { fs } from "../../lib/cep/node";
-import { csi, reloadJSX } from "../../lib/utils/bolt";
+import { csi } from "../../lib/utils/bolt";
 import { Motionflow } from "@/sdk";
 import { hostSdk, sdkData } from "@/sdk/host-api";
 import { convertToMp3, detectSpeechStart } from "../../utils/ffmpeg";
@@ -137,6 +137,8 @@ export const CaptionsApp = ({
     selectPreset,
     ensureStyleDownloaded,
     applySelectedPresetToHost,
+    syncSelectedPresetFontFromHost,
+    ensureDefinitionLoaded,
     updateMode,
     updateLines,
     updateCharacters,
@@ -302,6 +304,7 @@ export const CaptionsApp = ({
             startTime?: number;
             durationSeconds?: number;
             styleName?: string;
+            fontId?: string;
             segments?: { text: string; timestamp: [number, number] }[];
             segmentType?: number;
             lineCount?: number;
@@ -367,6 +370,17 @@ export const CaptionsApp = ({
       const matched = styleName ? matchPresetByStyleName(presets, styleName) : undefined;
       if (matched) {
         selectPreset(matched.id, { applyToHost: false });
+      }
+      const fontId = typeof loaded.fontId === "string" ? loaded.fontId.trim() : "";
+      if (fontId) {
+        const styleId = matched?.styleId;
+        if (styleId) {
+          void ensureDefinitionLoaded(styleId).then(() => {
+            syncSelectedPresetFontFromHost(fontId);
+          });
+        } else {
+          syncSelectedPresetFontFromHost(fontId);
+        }
       }
     } catch {
       // не isMGT / несколько слоёв / пустой mogrt — тихая ошибка
@@ -504,29 +518,37 @@ export const CaptionsApp = ({
         lines,
         characters,
       });
-      await reloadJSX();
-      const createRes = await sdkData(hostSdk().createCaptions(payload));
+      const created = await hostSdk().createCaptions(payload);
       throwIfCancelled(signal);
-      if (
-        createRes == null ||
-        (typeof createRes === "object" && (createRes as { created?: number }).created === 0)
-      ) {
-        throw new Error("Could not create captions on the timeline. Select a style and try again.");
+      if (!created.ok) {
+        throw new Error(
+          created.error || "Could not create captions on the timeline. Select a style and try again.",
+        );
       }
-      // evalTS() типизирует createCaptions по пересечению сигнатур ppro.ts/aeft.ts,
-      // так что trackIndex/compId выглядят для TS как один фиксированный (не оба
-      // опциональных) набор — приводим к реальной форме явно, определяем по хосту
-      const createResult = createRes as
+      const createRes = created.data as
         | {
+            created?: number;
+            error?: string;
             trackIndex?: number;
             sequenceId?: string;
             compId?: number;
             sourceCompId?: number;
             startTime?: number;
             durationSeconds?: number;
+            fontId?: string;
           }
         | null
         | undefined;
+      if (typeof createRes?.error === "string" && createRes.error) {
+        throw new Error(createRes.error);
+      }
+      if (createRes == null || createRes.created === 0) {
+        throw new Error("Could not create captions on the timeline. Select a style and try again.");
+      }
+      // evalTS() типизирует createCaptions по пересечению сигнатур ppro.ts/aeft.ts,
+      // так что trackIndex/compId выглядят для TS как один фиксированный (не оба
+      // опциональных) набор — приводим к реальной форме явно, определяем по хосту
+      const createResult = createRes;
       // запоминаем, куда именно легли captions — нужно для live-edit (updateCaptionText)
       const hostRef: HostRef | undefined =
         createResult && typeof createResult.trackIndex === "number"
@@ -559,6 +581,8 @@ export const CaptionsApp = ({
         } catch {
           // стиль не применился — captions уже на таймлайне
         }
+        const fontId = typeof createResult?.fontId === "string" ? createResult.fontId.trim() : "";
+        if (fontId) syncSelectedPresetFontFromHost(fontId);
       }
 
       try {
@@ -900,14 +924,14 @@ export const CaptionsApp = ({
   };
 
   useEffect(() => {
-    // Rehydrate caption state from storage on panel remount
+    // Keep last transcription in memory (Back stays cheap) but always open on
+    // landing. Editor is only via Transcribe or Load — not a leftover session.
     const storedData = panelStore.getItem(STORAGE_KEY);
     if (storedData) {
       try {
         const parsed = JSON.parse(storedData) as TranscribeResult;
         if (parsed?.chunk || parsed?.words) {
           setData(parsed);
-          setScreen("editor");
           skipSessionSaveRef.current = true;
         }
       } catch {

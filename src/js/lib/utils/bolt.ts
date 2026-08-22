@@ -82,8 +82,14 @@ export const evalTS = <
     csi.evalScript(
       `try{
           var host = typeof $ !== 'undefined' ? $ : window;
-          var res = host["${ns}"].${functionName}(${formattedArgs});
-          JSON.stringify(res);
+          var api = host["${ns}"];
+          if (!api || typeof api.${functionName} !== "function") {
+            throw new Error("Host function ${functionName} is not loaded. Reload the panel.");
+          }
+          var res = api.${functionName}(${formattedArgs});
+          var encoded = JSON.stringify(res);
+          if (typeof encoded !== "string") encoded = "null";
+          encoded;
         }catch(e){
           try { if (e && e.fileName) e.fileName = new File(e.fileName).fsName; } catch (_f) {}
           JSON.stringify({ name: (e && e.name) ? e.name : "Error", message: String(e && e.message != null ? e.message : e) });
@@ -92,6 +98,16 @@ export const evalTS = <
         try {
           //@ts-ignore
           if (res === "undefined") return resolve();
+          // CEP returns "" when JSON.stringify(undefined) or after an AE alert().
+          // JSON.parse("") → "Unexpected end of JSON input" in the panel.
+          if (res == null || res === "") {
+            reject(new Error("Host script returned no result. Reload the panel and try again."));
+            return;
+          }
+          if (res === "EvalScript error.") {
+            reject(new Error("Host script failed. Reload the panel and try again."));
+            return;
+          }
           const parsed = JSON.parse(res);
           // Host often returns JSON `null` on soft failure (e.g. describe after alert).
           // `typeof parsed.name` would throw on null and reject("null") → Error: null.
@@ -114,9 +130,11 @@ export const evalTS = <
           }
         } catch (error) {
           reject(
-            error instanceof Error
-              ? error
-              : new Error(typeof res === "string" ? res : String(error)),
+            error instanceof SyntaxError
+              ? new Error("Host script returned invalid data. Reload the panel and try again.")
+              : error instanceof Error
+                ? error
+                : new Error(typeof res === "string" ? res : String(error)),
           );
         }
       }
@@ -136,11 +154,12 @@ export const evalFile = (file: string) => {
 };
 
 /** Перечитать jsx/index.js в AE — иначе после правки ExtendScript остаётся старый код до рестарта панели. */
-export const reloadJSX = (): Promise<string> => {
-  if (!window.cep) return Promise.resolve("");
+export const reloadJSX = async (): Promise<string> => {
+  if (!window.cep) return "";
+  await initBolt(false);
   const extRoot = csi.getSystemPath("extension");
   const jsxSrc = `${extRoot}/jsx/index.js`;
-  if (!fs.existsSync(jsxSrc)) return Promise.resolve("");
+  if (!fs.existsSync(jsxSrc)) return "";
   return evalFile(jsxSrc.replace(/\\/g, "/"));
 };
 
@@ -221,20 +240,26 @@ export const dispatchTS = <Key extends string & keyof EventTS>(
 
 // js utils
 
-export const initBolt = (log = true) => {
-  if (window.cep) {
+let boltInit: Promise<void> | null = null;
+
+/** Load jsx/index.js once. Concurrent evalFile of the same host file leaves $[ns] half-defined. */
+export const initBolt = (log = true): Promise<void> => {
+  if (!window.cep) return Promise.resolve();
+  if (boltInit) return boltInit;
+  boltInit = (async () => {
     const extRoot = csi.getSystemPath("extension");
     const jsxSrc = `${extRoot}/jsx/index.js`;
     const jsxBinSrc = `${extRoot}/jsx/index.jsxbin`;
     if (fs.existsSync(jsxSrc)) {
       if (log) console.log(jsxSrc);
-      evalFile(jsxSrc);
+      await evalFile(jsxSrc.replace(/\\/g, "/"));
     } else if (fs.existsSync(jsxBinSrc)) {
       if (log) console.log(jsxBinSrc);
-      evalFile(jsxBinSrc);
+      await evalFile(jsxBinSrc.replace(/\\/g, "/"));
     }
     initializeCEP();
-  }
+  })();
+  return boltInit;
 };
 
 export const posix = (str: string) => str.replace(/\\/g, "/");

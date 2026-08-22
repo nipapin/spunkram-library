@@ -154,7 +154,7 @@ export const PresetGrid = ({
 
   const pick = (id: string) => {
     if (onSelect) onSelect(id);
-    else selectPreset(id);
+    else selectPreset(id, { applyToHost: false });
   };
 
   return (

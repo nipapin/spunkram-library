@@ -156,6 +156,22 @@ export const fontIdFromValue = (value: ControlValue | undefined): string => {
   return "";
 };
 
+export const isFontControl = (control: ClientControl): boolean => {
+  if (control.type === ControlType.FontMenu) return true;
+  if (control.fonteditinfo) return true;
+  const name = uiName(control).toLowerCase();
+  return name === "caption font" || name === "font";
+};
+
+export const findFontControl = (definition?: MogrtDefinition | null): ClientControl | null => {
+  if (!definition) return null;
+  for (const c of definition.clientControls ?? []) {
+    if (isGroup(c)) continue;
+    if (isFontControl(c)) return c;
+  }
+  return null;
+};
+
 /** Найти контрол по цепочке uiName, напр. ["Follow", "Background", "Fill"]. */
 export const findControlByNames = (
   definition: MogrtDefinition,
@@ -228,6 +244,10 @@ export const stylePropsFromValues = (
     // captions_batch_* / system text — не Styles; Caption Font оставляем
     if ((CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(name)) return;
     const current = values[control.id];
+    const raw = current !== undefined ? current : cloneValue(control.value as ControlValue);
+    const font = isFontControl(control);
+    const fontId = font ? fontIdFromValue(raw) : "";
+    if (font && !fontId) return;
     const leafIndex = leafCounts[name] ?? 0;
     leafCounts[name] = leafIndex + 1;
     const essentialPath = control.essentialName
@@ -237,10 +257,9 @@ export const stylePropsFromValues = (
           .map((s) => s.trim())
           .filter(Boolean)
       : [];
-    const raw = current !== undefined ? current : cloneValue(control.value as ControlValue);
     const value =
-      control.type === ControlType.FontMenu || isLocalizedStr(raw)
-        ? fontIdFromValue(raw) || raw
+      font || isLocalizedStr(raw)
+        ? fontId || raw
         : raw;
     out.push({
       path: essentialPath.length ? essentialPath : nextPath,

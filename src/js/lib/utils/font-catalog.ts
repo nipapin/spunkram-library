@@ -156,10 +156,12 @@ const normalizeStyleLabel = (style: string): string => {
   if (lower === "bold") return "Bold";
   if (lower === "italic") return "Italic";
   if (lower === "bold italic" || lower === "bolditalic") return "Bold Italic";
-  return s
+  const spaced = s
     .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  return spaced.replace(/\b([a-z])/g, (ch) => ch.toUpperCase());
 };
 
 const styleSortKey = (style: string): number => {
@@ -171,20 +173,26 @@ const styleSortKey = (style: string): number => {
   return 10;
 };
 
-const collectFontFiles = (): string[] => {
+export type FontScanScope = "quick" | "system";
+
+const collectFontFiles = (scope: FontScanScope = "quick"): string[] => {
   if (typeof fs?.readdirSync !== "function" || typeof os?.platform !== "function") return [];
 
   const files = new Set<string>();
   const dirs: string[] = [];
 
   if (os.platform() === "win32") {
+    if (scope === "system") return [];
     dirs.push(path.join(os.homedir(), "AppData", "Local", "Microsoft", "Windows", "Fonts"));
     dirs.push(path.join(cepProcessEnv().WINDIR || "C:\\Windows", "Fonts"));
   } else {
-    dirs.push(path.join(os.homedir(), "Library", "Fonts"));
-    dirs.push("/Library/Fonts");
-    dirs.push("/System/Library/Fonts");
-    dirs.push("/System/Library/Fonts/Supplemental");
+    if (scope === "system") {
+      dirs.push("/System/Library/Fonts");
+      dirs.push("/System/Library/Fonts/Supplemental");
+    } else {
+      dirs.push(path.join(os.homedir(), "Library", "Fonts"));
+      dirs.push("/Library/Fonts");
+    }
   }
 
   for (const dir of dirs) {
@@ -243,10 +251,24 @@ const assembleCatalog = (
 };
 
 /** Parse fonts in chunks so CEP/Premiere stay responsive. */
-export const buildFontCatalogAsync = async (): Promise<FontCatalog> => {
+export const mergeFontCatalogs = (base: FontCatalog, extra: FontCatalog): FontCatalog => {
+  const byId = new Map(base.byId);
+  const familyMap = new Map<string, FontFace[]>();
+  for (const group of base.families) familyMap.set(group.name, group.faces.slice());
+  extra.byId.forEach((face) => {
+    if (byId.has(face.id)) return;
+    byId.set(face.id, face);
+    const list = familyMap.get(face.family) ?? [];
+    list.push(face);
+    familyMap.set(face.family, list);
+  });
+  return assembleCatalog(byId, familyMap);
+};
+
+export const buildFontCatalogAsync = async (scope: FontScanScope = "quick"): Promise<FontCatalog> => {
   const byId = new Map<string, FontFace>();
   const familyMap = new Map<string, FontFace[]>();
-  const files = collectFontFiles();
+  const files = collectFontFiles(scope);
   const chunk = 6;
 
   for (let i = 0; i < files.length; i++) {
@@ -263,8 +285,21 @@ export const buildFontCatalogAsync = async (): Promise<FontCatalog> => {
   return assembleCatalog(byId, familyMap);
 };
 
-export const findFaceInCatalog = (catalog: FontCatalog, id: string): FontFace | null =>
-  catalog.byId.get(id) ?? null;
+export const findFaceInCatalog = (catalog: FontCatalog, id: string): FontFace | null => {
+  const trimmed = id.trim();
+  if (!trimmed) return null;
+  const exact = catalog.byId.get(trimmed);
+  if (exact) return exact;
+
+  const lower = trimmed.toLowerCase();
+  const compact = lower.replace(/[\s_-]+/g, "");
+  for (const face of catalog.byId.values()) {
+    const key = face.id.toLowerCase();
+    if (key === lower) return face;
+    if (key.replace(/[\s_-]+/g, "") === compact) return face;
+  }
+  return null;
+};
 
 export const pickFaceForFamily = (
   group: FontFamilyGroup | undefined,

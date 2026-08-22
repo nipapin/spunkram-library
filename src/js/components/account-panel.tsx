@@ -276,10 +276,11 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
   const extraLeft = credits?.extraLeft ?? 0;
   const usedCount = credits?.used ?? 0;
   const limitLabel = generationLimit != null ? String(generationLimit) : "—";
-  const capacity = Math.max(0, (generationLimit ?? 0) + extraLeft);
+  const showExtra = !isFreeUser;
+  const totalLeft = monthlyLeft + extraLeft;
+  const monthlyCap = Math.max(0, generationLimit ?? 0);
   const monthlyPct =
-    capacity > 0 ? Math.min(100, (Math.max(monthlyLeft, 0) / capacity) * 100) : 0;
-  const extraPct = capacity > 0 ? Math.min(100, (Math.max(extraLeft, 0) / capacity) * 100) : 0;
+    monthlyCap > 0 ? Math.min(100, (Math.max(monthlyLeft, 0) / monthlyCap) * 100) : 0;
 
   return (
     <div className="account-spunkram">
@@ -386,13 +387,13 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
                     </button>
                   </div>
                   <div>
-                    <p className="account-spunkram__price">{monthlyLeft + extraLeft}</p>
+                    <p className="account-spunkram__price">{totalLeft}</p>
                     <p className="account-spunkram__sub">
                       <span className="account-spunkram__legend-item">
                         <span className="account-spunkram__dot account-spunkram__dot--monthly" aria-hidden />
                         {monthlyLeft}/{limitLabel} monthly
                       </span>
-                      {extraLeft > 0 ? (
+                      {showExtra && extraLeft > 0 ? (
                         <span className="account-spunkram__legend-item">
                           <span className="account-spunkram__dot account-spunkram__dot--extra" aria-hidden />
                           {extraLeft} extra
@@ -403,14 +404,11 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
                       {monthlyPct > 0 ? (
                         <div className="account-spunkram__fill account-spunkram__fill--monthly" style={{ width: `${monthlyPct}%` }} />
                       ) : null}
-                      {extraPct > 0 ? (
-                        <div className="account-spunkram__fill account-spunkram__fill--extra" style={{ width: `${extraPct}%` }} />
-                      ) : null}
                     </div>
                     <div className="account-spunkram__usage">
                       <span>
                         {usedCount} used of {limitLabel} monthly
-                        {extraLeft > 0 ? ` · ${extraLeft} extra left` : ""}
+                        {showExtra && extraLeft > 0 ? ` · ${extraLeft} extra left` : ""}
                       </span>
                     </div>
                   </div>
