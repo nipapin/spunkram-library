@@ -76,8 +76,9 @@ $radius-xl: 16px;
 $radius-xxl: 20px;
 
 // type — SaaS pairing: Unbounded headlines, Geist UI
-$font-sans: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-$font-headline: "Unbounded Variable", Unbounded, sans-serif;
+// Robust fallback chain ensures readable UI when @font-face fails to load
+$font-sans: "Geist Variable", Geist, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+$font-headline: "Unbounded Variable", Unbounded, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 $font-family: $font-sans;
 
 $tokens: (

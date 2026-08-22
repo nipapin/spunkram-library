@@ -321,16 +321,6 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
           </div>
         </section>
 
-        <section className="mb-3 glass-card rounded-[20px] p-3">
-          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Render Options</h3>
-          <ToggleRow
-            label="Use System Fonts"
-            hint="Reload required"
-            checked={asBool(prefs.useSystemFonts)}
-            onChange={(v) => patch({ useSystemFonts: v ? 1 : 0 })}
-          />
-        </section>
-
         {isAdmin && (
           <section className="mb-3 glass-card rounded-[20px] p-3 ring-1 ring-inset ring-primary/20">
             <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Admin · Builds</h3>
