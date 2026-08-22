@@ -8,7 +8,7 @@ import {
   type DescribeType,
 } from "../../components/ProgressDialog";
 import { fs } from "../../lib/cep/node";
-import { csi, cepHostAppId } from "../../lib/utils/bolt";
+import { cepHostAppId } from "../../lib/utils/bolt";
 import { Motionflow } from "@/sdk";
 import { hostSdk, sdkData } from "@/sdk/host-api";
 import { convertToMp3, detectSpeechStart } from "../../utils/ffmpeg";

@@ -148,6 +148,7 @@ export const evalES = (script: string, isGlobal = false): Promise<string> => {
 import type { Scripts } from "@esTypes/index";
 import type { EventTS } from "../../../shared/universals";
 import { initializeCEP } from "./init-cep";
+import { initHostIdentity } from "./host-identity";
 
 type ArgTypes<F extends Function> = F extends (...args: infer A) => any
   ? A
@@ -410,6 +411,10 @@ export const initBolt = (log = true): Promise<void> => {
     const probed = await probeHostAppIdFromDom();
     console.log("[mf] host probe", probed, cepHostAppId(), readCepAppId());
     initializeCEP();
+    // Start host identity probe early (non-blocking) so getResolvedHostSync()
+    // returns the correct value by the time UI interactions need it.
+    // This fixes AE 24–25 where CSInterface can report "PPRO" in After Effects.
+    initHostIdentity();
   })();
   return boltInit;
 };
