@@ -577,10 +577,14 @@ export const CaptionsApp = ({
       persistAppliedConfig({ mode, lines, characters });
 
       if (hostRef) {
-        try {
-          await applySelectedPresetToHost();
-        } catch {
-          // стиль не применился — captions уже на таймлайне
+        // Apply style values only if the selected preset is a custom/user template.
+        // Built-in (catalog/downloaded) templates use their default styling from the .aep/.mogrt.
+        if (selected?.source === "user") {
+          try {
+            await applySelectedPresetToHost();
+          } catch {
+            // style did not apply — captions are already on the timeline
+          }
         }
         const fontId = typeof createResult?.fontId === "string" ? createResult.fontId.trim() : "";
         if (fontId) syncSelectedPresetFontFromHost(fontId);
