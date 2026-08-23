@@ -16,6 +16,7 @@ import {
   type StylesSyncStatus,
 } from "../js/styles";
 import { friendlyErrorMessage } from "../js/utils/user-error";
+import { getBundledCaptionsJsxPath } from "../js/utils/captionsJsx";
 import {
   ControlType,
   defaultsFromDefinition,
@@ -559,6 +560,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
             sequenceId: hostRef.sequenceId,
             trackIndex: hostRef.trackIndex,
             compId: hostRef.compId,
+            captionsJsxPath: getBundledCaptionsJsxPath() ?? undefined,
           });
           if (selectPresetGen.current !== gen) return;
           if (!wrapped.ok) {

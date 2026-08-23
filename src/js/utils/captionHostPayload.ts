@@ -1,6 +1,7 @@
 import { fs, os, path } from "../lib/cep/node";
 import type { Caption, GroupingMode, ScribeWord } from "../utils/transcribe";
 import { captionsRawJsonToChunks, SEGMENT_TYPE_INDEX } from "../../shared/caption-system";
+import { getBundledCaptionsJsxPath } from "./captionsJsx";
 
 export { captionsRawJsonToChunks } from "../../shared/caption-system";
 
@@ -37,6 +38,8 @@ export type HostCaptionPayload = {
   charsPerLine: number;
   mogrtPath?: string;
   aepPath?: string;
+  /** AE only: expression library the template loads as `footage("captions.jsx")`. */
+  captionsJsxPath?: string;
 };
 
 const cloneScribeWord = (w: ScribeWord): ScribeWord => ({
@@ -225,6 +228,7 @@ export const toHostCaptionPayload = (
       charsPerLine: Math.max(1, opts.characters ?? 20),
       mogrtPath: opts.mogrtPath,
       aepPath: opts.aepPath,
+      captionsJsxPath: getBundledCaptionsJsxPath() ?? undefined,
     },
   ];
 };

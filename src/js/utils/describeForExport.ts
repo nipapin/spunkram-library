@@ -1,5 +1,6 @@
 import { Motionflow, type MfResult } from "@/sdk";
-import { evalES, cepHostAppId } from "../lib/utils/bolt";
+import { evalES } from "../lib/utils/bolt";
+import { isAfterEffectsAsync } from "../lib/utils/host-identity";
 import { ns } from "../../shared/shared";
 import { fs, os, path } from "../lib/cep/node";
 import { exportAeWorkAreaAudio } from "./exportAeWorkAreaAudio";
@@ -106,7 +107,7 @@ export async function describeForExport(
   await Motionflow.ready();
 
   // For After Effects: use the new direct render queue approach
-  if (cepHostAppId() === "AEFT") {
+  if (await isAfterEffectsAsync()) {
     return exportAeWorkAreaAudio();
   }
 

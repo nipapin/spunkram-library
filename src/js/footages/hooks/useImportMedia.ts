@@ -22,15 +22,14 @@ function mapImportError(reason?: string | null): string {
     return "Could not import footage. Try again.";
   }
   if (reason === "PLACE_FAILED") {
-    return "Footage is in the project, but could not be added to the composition. Click the timeline and try again.";
+    return "Footage is in the project, but could not be added to the composition.";
   }
   if (/host script returned no result/i.test(reason)) {
-    return "After Effects did not apply the footage. Click the composition timeline and try again.";
+    return "After Effects is busy. Check the project panel — the footage may already be there.";
   }
   return reason;
 }
 
-/** Direct CDN URL already on the gallery item — same source Spunkram Assets fetches. */
 function resolveSourceUrl(item: MediaItem): { url: string; duration: number } | null {
   if (item.type === "video") {
     const files = item.videoFiles ?? [];
@@ -53,7 +52,6 @@ function resolveSourceUrl(item: MediaItem): { url: string; duration: number } | 
   return { url, duration: item.duration ?? 5 };
 }
 
-/** Browser fetch (visible in CEP inspector Network) → write with Node fs. */
 async function fetchToFile(
   url: string,
   filePath: string,
@@ -131,7 +129,6 @@ export function useImportMedia() {
         const dest: "project" | "timeline" =
           destination === "timeline" ? "timeline" : "project";
 
-        await Motionflow.ready();
         const outcome = await Motionflow.importMedia(filePath, dest, source.duration);
         console.log("[mf] importMedia", Motionflow.host, dest, outcome);
         if (!outcome.ok) {

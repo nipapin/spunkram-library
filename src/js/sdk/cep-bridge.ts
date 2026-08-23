@@ -1,9 +1,44 @@
 import { evalTS, reloadJSX, cepHostAppId, probeHostAppIdFromDom, evalES } from "../lib/utils/bolt";
 import { fs, os, path } from "../lib/cep/node";
+import { getResolvedHostSync } from "../lib/utils/host-identity";
 import type { MotionFlowBridge, MfHost } from "motionflow-sdk";
 import { ensureAsciiImportPath, esPath } from "../utils/ae-import-path";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * A CEP callback can never be counted on to fire: AE drops it while a modal
+ * dialog is up (missing fonts on project import, for one) and a promise that
+ * never settles freezes the panel with no way out.
+ */
+const HOST_CALL_TIMEOUT_MS = 120 * 1000;
+
+const hostLabel = (): string =>
+  (getResolvedHostSync() ?? cepHostAppId()) === "PPRO"
+    ? "Premiere Pro"
+    : "After Effects";
+
+function withHostCallTimeout<T>(promise: Promise<T>, functionName: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          `${hostLabel()} did not answer "${functionName}". Close any open dialog in the app, then try again.`,
+        ),
+      );
+    }, HOST_CALL_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 const readSidecar = (resultPath: string): unknown | undefined => {
   try {
@@ -21,42 +56,13 @@ const isSidecarStarted = (data: unknown): boolean =>
   typeof data === "object" &&
   (data as { status?: string }).status === "started";
 
-const isSidecarFinal = (data: unknown): boolean => {
-  if (!data || typeof data !== "object") return false;
-  const d = data as Record<string, unknown>;
-  if (d.status === "started") return false;
-  if (d.ok === true || d.ok === false) return true;
-  if (d.applied === true || d.applied === false) return true;
-  return false;
-};
-
-const waitForSidecar = async (
-  resultPath: string,
-  timeoutMs: number,
-): Promise<unknown | undefined> => {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    const data = readSidecar(resultPath);
-    if (data !== undefined && isSidecarFinal(data)) return data;
-    if (isSidecarStarted(data)) {
-      await sleep(150);
-      continue;
-    }
-    if (data !== undefined) return data;
-    await sleep(250);
-  }
-  const last = readSidecar(resultPath);
-  if (last !== undefined && !isSidecarStarted(last)) return last;
-  return undefined;
-};
-
 /**
  * Write payload to temp JSON (ASCII-safe) and pass path to ExtendScript.
  * Keeps cyrillic out of evalScript strings.
  *
- * AE render/import often makes evalScript return "". The host writes a sibling
- * `.result.json`; we keep the payload on disk and read that sidecar instead of
- * treating the empty CEP callback as a hard failure.
+ * The sidecar `.result.json` the host writes is the answer, not the evalScript
+ * callback: a script that edits the project comes back empty at best and often
+ * never comes back at all, so the run is never awaited on its own.
  */
 async function withHostJsonFile<T>(
   data: unknown,
@@ -84,11 +90,17 @@ async function withHostJsonFile<T>(
     const esPath = filePath.replace(/\\/g, "/");
     let out: T | undefined;
     let runError: unknown;
-    try {
-      out = await run(esPath);
-    } catch (e) {
-      runError = e;
-    }
+    let runSettled = false;
+    void run(esPath).then(
+      (value) => {
+        out = value;
+        runSettled = true;
+      },
+      (error) => {
+        runError = error;
+        runSettled = true;
+      },
+    );
     if (window.cep && cepHostAppId() === "AEFT") {
       void evalES(
         `(function(){
@@ -106,22 +118,28 @@ async function withHostJsonFile<T>(
         true,
       );
     }
-    if (!runError && out != null) {
+    const hardDeadline = Date.now() + 3 * 60 * 1000;
+    let graceDeadline = 0;
+    while (Date.now() < hardDeadline) {
       const sidecar = readSidecar(resultPath);
-      if (sidecar !== undefined && isSidecarFinal(sidecar)) {
-        return sidecar as T;
+      if (sidecar !== undefined && !isSidecarStarted(sidecar)) return sidecar as T;
+      if (isSidecarStarted(sidecar)) {
+        // Host reported it started — it owns the timing now.
+        graceDeadline = 0;
+      } else if (runSettled) {
+        // A callback that carries a value means the host finished and answered.
+        if (!runError && out != null && !isSidecarStarted(out)) return out as T;
+        // Otherwise give the host a moment to flush the sidecar.
+        if (!graceDeadline) graceDeadline = Date.now() + 2000;
+        if (Date.now() > graceDeadline) break;
       }
-      if (!isSidecarStarted(sidecar) && sidecar !== undefined) {
-        return sidecar as T;
-      }
-      if (!isSidecarStarted(out)) {
-        return out as T;
-      }
+      await sleep(150);
     }
-    const sidecar = await waitForSidecar(resultPath, 3 * 60 * 1000);
-    if (sidecar !== undefined) return sidecar as T;
+    const late = readSidecar(resultPath);
+    if (late !== undefined && !isSidecarStarted(late)) return late as T;
     if (runError) throw runError;
-    return out as T;
+    if (out != null && !isSidecarStarted(out)) return out as T;
+    throw new Error("After Effects did not answer. Reload the panel and try again.");
   } finally {
     try {
       fs.unlinkSync(filePath);
@@ -140,15 +158,19 @@ async function withHostJsonFile<T>(
 export function createCepBridge(): MotionFlowBridge {
   return {
     getHost(): MfHost | null {
-      const id = cepHostAppId();
+      // DOM probe beats CSInterface — AE 24–25 can report PPRO inside After Effects.
+      const id = getResolvedHostSync() ?? cepHostAppId();
       if (id === "AEFT") return "AE";
       if (id === "PPRO") return "PPRO";
       return null;
     },
 
     callHost<T = unknown>(functionName: string, ...args: unknown[]): Promise<T> {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return evalTS(functionName as any, ...(args as any)) as Promise<T>;
+      return withHostCallTimeout(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        evalTS(functionName as any, ...(args as any)) as Promise<T>,
+        functionName,
+      );
     },
 
     evalScript(script: string): Promise<string> {

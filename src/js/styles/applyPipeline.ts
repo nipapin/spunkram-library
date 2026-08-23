@@ -1,6 +1,7 @@
 import { fs, path } from "../lib/cep/node";
 import { cepHostAppId } from "../lib/utils/bolt";
 import { hostSdk } from "@/sdk";
+import { getBundledCaptionsJsxPath } from "../utils/captionsJsx";
 import { defaultsFromDefinition } from "../presets";
 import type { MogrtDefinition } from "../presets/types";
 import { loadLocalPackage } from "./localStore";
@@ -142,6 +143,7 @@ export const applyPresetProjectInHost = async (
     aepPath: prepared.paths?.aep,
     mogrtPath: prepared.paths?.mogrt,
     values: prepared.preset.values,
+    captionsJsxPath: getBundledCaptionsJsxPath() ?? undefined,
   });
   if (!wrapped.ok) {
     return { applied: false, reason: wrapped.error };
