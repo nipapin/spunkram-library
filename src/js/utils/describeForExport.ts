@@ -1,7 +1,8 @@
 import { Motionflow, type MfResult } from "@/sdk";
-import { evalES } from "../lib/utils/bolt";
+import { evalES, cepHostAppId } from "../lib/utils/bolt";
 import { ns } from "../../shared/shared";
 import { fs, os, path } from "../lib/cep/node";
+import { exportAeWorkAreaAudio } from "./exportAeWorkAreaAudio";
 
 export type DescribeExportResult = {
   source: string;
@@ -94,16 +95,32 @@ const isFresh = (filePath: string, startedAt: number): boolean => {
 };
 
 /**
- * Calls host describe for audio export.
- * After Effects renderQueue.render() often makes CEP evalScript return "" —
- * the host writes a sidecar JSON; we wait for that instead of treating empty as fatal.
- * Never reuse a leftover mf-ae-describe-last.json from a previous click.
+ * Export audio from the timeline for transcription.
+ *
+ * After Effects: uses the new render queue + file wait approach.
+ * Premiere Pro: uses Motionflow.describe() with the existing sidecar flow.
  */
 export async function describeForExport(
   audioPresetPath?: string,
 ): Promise<DescribeExportResult> {
   await Motionflow.ready();
 
+  // For After Effects: use the new direct render queue approach
+  if (cepHostAppId() === "AEFT") {
+    return exportAeWorkAreaAudio();
+  }
+
+  // For Premiere Pro: keep existing Motionflow.describe() flow
+  return describePproExport(audioPresetPath);
+}
+
+/**
+ * Premiere Pro export: uses Motionflow.describe() with In/Out range.
+ * This path remains unchanged from the original implementation.
+ */
+async function describePproExport(
+  audioPresetPath?: string,
+): Promise<DescribeExportResult> {
   const probeRaw = await evalES(
     `(function(){
       var host = typeof $ !== "undefined" ? $ : window;
@@ -150,7 +167,7 @@ export async function describeForExport(
       tempDir?: string;
     };
     hostTemp = typeof probe.tempDir === "string" ? probe.tempDir : "";
-    console.log("[mf] describe probe", probe);
+    console.log("[mf] describe probe (PPRO)", probe);
     if (!probe.hasDescribe) {
       throw new Error(
         `Host describe is not loaded (app=${probe.appName || "?"} id=${probe.appId || "?"} bt=${probe.bt || "?"} bound=${probe.bound || "?"} cep=${probe.cepId || "?"} ns=${probe.hasNs ? "yes" : "no"} rq=${probe.hasRQ ? "yes" : "no"}). Reload the panel.`,
@@ -192,7 +209,7 @@ export async function describeForExport(
       evalBox.current = r;
     },
     () => {
-      // evalScript often returns "" during AE render — sidecar is the real result
+      // evalScript often returns "" during render — sidecar is the real result
     },
   );
 
@@ -219,7 +236,7 @@ export async function describeForExport(
       }
 
       if (fromEval && fromEval.ok === false) {
-        // Empty eval is normal during AE render(). Only honor a real host fail shape.
+        // Empty eval is normal during render(). Only honor a real host fail shape.
         const err = String(fromEval.error || "");
         const emptyEval =
           /no result/i.test(err) ||
@@ -242,6 +259,6 @@ export async function describeForExport(
   }
 
   throw new Error(
-    "Could not export audio from the timeline. Check Work Area / In-Out and try again.",
+    "Could not export audio from the timeline. Check In/Out and try again.",
   );
 }
