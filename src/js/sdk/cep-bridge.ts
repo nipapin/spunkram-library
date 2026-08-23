@@ -1,6 +1,7 @@
 import { evalTS, reloadJSX, cepHostAppId, probeHostAppIdFromDom, evalES } from "../lib/utils/bolt";
 import { fs, os, path } from "../lib/cep/node";
 import type { MotionFlowBridge, MfHost } from "motionflow-sdk";
+import { ensureAsciiImportPath, esPath } from "../utils/ae-import-path";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -148,6 +149,14 @@ export function createCepBridge(): MotionFlowBridge {
     callHost<T = unknown>(functionName: string, ...args: unknown[]): Promise<T> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return evalTS(functionName as any, ...(args as any)) as Promise<T>;
+    },
+
+    evalScript(script: string): Promise<string> {
+      return evalES(script, true);
+    },
+
+    prepareImportPath(filePath: string): string {
+      return esPath(ensureAsciiImportPath(filePath));
     },
 
     isPanelEnvironment(): boolean {

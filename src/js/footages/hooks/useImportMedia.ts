@@ -1,8 +1,6 @@
 import { useCallback } from "react";
 import { fs, os, path } from "../../lib/cep/node";
 import { Motionflow } from "@/sdk";
-import { cepHostAppId } from "../../lib/utils/bolt";
-import { importAeStockFootage } from "../../utils/ae-queued-import";
 import { resolveFootageDownloadDirSilent } from "@/lib/utils/stock-paths";
 import { useFiltersContext } from "../context/FiltersContext";
 import { useProgressContext } from "../context/ProgressContext";
@@ -133,23 +131,12 @@ export function useImportMedia() {
         const dest: "project" | "timeline" =
           destination === "timeline" ? "timeline" : "project";
 
-        const hostApp = cepHostAppId();
-
-        if (hostApp === "AEFT") {
-          const outcome = await importAeStockFootage(filePath, dest);
-          console.log("[mf] importAeStockFootage", dest, outcome);
-          if (!outcome.ok) {
-            setError(mapImportError(outcome.reason));
-            return;
-          }
-        } else {
-          await Motionflow.ready();
-          const outcome = await Motionflow.importMedia(filePath, dest, source.duration, "");
-          console.log("[mf] importMedia (Premiere)", dest, outcome);
-          if (!outcome.ok) {
-            setError(mapImportError(outcome.error));
-            return;
-          }
+        await Motionflow.ready();
+        const outcome = await Motionflow.importMedia(filePath, dest, source.duration);
+        console.log("[mf] importMedia", Motionflow.host, dest, outcome);
+        if (!outcome.ok) {
+          setError(mapImportError(outcome.error));
+          return;
         }
         incrementUsage("gallery");
         setProgress(100);
