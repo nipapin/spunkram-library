@@ -15,6 +15,7 @@ export {
   defaultsFromDefinition,
   findControlByNames,
   findControlByAnyNames,
+  findControlBySource,
   fontIdFromValue,
   findFontControl,
   isFontControl,
@@ -26,7 +27,9 @@ export {
   isPointValue,
   stylePropsFromValues,
   diffStyleProps,
+  withCatalogApplyValues,
   uiName,
+  CATALOG_LAYOUT_OVERRIDES,
 } from "./clientControls";
 export type { StylePropPayload } from "./clientControls";
 export { hexToRgba, rgbaToHex } from "./color";
@@ -35,15 +38,19 @@ export {
   controlsToDefinition,
   isControlsDocument,
   normalizeDefinition,
+  sourceToEssentialName,
+  sourceToNestedPath,
 } from "./controlsSchema";
 export type { ControlsDocument } from "./controlsSchema";
 
 export const colorControlIds = (definition: MogrtDefinition) => {
   const idByPath = (...paths: string[][]) => findControlByAnyNames(definition, paths)?.id ?? "";
   return {
-    fill: idByPath(["Static", "Fill"]),
+    fill: idByPath(["Segment Static", "Fill"], ["Static", "Fill"]),
     highlight: idByPath(["Animated Text", "Fill"]),
     background: idByPath(
+      ["Segment Background", "Fill"],
+      ["Follow Background", "Fill"],
       ["Segment Settings", "Background", "Fill"],
       ["Follow", "Background", "Fill"],
     ),

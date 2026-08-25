@@ -29,6 +29,7 @@ import {
   hasPendingNativeUpdate,
 } from "@/utils/extension-update";
 import { ensureFfmpeg } from "@/utils/ffmpeg";
+import { preloadVoiceoverPreviews } from "@/api/voiceover";
 import { openMarketUrl, resolvePackEntitlementContextForScan } from "@/api/cep-market";
 import { version as LOCAL_VERSION } from "../../shared/shared";
 import {
@@ -651,6 +652,12 @@ function AppShell() {
     if (!authReady || !signedIn) return;
     void refreshMarket();
   }, [authReady, signedIn, refreshMarket]);
+
+  // Download voice samples locally so Voiceover playback isn't gated on the network.
+  useEffect(() => {
+    if (!authReady || !signedIn) return;
+    void preloadVoiceoverPreviews();
+  }, [authReady, signedIn]);
 
   // Prefetch ffmpeg after the shell is up so unzip/download cannot freeze Loading.
   useEffect(() => {

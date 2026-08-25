@@ -237,6 +237,7 @@ extendscriptConfig(
   isPackage,
   {
     namespace: cepConfig.id,
+    authorBin: brand.adobeCommonFolder,
     captionsBin: brand.captionsBin,
     stylesBin: brand.stylesBin,
   },

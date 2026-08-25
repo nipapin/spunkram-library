@@ -16,7 +16,8 @@ import { describeForExport } from "../../utils/describeForExport";
 import { getUserIdentity } from "../../api";
 import { reportSupportError } from "../../api/support";
 import { authErrorMessage } from "../../styles";
-import { normalize, transcribe, type CaptionsChunk, type TranscribeResult } from "../../utils/transcribe";
+import { resolveChaptersLanguage } from "../../data/languages";
+import { normalize, transcribe, transcriptionLanguageCode, type CaptionsChunk, type TranscribeResult } from "../../utils/transcribe";
 import {
   ChapterApiError,
   createChapter,
@@ -174,7 +175,7 @@ export const ChaptersApp = ({
 }: {
   generationsLeft?: number;
 }) => {
-  const { srcLang, translateTo } = useConfiguration();
+  const { chaptersSrcLang, chaptersTranslateTo } = useConfiguration();
   const { showStatus } = usePanelUI();
   const workRange = useWorkRangeCost(true);
   const generationCost = workRange.cost;
@@ -201,10 +202,11 @@ export const ChaptersApp = ({
   const activeHistoryIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // ÐºÐ¾Ð³Ð´Ð° Ð²ÑÐ±ÑÐ°Ð½ Ð¿ÐµÑÐµÐ²Ð¾Ð´, ÐÐ¡Ð Ð¿Ð¾Ð»Ñ (title/description/tags/Ð³Ð»Ð°Ð²Ñ) Ð³ÐµÐ½ÐµÑÐ¸ÑÑÑÑÑÑ
-  // Ð½Ð° ÑÑÐ¾Ð¼ ÑÐ·ÑÐºÐµ â Ð½Ðµ ÑÐ¾Ð»ÑÐºÐ¾ ÑÑÐ°Ð½ÑÐºÑÐ¸Ð¿Ñ; ÑÐ¸ÑÐ°ÐµÐ¼ Ð¿ÐµÑÐµÐ´ ÐºÐ°Ð¶Ð´ÑÐ¼ Ð²ÑÐ·Ð¾Ð²Ð¾Ð¼, ÑÑÐ¾Ð±Ñ
-  // Regenerate Ð¾Ð´Ð½Ð¾Ð¹ ÑÐµÐºÑÐ¸Ð¸ ÑÑÐ°Ð·Ñ Ð¿Ð¾Ð´ÑÐ²Ð°ÑÑÐ²Ð°Ð» ÑÐµÐºÑÑÐ¸Ð¹ Ð²ÑÐ±Ð¾Ñ ÑÐ·ÑÐºÐ° Ð² Ð¿Ð°Ð½ÐµÐ»Ð¸
-  const outputLanguage = translateTo !== "off" ? translateTo : undefined;
+  // язык выходных полей (title/description/tags/главы): цель перевода, иначе
+  // исходный / детект Scribe. Читаем перед каждым вызовом, чтобы Regenerate
+  // одной секции сразу подхватывал текущий выбор языка в панели
+  const chaptersLanguage = (detected?: string) =>
+    resolveChaptersLanguage({ srcLang: chaptersSrcLang, translateTo: chaptersTranslateTo, detected });
 
   const persistTranscription = (next: TranscribeResult) => {
     try {
@@ -317,8 +319,8 @@ export const ChaptersApp = ({
       let transcriptionResult: TranscribeResult;
       try {
         transcriptionResult = await transcribe(mp3Path, {
-          language: srcLang,
-          translateTo,
+          language: chaptersSrcLang,
+          translateTo: chaptersTranslateTo,
           signal,
           durationSeconds: res.durationSeconds > 0 ? res.durationSeconds : undefined,
           userId: user.id || undefined,
@@ -338,10 +340,15 @@ export const ChaptersApp = ({
 
       setProgress({ stage: "summarizing" });
       const chunks: CaptionsChunk[] = normalized.chunk?.chunks ?? [];
-      const { titles, sections, description, tags } = await generateAll(chunks, signal, outputLanguage, {
-        chaptersReceipt: transcriptionResult.chaptersReceipt,
-        durationSeconds: res.durationSeconds > 0 ? res.durationSeconds : undefined,
-      });
+      const { titles, sections, description, tags } = await generateAll(
+        chunks,
+        signal,
+        chaptersLanguage(transcriptionLanguageCode(normalized)),
+        {
+          chaptersReceipt: transcriptionResult.chaptersReceipt,
+          durationSeconds: res.durationSeconds > 0 ? res.durationSeconds : undefined,
+        },
+      );
       throwIfCancelled(signal);
 
       const nextResult: ResultState = {
@@ -431,7 +438,12 @@ export const ChaptersApp = ({
       busy: regeneratingTitles,
       setBusy: setRegeneratingTitles,
       action: "chapters.regenerate_titles",
-      run: (chunks) => regenerateTitles(chunks, undefined, outputLanguage),
+      run: (chunks) =>
+        regenerateTitles(
+          chunks,
+          undefined,
+          chaptersLanguage(transcriptionLanguageCode(transcriptionRef.current)),
+        ),
       apply: (titles) => persistResult({ ...result, titles }),
     });
 
@@ -440,7 +452,12 @@ export const ChaptersApp = ({
       busy: regeneratingChapters,
       setBusy: setRegeneratingChapters,
       action: "chapters.regenerate_chapters",
-      run: (chunks) => regenerateChapters(chunks, undefined, outputLanguage),
+      run: (chunks) =>
+        regenerateChapters(
+          chunks,
+          undefined,
+          chaptersLanguage(transcriptionLanguageCode(transcriptionRef.current)),
+        ),
       apply: (sections) =>
         persistResult({ ...result, chapters: sectionsToChapters(sections) }),
     });
@@ -450,7 +467,12 @@ export const ChaptersApp = ({
       busy: regeneratingDescription,
       setBusy: setRegeneratingDescription,
       action: "chapters.regenerate_description",
-      run: (chunks) => regenerateDescription(chunks, undefined, outputLanguage),
+      run: (chunks) =>
+        regenerateDescription(
+          chunks,
+          undefined,
+          chaptersLanguage(transcriptionLanguageCode(transcriptionRef.current)),
+        ),
       apply: (description) => persistResult({ ...result, description }),
     });
 
@@ -459,7 +481,12 @@ export const ChaptersApp = ({
       busy: regeneratingTags,
       setBusy: setRegeneratingTags,
       action: "chapters.regenerate_tags",
-      run: (chunks) => regenerateTags(chunks, undefined, outputLanguage),
+      run: (chunks) =>
+        regenerateTags(
+          chunks,
+          undefined,
+          chaptersLanguage(transcriptionLanguageCode(transcriptionRef.current)),
+        ),
       apply: (tags) => persistResult({ ...result, tags: tagsToText(tags) }),
     });
 

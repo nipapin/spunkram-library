@@ -122,28 +122,6 @@
   min-width: 0;
 }
 
-.captions-tab__lang-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  color: var(--text-dim);
-}
-
-.captions-tab__lang-row .select {
-  flex: 1;
-  min-width: 0;
-  height: auto;
-  padding: 5px 6px;
-  background: var(--bg-input-dark);
-  font-size: 11.5px;
-}
-
-.captions-tab__lang-arrow {
-  flex-shrink: 0;
-  color: var(--text-ghost);
-}
-
 .captions-tab__section-label {
   margin: 0 0 8px;
   font-size: 10.5px;

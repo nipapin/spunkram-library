@@ -13,6 +13,7 @@ const GLOBAL_THIS = "thisObj";
 /** Inline env + motionflow-host identity placeholders for ExtendScript bundle. */
 function extEnvDefines(host?: {
   namespace: string;
+  authorBin: string;
   captionsBin: string;
   stylesBin: string;
 }): Record<string, string> {
@@ -22,6 +23,7 @@ function extEnvDefines(host?: {
   };
   if (host) {
     defines['"__MF_HOST_NS__"'] = JSON.stringify(host.namespace);
+    defines['"__MF_AUTHOR_BIN__"'] = JSON.stringify(host.authorBin);
     defines['"__MF_CAPTIONS_BIN__"'] = JSON.stringify(host.captionsBin);
     defines['"__MF_STYLES_BIN__"'] = JSON.stringify(host.stylesBin);
   }
@@ -35,7 +37,7 @@ export const extendscriptConfig = (
   extensions: string[],
   isProduction: boolean,
   isPackage: boolean,
-  host?: { namespace: string; captionsBin: string; stylesBin: string },
+  host?: { namespace: string; authorBin: string; captionsBin: string; stylesBin: string },
 ) => {
   console.log(outPath);
   const config: RollupOptions = {

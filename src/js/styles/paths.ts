@@ -24,6 +24,14 @@ export const getStylesDir = (): string | null => {
 };
 
 /**
+ * Shared host template id — one `master.aep` / `master.mogrt` for all presets.
+ * POST /api/captions `{ id: "master", file: "aep"|"mogrt" }`.
+ */
+export const MASTER_STYLE_ID = "master";
+export const MASTER_AEP_FILE = "master.aep";
+export const MASTER_MOGRT_FILE = "master.mogrt";
+
+/**
  * id с сервера: `Category/Caption Folder`.
  * На диске `/` недопустим как имя — заменяем на `__`.
  */
@@ -34,6 +42,9 @@ export const getStylePackageDir = (styleId: string): string | null => {
   const dir = getStylesDir();
   return dir ? path.join(dir, styleIdToDirName(styleId)) : null;
 };
+
+/** AppData/styles/master/ — shared aep/mogrt cache. */
+export const getMasterPackageDir = (): string | null => getStylePackageDir(MASTER_STYLE_ID);
 
 export const getLocalStatePath = (): string | null => {
   const root = getStylesRoot();

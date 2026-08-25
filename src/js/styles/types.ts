@@ -95,7 +95,9 @@ export interface LocalStyleManifest {
   version: string;
   downloadedAt: string;
   files: {
+    /** Shared master — usually `master.aep` */
     aep?: string;
+    /** Shared master — usually `master.mogrt` */
     mogrt?: string;
   };
   /** Fingerprint of last downloaded project file (R2 / CDN). */

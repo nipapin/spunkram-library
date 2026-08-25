@@ -1,6 +1,7 @@
 import { CAPTIONS_ENDPOINTS, apiUrl, getUserIdentity, type UserIdentity } from "../api";
 import { getBrand, type BrandId } from "@brands";
 import { CONTROLS_FILE, normalizeDefinition } from "../presets/controlsSchema";
+import { cepHttpRequest } from "../lib/api/cep-http";
 import type { MogrtDefinition } from "../presets/types";
 import type {
   CaptionCatalogCategory,
@@ -32,6 +33,18 @@ export const authErrorMessage = (err: unknown): string | null => {
 };
 
 const CATALOG_TIMEOUT_MS = 12000;
+
+const NO_CACHE_HEADERS: Record<string, string> = {
+  Accept: "application/json",
+  "Cache-Control": "no-cache, no-store, must-revalidate",
+  Pragma: "no-cache",
+};
+
+/** Bypass CEF + Cloudflare URL cache — query string is part of the CDN cache key. */
+const withCacheBust = (url: string): string => {
+  const join = url.indexOf("?") >= 0 ? "&" : "?";
+  return `${url}${join}_=${Date.now()}`;
+};
 
 const fetchWithTimeout = async (
   url: string,
@@ -145,19 +158,42 @@ export const captionsCdnBaseManifestUrl = (brand: BrandId): string =>
 export const fetchCaptionsCdnBaseManifest = async (
   brand: BrandId,
 ): Promise<CaptionsCdnBaseManifest | null> => {
-  const url = captionsCdnBaseManifestUrl(brand);
+  const url = withCacheBust(captionsCdnBaseManifestUrl(brand));
+  const parse = (text: string): CaptionsCdnBaseManifest | null => {
+    try {
+      const data = JSON.parse(text) as { version?: unknown };
+      if (typeof data.version !== "string") return null;
+      const version = data.version.trim();
+      return version ? { version } : null;
+    } catch {
+      return null;
+    }
+  };
+
+  try {
+    // Node https — CEP Chromium keeps a disk HTTP cache that ignores Cache-Control
+    // on GET cdn.motionflow.pro, so window.fetch() can keep returning 1.0.2 forever.
+    const result = await cepHttpRequest(url, {
+      method: "GET",
+      headers: NO_CACHE_HEADERS,
+      timeoutMs: CATALOG_TIMEOUT_MS,
+    });
+    if (result.ok) {
+      const parsed = parse(result.text);
+      if (parsed) return parsed;
+    }
+  } catch {
+    // fall through to fetch
+  }
+
   try {
     const response = await fetchWithTimeout(
       url,
-      { method: "GET", headers: { Accept: "application/json" } },
+      { method: "GET", cache: "no-store", headers: { ...NO_CACHE_HEADERS } },
       CATALOG_TIMEOUT_MS,
     );
     if (!response.ok) return null;
-    const data = (await response.json()) as { version?: unknown };
-    if (typeof data.version !== "string") return null;
-    const version = data.version.trim();
-    if (!version) return null;
-    return { version };
+    return parse(await response.text());
   } catch {
     return null;
   }
@@ -204,29 +240,51 @@ export const fetchCaptionControls = async (
   url: string,
   brand: BrandId,
 ): Promise<MogrtDefinition> => {
-  const load = async (target: string): Promise<MogrtDefinition> => {
-    const response = await fetch(target, { method: "GET", headers: { Accept: "application/json" } });
-    if (!response.ok) {
-      throw new CaptionApiError(`Could not load controls.json (${response.status})`, response.status);
+  const parse = (text: string): MogrtDefinition | null => {
+    try {
+      const parsed = normalizeDefinition(JSON.parse(text));
+      return parsed.clientControls?.length ? parsed : null;
+    } catch {
+      return null;
     }
-    return normalizeDefinition(await response.json());
   };
 
-  try {
-    const parsed = await load(url);
-    if (parsed.clientControls?.length) return parsed;
-  } catch {
-    // CDN CORS or missing file — try same-origin catalog host
-  }
+  const load = async (target: string): Promise<MogrtDefinition | null> => {
+    try {
+      // Node https — CEP Chromium caches GET cdn.motionflow.pro past Cache-Control.
+      const result = await cepHttpRequest(withCacheBust(target), {
+        method: "GET",
+        headers: NO_CACHE_HEADERS,
+        timeoutMs: CATALOG_TIMEOUT_MS,
+      });
+      if (result.ok) {
+        const parsed = parse(result.text);
+        if (parsed) return parsed;
+      }
+    } catch {
+      // fall through to fetch
+    }
+
+    try {
+      const response = await fetch(withCacheBust(target), {
+        method: "GET",
+        cache: "no-store",
+        headers: NO_CACHE_HEADERS,
+      });
+      if (!response.ok) return null;
+      return parse(await response.text());
+    } catch {
+      return null;
+    }
+  };
+
+  const fromCdn = await load(url);
+  if (fromCdn) return fromCdn;
 
   const fallback = controlsApiFallbackUrl(url, brand);
   if (fallback && fallback !== url) {
-    try {
-      const parsed = await load(fallback);
-      if (parsed.clientControls?.length) return parsed;
-    } catch {
-      // API proxy missing or 404
-    }
+    const fromApi = await load(fallback);
+    if (fromApi) return fromApi;
   }
 
   return { clientControls: [] };
@@ -241,7 +299,8 @@ export const fetchCaptionsCatalog = async (brand?: BrandId): Promise<CaptionCata
     apiUrl(url),
     {
       method: "GET",
-      headers: { Accept: "application/json" },
+      cache: "no-store",
+      headers: { ...NO_CACHE_HEADERS },
     },
     CATALOG_TIMEOUT_MS,
   );
@@ -324,6 +383,8 @@ export const downloadCaptionProject = async (
   const headers: Record<string, string> = {
     Accept: "application/octet-stream, application/json",
     "Content-Type": "application/json",
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    Pragma: "no-cache",
   };
   if (identity.token) headers.Authorization = `Bearer ${identity.token}`;
   if (onlyIfChanged?.etag) {
@@ -332,6 +393,7 @@ export const downloadCaptionProject = async (
 
   const response = await fetch(apiUrl(CAPTIONS_ENDPOINTS.download), {
     method: "POST",
+    cache: "no-store",
     credentials: "include",
     headers,
     body: JSON.stringify({ id, file, user: userPayload(identity), ...(brand ? { brand } : {}) }),

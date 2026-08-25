@@ -1,0 +1,29 @@
+---
+description: Caption Font is a Source Text param. Write a plain string. Never JSON.
+globs:
+  - **/ppro-utils.ts
+  - **/ppro.ts
+  - **/aeft.ts
+  - **/clientControls.ts
+  - **/font-catalog.ts
+  - **/PresetFields.tsx
+  - **/CaptionsApp.tsx
+---
+
+# Caption Font — DO NOT BREAK
+
+The mogrt has **one** param named exactly **`Caption Font`**.
+
+It is published **Source Text**, not a font-menu object.
+
+Value = **plain string** (PostScript / system name), e.g. `Inter-SemiBold`.
+
+```js
+if (String(param.displayName) === "Caption Font") {
+  param.setValue(fontName, 1);
+}
+```
+
+- Never `{ systemName }`, never `fontEditValue`, never TextDocument JSON, never arrays.
+- Never match `Caption Font>Text>Source Text` / leaf `Source Text`.
+- Name is always `Caption Font`. There is not a second font param.

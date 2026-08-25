@@ -1,11 +1,11 @@
-import { ArrowLeft, ArrowRight, AudioWaveform, ChevronUp, Download, Globe } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, AudioWaveform, ChevronUp, Download } from "lucide-react";
+import { useState } from "react";
 import { useConfiguration } from "../../context/ConfigurationWrapper";
-import { SRC_LANGS, TRANSLATE_TARGETS } from "../data/languages";
 import { rangeFillStyle } from "../utils/rangeFillStyle";
 import type { AppliedSegmentConfig, Caption, GroupingMode } from "../utils/transcribe";
 import "./CaptionsTab.scss";
 import { EditableCaption } from "./EditableCaption";
+import { LanguageRow } from "./LanguageRow";
 import { PresetGrid } from "./PresetGrid";
 import type { DescribeProgress, DescribeType } from "./ProgressDialog";
 import { StyleTab } from "./StyleTab";
@@ -102,29 +102,13 @@ export const CaptionsTab = ({
         </div>
 
         <div className="captions-tab__landing-footer">
-          <div className="card captions-tab__lang-row">
-            <Globe size={15} />
-            <select className="select" value={srcLang} onChange={(e) => updateSrcLang(e.target.value)}>
-              {SRC_LANGS.map((l) => (
-                <option key={l.value} value={l.value}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-            <ArrowRight size={13} className="captions-tab__lang-arrow" />
-            <select
-              className="select"
-              value={translateTo}
-              onChange={(e) => updateTranslateTo(e.target.value)}
-              style={{ color: translateTo === "off" ? undefined : "var(--accent)" }}
-            >
-              {TRANSLATE_TARGETS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <LanguageRow
+            srcLang={srcLang}
+            translateTo={translateTo}
+            onSrcLang={updateSrcLang}
+            onTranslateTo={updateTranslateTo}
+            showArrow
+          />
 
           <div className="captions-tab__landing-actions">
             <button

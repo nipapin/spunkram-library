@@ -20,8 +20,11 @@ export { EMPTY_DEFINITION } from "./types";
 
 export {
   colorIdsFromDefinition,
+  downloadMasterTemplate,
   downloadStylePackage,
   ensureDefinitionForStyle,
+  clearCaptionControlsCache,
+  hasLocalMasterTemplate,
   isPresetDirty,
   isPresetValuesDirty,
   makeOrigin,
@@ -29,6 +32,7 @@ export {
   matchPresetByStyleName,
   previewFromValues,
   refreshStylePackageIfRemoteChanged,
+  refreshCaptionControlsIfRemoteNewer,
   syncCaptionStyles,
   valuesEqual,
 } from "./sync";
@@ -60,7 +64,17 @@ export {
   saveLocalState,
   upsertUserPreset,
 } from "./localStore";
-export { getCdnBaseManifestPath, getStylePackageDir, getStylesDir, getStylesRoot, styleIdToDirName } from "./paths";
+export {
+  getCdnBaseManifestPath,
+  getMasterPackageDir,
+  getStylePackageDir,
+  getStylesDir,
+  getStylesRoot,
+  styleIdToDirName,
+  MASTER_AEP_FILE,
+  MASTER_MOGRT_FILE,
+  MASTER_STYLE_ID,
+} from "./paths";
 export {
   acquireAndApplyPreset,
   acquirePresetProject,

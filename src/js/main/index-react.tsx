@@ -9,6 +9,7 @@ import "../globals.css";
 import { App } from "./main";
 import { ConfigurationWrapper } from "../../context/ConfigurationWrapper";
 import { getFontCatalog } from "../lib/utils/system-fonts";
+import { preloadVoiceoverPreviews } from "../api/voiceover";
 // host-pick-20260822 cache bust
 
 enableSpectrum();
@@ -25,6 +26,7 @@ ReactDOM.createRoot(document.getElementById("app") as HTMLElement).render(
 const afterFirstPaint = () => {
   initBolt();
   void getFontCatalog();
+  void preloadVoiceoverPreviews();
 };
 
 if (typeof requestAnimationFrame === "function") {

@@ -9,6 +9,11 @@ const basename = (filePath: string) => filePath.split(/[\\/]/).pop() || filePath
 export type CaptionsChunk = {
     text: string;
     timestamp: [number, number];
+    /**
+     * Сегмент правился вручную — читаем его as is: ни границы, ни переносы строк
+     * не пересчитываются правилами lines / characters.
+     */
+    manual?: boolean;
 };
 
 export type WhisperTranscription = {
@@ -47,6 +52,8 @@ export type TranscribeResult = {
     chaptersReceipt?: string;
     cost?: number;
     durationSeconds?: number;
+    /** Detected or requested ISO language from Scribe / captions API */
+    languageCode?: string;
     /** Ответ Scribe as-is — CEP пакует в System captions_batch_01..15 */
     raw?: ScribeResponse;
 };
@@ -79,6 +86,7 @@ export type Caption = {
     edit: CaptionEdit;
     words?: CaptionWord[];           // слова предложения (sentence-режим) для split/merge
     lineWordCounts?: number[];       // custom-режим: сколько слов из words[] приходится на каждую строку lines[]
+    manual?: boolean;                // текст правился вручную — отображается as is (см. CaptionsChunk.manual)
 };
 
 const REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
@@ -266,6 +274,7 @@ export const scribeToTranscription = (raw: ScribeResponse): TranscribeResult => 
         chaptersReceipt: raw.chaptersReceipt,
         cost: raw.cost,
         durationSeconds: raw.durationSeconds ?? raw.duration_seconds ?? undefined,
+        languageCode: raw.language_code,
         raw,
     };
 };
@@ -273,9 +282,20 @@ export const scribeToTranscription = (raw: ScribeResponse): TranscribeResult => 
 export const parseCaptionsApiResponse = (data: unknown): TranscribeResult => {
     if (isScribePayload(data)) return scribeToTranscription(data);
     const t = data as TranscribeResult;
-    if (t?.words?.chunks || t?.chunk?.chunks) return t;
+    if (t?.words?.chunks || t?.chunk?.chunks) {
+        const languageCode =
+            t.languageCode ??
+            (typeof (data as ScribeResponse).language_code === "string"
+                ? (data as ScribeResponse).language_code
+                : undefined);
+        return languageCode ? { ...t, languageCode } : t;
+    }
     return { words: { chunks: [] }, chunk: { chunks: [] } };
 };
+
+export const transcriptionLanguageCode = (
+    t: TranscribeResult | null | undefined,
+): string | undefined => t?.languageCode || t?.raw?.language_code || undefined;
 
 const MIN_WORD_SPAN = 0.02;
 
@@ -397,6 +417,17 @@ export const formatTimestamp = (seconds: number): string => {
     return `${pad(mins, 2)}:${pad(secs, 2)}:${pad(ms, 3)}`;
 };
 
+// текст сегмента как строки слов: раскладку по строкам правки сохраняют as is,
+// пересчитывать её по characters мы больше не будем (см. grouping)
+const toWordLines = (text: string): string[][] =>
+    text
+        .split("\n")
+        .map((line) => line.trim().split(/\s+/).filter(Boolean))
+        .filter((line) => line.length);
+
+const fromWordLines = (lines: string[][]): string =>
+    lines.map((line) => line.join(" ")).join("\n");
+
 // перенос первого/последнего слова сегмента в соседний: prev = первое слово уходит
 // в chunks[index-1], next = последнее — в chunks[index+1]; пустой сегмент удаляется.
 // words — слова текущего сегмента (для точных таймингов); без них — пропорциональная оценка.
@@ -410,7 +441,8 @@ export const moveWordToAdjacent = (
     const neighbor = dir === "prev" ? index - 1 : index + 1;
     if (neighbor < 0 || neighbor >= chunks.length) return null;
 
-    const tokens = chunks[index].text.trim().split(/\s+/).filter(Boolean);
+    const wordLines = toWordLines(chunks[index].text);
+    const tokens = wordLines.flat();
     if (!tokens.length) return null;
 
     const movedWord = words?.length
@@ -419,7 +451,12 @@ export const moveWordToAdjacent = (
             : words[words.length - 1]
         : null;
     const wordText = movedWord?.text ?? (dir === "prev" ? tokens[0] : tokens[tokens.length - 1]);
-    const restTokens = dir === "prev" ? tokens.slice(1) : tokens.slice(0, -1);
+    // слово уходит из своей строки; опустевшая строка исчезает, остальные остаются как были
+    const restLines = wordLines.map((line) => [...line]);
+    if (dir === "prev") restLines[0].shift();
+    else restLines[restLines.length - 1].pop();
+    const restWordLines = restLines.filter((line) => line.length);
+    const restTokens = restWordLines.flat();
 
     let wordTs: [number, number];
     let restTs: [number, number] | null;
@@ -444,23 +481,29 @@ export const moveWordToAdjacent = (
     }
 
     const out = chunks.map((c) => ({ ...c, timestamp: [...c.timestamp] as [number, number] }));
-    const neighborTokens = out[neighbor].text.trim().split(/\s+/).filter(Boolean);
+    // слово дописываем в крайнюю строку соседа — новую строку не создаём, иначе
+    // перенос слова менял бы число строк сегмента
+    const neighborLines = toWordLines(out[neighbor].text);
     if (dir === "prev") {
-        neighborTokens.push(wordText);
+        if (neighborLines.length) neighborLines[neighborLines.length - 1].push(wordText);
+        else neighborLines.push([wordText]);
         out[neighbor] = {
-            text: neighborTokens.join(" "),
+            ...out[neighbor],
+            text: fromWordLines(neighborLines),
             timestamp: [out[neighbor].timestamp[0], wordTs[1]],
         };
     } else {
-        neighborTokens.unshift(wordText);
+        if (neighborLines.length) neighborLines[0].unshift(wordText);
+        else neighborLines.push([wordText]);
         out[neighbor] = {
-            text: neighborTokens.join(" "),
+            ...out[neighbor],
+            text: fromWordLines(neighborLines),
             timestamp: [wordTs[0], out[neighbor].timestamp[1]],
         };
     }
 
     if (restTokens.length && restTs) {
-        out[index] = { text: restTokens.join(" "), timestamp: restTs };
+        out[index] = { ...out[index], text: fromWordLines(restWordLines), timestamp: restTs };
     } else {
         out.splice(index, 1);
     }
@@ -483,43 +526,133 @@ export const splitIntoWords = (
     return out;
 };
 
-// оборачивает уже готовый (границы не трогаем) список слов сегмента в строки по
-// `characters` — только визуальный перенос, без правила `lines` (оно решает,
-// сколько слов входит в caption, т.е. границы сегмента — это уже сделано раньше;
-// пересчитывать его здесь значит конфликтовать с ручной правкой пользователя)
-const wrapWordsToLines = (words: CaptionWord[], characters: number): CaptionWord[][] => {
-    const C = Math.max(1, characters);
-    const lines: CaptionWord[][] = [];
-    let curLine: CaptionWord[] = [];
-    let curLen = 0;
-    for (const word of words) {
-        const nextLen = curLine.length === 0 ? word.text.length : curLen + 1 + word.text.length;
-        if (curLine.length === 0 || nextLen <= C) {
-            curLine.push(word);
-            curLen = nextLen;
-        } else {
-            lines.push(curLine);
-            curLine = [word];
-            curLen = word.text.length;
+// ───────────────── правка текста сегмента: пересборка слов ─────────────────
+
+// для сопоставления слов нас интересуют только буквы/цифры: "example," и
+// "Example" — то же слово, у которого нужно сохранить исходный тайминг
+const wordKey = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+
+// LCS: какие токены нового текста — те же слова, что были (tokenIndex -> origIndex).
+// Всё остальное считаем дописанным/удалённым.
+const matchTokensToWords = (orig: string[], tokens: string[]): Map<number, number> => {
+    const a = orig.map(wordKey);
+    const b = tokens.map(wordKey);
+    const lcs: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+    for (let i = a.length - 1; i >= 0; i--) {
+        for (let j = b.length - 1; j >= 0; j--) {
+            lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
         }
     }
-    if (curLine.length) lines.push(curLine);
-    return lines;
+    const pairs = new Map<number, number>();
+    let i = 0;
+    let j = 0;
+    while (i < a.length && j < b.length) {
+        if (a[i] === b[j]) {
+            pairs.set(j, i);
+            i++;
+            j++;
+        } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+            i++;
+        } else {
+            j++;
+        }
+    }
+    return pairs;
+};
+
+// текст переписан целиком (ни одного прежнего слова) — делим весь диапазон
+// пропорционально длине слов, других ориентиров нет
+const spreadByCharLength = (
+    orig: CaptionsChunk[],
+    tokens: string[],
+): CaptionsChunk[] => {
+    const start = orig[0].timestamp[0];
+    const end = orig[orig.length - 1].timestamp[1];
+    const span = Math.max(0, end - start);
+    const totalChars = tokens.reduce((sum, t) => sum + t.length, 0) || tokens.length;
+    let cursor = start;
+    return tokens.map((tok, i) => {
+        const dur = i === tokens.length - 1 ? end - cursor : span * (tok.length / totalChars);
+        const ws = cursor;
+        cursor += dur;
+        return { text: tok, timestamp: [ws, cursor] as [number, number] };
+    });
+};
+
+/**
+ * Пересобрать слова сегмента из отредактированного текста.
+ *
+ * Слова, которые пользователь не тронул, сохраняют свои таймкоды 1:1. Дописанные
+ * слова забирают время у того слова, к которому их дописали: его диапазон делится
+ * поровну между ним и новыми словами (`example` 1.511–2.075 + `hello world` →
+ * example 1.511–1.699, hello 1.699–1.887, world 1.887–2.075). Время удалённых слов
+ * достаётся предыдущему слову, так что границы сегмента не двигаются.
+ */
+export const rebuildWords = (orig: CaptionsChunk[], text: string): CaptionsChunk[] => {
+    const tokens = text.trim().split(/\s+/).filter(Boolean);
+    if (!tokens.length || !orig.length) return [];
+    if (tokens.length === orig.length) {
+        return orig.map((w, i) => ({ text: tokens[i], timestamp: w.timestamp }));
+    }
+
+    const pairs = matchTokensToWords(orig.map((w) => w.text), tokens);
+    if (!pairs.size) return spreadByCharLength(orig, tokens);
+
+    // каждый токен приписываем «владельцу» — исходному слову, чей тайминг он делит:
+    // совпавший токен владеет собой, дописанный прилипает к последнему совпавшему
+    // (а токены до первого совпадения — к нему же, они стоят перед ним в строке)
+    const owned: number[][] = orig.map(() => []);
+    const firstOwner = pairs.get([...pairs.keys()][0])!;
+    let owner = firstOwner;
+    for (let j = 0; j < tokens.length; j++) {
+        const matched = pairs.get(j);
+        if (matched != null) owner = matched;
+        owned[owner].push(j);
+    }
+
+    const out: CaptionsChunk[] = [];
+    // время удалённых слов: достаётся предыдущему слову (тянем его конец вперёд),
+    // а если удалили начало сегмента — первому оставшемуся, чтобы не сдвинуть границу
+    let freed: [number, number] | null = null;
+    const stretchLast = (end: number) => {
+        const tail = out[out.length - 1];
+        out[out.length - 1] = { ...tail, timestamp: [tail.timestamp[0], end] };
+    };
+    for (let i = 0; i < orig.length; i++) {
+        const [wordStart, wordEnd] = orig[i].timestamp;
+        if (!owned[i].length) {
+            freed = [freed ? freed[0] : wordStart, wordEnd];
+            continue;
+        }
+        let start = wordStart;
+        if (freed) {
+            if (out.length) stretchLast(freed[1]);
+            else start = freed[0];
+            freed = null;
+        }
+        const step = Math.max(0, wordEnd - start) / owned[i].length;
+        owned[i].forEach((tokenIndex, k) => {
+            const from = start + step * k;
+            out.push({
+                text: tokens[tokenIndex],
+                timestamp: [from, k === owned[i].length - 1 ? wordEnd : from + step],
+            });
+        });
+    }
+    if (freed && out.length) stretchLast(orig[orig.length - 1].timestamp[1]);
+    return out;
 };
 
 // собрать Caption[] из готовых сегментов (override / ручная правка границ).
 // слова привязываются последовательно по таймкоду конца сегмента — как в старой
 // sentence-ветке grouping.
-// wrapCharacters задан только для custom-режима: границы сегментов (сколько слов
-// в caption) заданы извне и не пересчитываются — правило `lines` работает только
-// при первичной раскладке (packByLinesAndChars); здесь пересобираем лишь переносы
-// строк внутри каждого уже готового сегмента, чтобы правки (move/split/merge) не
-// теряли многострочность и не конфликтовали с ручной разбивкой на captions.
+// Раскладка сегментов (границы и переносы строк) приходит готовой и здесь не
+// пересчитывается: правила lines / characters работают только при первичной
+// раскладке (packByLinesAndChars) и по кнопке Update.
 const captionsFromChunks = (
     segments: CaptionsChunk[],
     wordChunks: CaptionsChunk[],
     editTarget: "sentence" | "words",
-    wrapCharacters?: number,
 ): Caption[] => {
     let wi = 0;
     const last = segments.length - 1;
@@ -538,11 +671,28 @@ const captionsFromChunks = (
                 ? { target: "sentence", index }
                 : { target: "words", indices: words.map((w) => w.gi) };
 
-        // явные переносы строк, которые пользователь расставил при редактировании
-        // текста (textarea), — приоритет над авто-переносом по characters, иначе
-        // правку стирал бы следующий пересчёт (см. wrapCharacters ниже).
-        // Проверяем, что число слов по строкам совпадает с реально привязанными
-        // словами сегмента — иначе (текст правился отдельно от слов) не доверяем.
+        // сегмент правился вручную — берём его текст as is: ни авто-перенос по
+        // characters, ни правило lines к нему не применяются
+        if (c.manual) {
+            const manualLines = c.text.split("\n").map((l) => l.trim()).filter(Boolean);
+            const lines = manualLines.length ? manualLines : [c.text.trim()];
+            const counts = lines.map((line) => line.split(/\s+/).filter(Boolean).length);
+            const totalCount = counts.reduce((sum, n) => sum + n, 0);
+            return {
+                lines,
+                text: lines.join("\n"),
+                timestamp: c.timestamp,
+                edit,
+                words,
+                lineWordCounts: lines.length > 1 && totalCount === words.length ? counts : undefined,
+                manual: true,
+            };
+        }
+
+        // многострочный сегмент: переносы уже расставлены — первичной раскладкой
+        // или пользователем в textarea. Проверяем, что число слов по строкам
+        // совпадает с реально привязанными словами сегмента — иначе (текст правился
+        // отдельно от слов) не доверяем и рисуем одной строкой.
         if (editTarget === "words") {
             const explicitLines = c.text.split("\n").map((l) => l.trim()).filter(Boolean);
             if (explicitLines.length > 1) {
@@ -557,21 +707,6 @@ const captionsFromChunks = (
                         lineWordCounts,
                     };
                 }
-            }
-        }
-
-        if (wrapCharacters != null && words.length > 1) {
-            const wrapped = wrapWordsToLines(words, wrapCharacters);
-            if (wrapped.length > 1) {
-                const lines = wrapped.map((line) => line.map((w) => w.text).join(" "));
-                return {
-                    lines,
-                    text: lines.join("\n"),
-                    timestamp: c.timestamp,
-                    edit,
-                    words,
-                    lineWordCounts: wrapped.map((line) => line.length),
-                };
             }
         }
 
@@ -590,10 +725,20 @@ type LWord = { text: string; timestamp: [number, number]; gi: number };
 const lineCharLen = (words: LWord[]) =>
     words.length === 0 ? 0 : words.reduce((sum, w) => sum + w.text.length, 0) + (words.length - 1);
 
+// как captions.jsx Pause Gap (Bridge/Global). Пауза между словами режет caption,
+// даже если строка ещё не заполнена — иначе UI и mogrt группируют по-разному.
+const DEFAULT_PAUSE_GAP = 0.35;
+
 // пакует слова в captions: до `lines` строк, до `characters` символов в строке
-const packByLinesAndChars = (words: LWord[], lines: number, characters: number): LWord[][][] => {
+const packByLinesAndChars = (
+    words: LWord[],
+    lines: number,
+    characters: number,
+    pauseGap: number = DEFAULT_PAUSE_GAP,
+): LWord[][][] => {
     const L = Math.max(1, lines);
     const C = Math.max(1, characters);
+    const gap = pauseGap > 0 ? pauseGap : 0;
     const captions: LWord[][][] = [];
     let capLines: LWord[][] = [];
     let curLine: LWord[] = [];
@@ -610,21 +755,24 @@ const packByLinesAndChars = (words: LWord[], lines: number, characters: number):
         capLines = [];
     };
 
-    for (const word of words) {
+    for (let i = 0; i < words.length; i++) {
+        const word = words[i];
         const nextLen = curLine.length === 0 ? word.text.length : lineCharLen(curLine) + 1 + word.text.length;
         if (curLine.length === 0 || nextLen <= C) {
             curLine.push(word);
-            continue;
-        }
-        // текущая строка полна — перенос слова
-        if (capLines.length + 1 < L) {
-            // есть ещё строка в этом caption
+        } else if (capLines.length + 1 < L) {
+            // текущая строка полна — перенос слова
             flushLine();
             curLine.push(word);
         } else {
             // последняя строка caption полна — новый caption
             flushCaption();
             curLine.push(word);
+        }
+        // captions.jsx collectCustom: if (w.pauseAfter) flush()
+        if (gap > 0 && i + 1 < words.length) {
+            const untilNext = words[i + 1].timestamp[0] - word.timestamp[1];
+            if (untilNext >= gap) flushCaption();
         }
     }
     flushCaption();
@@ -651,11 +799,12 @@ export const grouping = (
         return captionsFromChunks(sentenceChunks, wordChunks, "sentence");
     }
 
-    // words/custom с ручной разбивкой — рисуем ровно то, что сохранено; в custom
-    // дополнительно пересобираем переносы строк по characters (см. captionsFromChunks)
+    // captions уже созданы: рисуем ровно то, что сохранено. Правила lines / characters
+    // применяются только при первичной раскладке и по кнопке Update (она сбрасывает
+    // customSegments) — правка сегментов их больше не пересобирает, меняются только
+    // тайминги слов внутри сегментов.
     if (options.customSegments?.length) {
-        const wrapCharacters = config.mode === "custom" ? config.characters : undefined;
-        return captionsFromChunks(options.customSegments, wordChunks, "words", wrapCharacters);
+        return captionsFromChunks(options.customSegments, wordChunks, "words");
     }
 
     // words: один caption = одно слово (как от API)
@@ -690,9 +839,15 @@ export const grouping = (
     });
 };
 
-// снимок текущих captions как CaptionsChunk[] — для ленивой инициализации customSegments
+// снимок текущих captions как CaptionsChunk[] — для ленивой инициализации customSegments.
+// Переносы строк сохраняем: снимок и есть готовая раскладка, пересчитывать её по
+// characters мы больше не будем (см. grouping)
 export const captionsToChunks = (captions: Caption[]): CaptionsChunk[] =>
-    captions.map((c) => ({ text: c.text.replace(/\n/g, " ").trim(), timestamp: c.timestamp }));
+    captions.map((c) => ({
+        text: c.lines.length > 1 ? c.lines.join("\n") : c.text.trim(),
+        timestamp: c.timestamp,
+        ...(c.manual ? { manual: true as const } : {}),
+    }));
 
 // usage:
 // const result = await transcribe("/path/to/audio.mp3");

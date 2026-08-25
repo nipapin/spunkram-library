@@ -1,5 +1,6 @@
 import { Check, Pencil, X } from "lucide-react";
-import { memo, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { formatTimestamp, type Caption } from "../utils/transcribe";
 import "./EditableCaption.scss";
 
@@ -61,6 +62,17 @@ export const EditableCaption = memo(function EditableCaption({
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
+  }, [menu]);
+
+  // держим меню в границах панели — рядом с нижними сегментами оно иначе уезжает за экран
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!menu || !el) return;
+    const { width, height } = el.getBoundingClientRect();
+    const x = Math.max(4, Math.min(menu.x, window.innerWidth - width - 4));
+    const y = Math.max(4, Math.min(menu.y, window.innerHeight - height - 4));
+    if (Math.abs(x - menu.x) < 0.5 && Math.abs(y - menu.y) < 0.5) return;
+    setMenu({ ...menu, x, y });
   }, [menu]);
 
   const startEdit = () => {
@@ -213,74 +225,79 @@ export const EditableCaption = memo(function EditableCaption({
         </>
       )}
 
-      {menu && (
-        <div ref={menuRef} className="menu" style={{ top: menu.y, left: menu.x }}>
-          {isSentence && (
-            <>
-              <button
-                className="menu-item"
-                disabled={!canSplit}
-                onClick={() => {
-                  onSplit(caption, menu.wordPos);
-                  closeMenu();
-                }}
-              >
-                Split here
-              </button>
-              <button
-                className="menu-item"
-                disabled={!canMergePrev}
-                onClick={() => {
-                  onMerge(caption, "prev");
-                  closeMenu();
-                }}
-              >
-                Merge with previous
-              </button>
-              <button
-                className="menu-item"
-                disabled={!canMergeNext}
-                onClick={() => {
-                  onMerge(caption, "next");
-                  closeMenu();
-                }}
-              >
-                Merge with next
-              </button>
-            </>
-          )}
-          <button
-            className="menu-item"
-            disabled={!canMovePrev}
-            onClick={() => {
-              onMoveWord(caption, index, "prev");
-              closeMenu();
-            }}
-          >
-            Move first word to previous
-          </button>
-          <button
-            className="menu-item"
-            disabled={!canMoveNext}
-            onClick={() => {
-              onMoveWord(caption, index, "next");
-              closeMenu();
-            }}
-          >
-            Move last word to next
-          </button>
-          <button
-            className="menu-item"
-            disabled={!canSplitWords}
-            onClick={() => {
-              onSplitWords(caption, index);
-              closeMenu();
-            }}
-          >
-            Split into words
-          </button>
-        </div>
-      )}
+      {/* меню рисуем через портал в body: у .caption-card есть backdrop-filter, а он делает
+          карточку containing block для position: fixed — внутри неё меню обрезалось
+          и уходило под панель сегментов */}
+      {menu &&
+        createPortal(
+          <div ref={menuRef} className="menu" style={{ top: menu.y, left: menu.x }}>
+            {isSentence && (
+              <>
+                <button
+                  className="menu-item"
+                  disabled={!canSplit}
+                  onClick={() => {
+                    onSplit(caption, menu.wordPos);
+                    closeMenu();
+                  }}
+                >
+                  Split here
+                </button>
+                <button
+                  className="menu-item"
+                  disabled={!canMergePrev}
+                  onClick={() => {
+                    onMerge(caption, "prev");
+                    closeMenu();
+                  }}
+                >
+                  Merge with previous
+                </button>
+                <button
+                  className="menu-item"
+                  disabled={!canMergeNext}
+                  onClick={() => {
+                    onMerge(caption, "next");
+                    closeMenu();
+                  }}
+                >
+                  Merge with next
+                </button>
+              </>
+            )}
+            <button
+              className="menu-item"
+              disabled={!canMovePrev}
+              onClick={() => {
+                onMoveWord(caption, index, "prev");
+                closeMenu();
+              }}
+            >
+              Move first word to previous
+            </button>
+            <button
+              className="menu-item"
+              disabled={!canMoveNext}
+              onClick={() => {
+                onMoveWord(caption, index, "next");
+                closeMenu();
+              }}
+            >
+              Move last word to next
+            </button>
+            <button
+              className="menu-item"
+              disabled={!canSplitWords}
+              onClick={() => {
+                onSplitWords(caption, index);
+                closeMenu();
+              }}
+            >
+              Split into words
+            </button>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 });

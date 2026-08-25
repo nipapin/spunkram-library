@@ -20,6 +20,12 @@
         var INDEXED_LOOKUP_PREFIX = "v4lut~";
         var INDEXED_BATCH_PREFIX = "v4~";
         var BATCH_SEP = "|||";
+        // Разбивка, посчитанная панелью: служебные строки пака (пустой текст,
+        // отрицательный wordIndex). Есть маркеры — рисуем сегменты as is и ничего
+        // не считаем; нет — старый расчёт по Line Count / Chars Per Line / Pause Gap.
+        var MARK_LINE = -2;
+        var MARK_SEGMENT = -3;
+        var MARK_PRESENT = -4;
         var CODE_SEMI = 59;
         var CODE_COMMA = 44;
         var CODE_PIPE = 124;
@@ -431,33 +437,48 @@
 
             sdk.packToChunkLayers = function (captions) {
                 captions = captions || [];
-                var n = captions.length;
                 var rows = [];
                 var starts = [];
                 var ends = [];
                 var isWord = [];
-                var i, text, startMs, endMs, word, wordIndex, wcount, row, sec;
+                var i, text, startMs, endMs, word, wcount, sec, brk, marked;
                 wcount = 0;
                 var lastSec = 0;
 
-                for (i = 0; i < n; i++) {
+                function pushRow(sMs, eMs, wIdx, txt) {
+                    rows.push(sMs + "~" + eMs + "~" + wIdx + "~" + txt);
+                    starts.push(sMs);
+                    ends.push(eMs);
+                    isWord.push(txt !== "");
+                    sec = Math.floor(sMs / MS);
+                    if (sec > lastSec) lastSec = sec;
+                    sec = Math.floor(eMs / MS + LUT_HOLD_PAD);
+                    if (sec > lastSec) lastSec = sec;
+                }
+
+                marked = false;
+                for (i = 0; i < captions.length; i++) {
+                    if (captions[i].breakAfter) {
+                        marked = true;
+                        break;
+                    }
+                }
+                if (marked) pushRow(0, 0, MARK_PRESENT, "");
+
+                for (i = 0; i < captions.length; i++) {
                     text = captions[i].text == null ? "" : String(captions[i].text);
                     if (captions[i].type === "spacing") text = "";
                     startMs = toMs(captions[i].start);
                     endMs = toMs(captions[i].end);
                     word = text !== "";
-                    wordIndex = word ? wcount : -1;
+                    pushRow(startMs, endMs, word ? wcount : -1, escapeRowText(text));
                     if (word) wcount++;
-                    row = startMs + "~" + endMs + "~" + wordIndex + "~" + escapeRowText(text);
-                    rows.push(row);
-                    starts.push(startMs);
-                    ends.push(endMs);
-                    isWord.push(word);
-                    sec = Math.floor(startMs / MS);
-                    if (sec > lastSec) lastSec = sec;
-                    sec = Math.floor(endMs / MS + LUT_HOLD_PAD);
-                    if (sec > lastSec) lastSec = sec;
+                    brk = word ? captions[i].breakAfter : null;
+                    if (brk === "segment") pushRow(endMs, endMs, MARK_SEGMENT, "");
+                    else if (brk === "line") pushRow(endMs, endMs, MARK_LINE, "");
                 }
+
+                var n = rows.length;
                 if (lastSec < 0) lastSec = 0;
                 if (lastSec > MAX_LUT_SEC - 1) lastSec = MAX_LUT_SEC - 1;
                 var secCount = n ? lastSec + 1 : 0;
@@ -687,6 +708,7 @@
                     maxCaption: header.maxCaption,
                     lutCount: lutCount,
                     dataCount: dataCount,
+                    marked: false,
                     captionsPerBatch: Math.ceil(header.maxCaption / dataCount) || 1,
                     lookup0: header,
                     capCache: {},
@@ -790,6 +812,59 @@
                     end: holdExtend(spokenEnd, holdDur, silenceDur, nextStart),
                     pauseAfter: pauseAfter,
                     wordIndex: cap.wordIndex
+                };
+            }
+
+            // разбивка лежит в паке: сентинел в нулевой строке или сами маркеры строк/сегментов
+            function hasMarkRows(comp, state) {
+                var i, cap, limit;
+                limit = state.maxCaption < 24 ? state.maxCaption : 24;
+                for (i = 0; i < limit; i++) {
+                    cap = captionAt(comp, state, i);
+                    if (!cap) continue;
+                    if (cap.wordIndex === MARK_PRESENT || cap.wordIndex === MARK_LINE || cap.wordIndex === MARK_SEGMENT) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            /**
+             * Сегмент по маркерам: назад до конца предыдущего сегмента, вперёд до
+             * своего. Строки режем по маркерам строк — ровно как в панели.
+             */
+            function segmentFromMarks(comp, state, wv, pauseGap, holdDur) {
+                var startIndex = wv.index;
+                var j, cap, w, txt, li;
+                for (j = wv.index - 1; j >= 0; j--) {
+                    cap = captionAt(comp, state, j);
+                    if (!cap || cap.wordIndex === MARK_SEGMENT) break;
+                    if (cap.text !== "") startIndex = j;
+                }
+                var words = [];
+                var lines = [""];
+                for (j = startIndex; j < state.maxCaption; j++) {
+                    cap = captionAt(comp, state, j);
+                    if (!cap || cap.wordIndex === MARK_SEGMENT) break;
+                    if (cap.wordIndex === MARK_LINE) {
+                        lines.push("");
+                        continue;
+                    }
+                    if (cap.text === "") continue;
+                    w = wordView(comp, state, j, pauseGap, holdDur);
+                    if (!w) continue;
+                    txt = w.text.replace(/^\s+|\s+$/g, "");
+                    if (!txt) continue;
+                    li = lines.length - 1;
+                    lines[li] = lines[li].length ? lines[li] + " " + txt : txt;
+                    words.push(w);
+                }
+                if (!words.length) return null;
+                while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+                return {
+                    words: words,
+                    text: lines.join("\r"),
+                    segIndex: words[0].wordIndex
                 };
             }
 
@@ -993,9 +1068,17 @@
             }
 
             function buildIndexedSegment(comp, state, wv, segType, s) {
+                // панель уже посчитала сегменты и положила их маркерами в chunks —
+                // Line Count / Chars Per Line / Pause Gap больше не трогаем
+                if (state.marked) {
+                    var marked = segmentFromMarks(comp, state, wv, s.pauseGap, s.holdDur);
+                    if (marked) return marked;
+                    return { words: [wv], text: wv.text, segIndex: wv.wordIndex };
+                }
                 if (segType == sdk.SegmentType.WORDS) {
                     return { words: [wv], text: wv.text, segIndex: wv.wordIndex };
                 }
+                // только старые паки без маркеров — считаем custom на лету
                 ensureCustomSegs(comp, state, s, wv.index);
                 var hit = findCachedCustomSeg(wv.index);
                 if (hit) {
@@ -1125,6 +1208,7 @@
                 if (!state || !state.maxCaption) {
                     return remember(formatFrameState(false, -1, 0, 0, -1, -1, 0, 0, s.segmentType, 0, 0, [], "", bounce));
                 }
+                state.marked = hasMarkRows(comp, state);
                 var segType = s.segmentType;
                 var entry = readLookupEntry(comp, state, t);
                 var wv = findActiveWordView(comp, state, entry, t, s.pauseGap, s.holdDur);
@@ -1142,7 +1226,7 @@
                 var built = buildIndexedSegment(comp, state, source, segType, s);
                 var stats = wordStats(built.words, t, source.index);
                 var range = activeRangeInText(built.words, source.index, built.text);
-                var wordStarts = segType == sdk.SegmentType.WORDS
+                var wordStarts = (!state.marked && segType == sdk.SegmentType.WORDS)
                     ? [source.start]
                     : startsOf(built.words);
                 var segStart = built.words.length ? built.words[0].start : 0;
@@ -1189,6 +1273,7 @@
                 for (i = 0; i < state.maxCaption; i++) {
                     cap = captionAt(comp, state, i);
                     if (!cap) continue;
+                    if (cap.text === "" && cap.wordIndex < -1) continue;
                     out.push({
                         text: cap.text,
                         start: cap.start,
@@ -1227,10 +1312,8 @@
 
             sdk.animatorWordStartFromFrame = function (comp, textIndex) {
                 var f = sdk.frame(comp);
-                if (f.segType == sdk.SegmentType.WORDS) {
-                    return f.wordStarts.length ? f.wordStarts[0] : 0;
-                }
                 if (!f.wordStarts.length) return 0;
+                if (f.wordStarts.length === 1) return f.wordStarts[0];
                 var i = clamp(textIndex, 1, f.wordStarts.length) - 1;
                 return f.wordStarts[i];
             };

@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
+  clearCaptionControlsCache,
   downloadStylePackage,
   ensureDefinitionForStyle,
   getLocalStyleAssetPaths,
@@ -8,6 +9,7 @@ import {
   loadLocalState,
   makeOrigin,
   presetSwatchColors,
+  refreshCaptionControlsIfRemoteNewer,
   saveLocalState,
   syncCaptionStyles,
   type AcquirePresetStatus,
@@ -16,20 +18,22 @@ import {
   type StylesSyncStatus,
 } from "../js/styles";
 import { friendlyErrorMessage } from "../js/utils/user-error";
-import { getBundledCaptionsJsxPath } from "../js/utils/captionsJsx";
 import {
+  CATALOG_LAYOUT_OVERRIDES,
   ControlType,
   defaultsFromDefinition,
   diffStyleProps,
+  findControlBySource,
   findFontControl,
   fontIdFromValue,
   stylePropsFromValues,
+  withCatalogApplyValues,
   type StylePropPayload,
 } from "../js/presets";
 import type { ControlValues, MogrtDefinition } from "../js/presets";
 import type { GroupingMode } from "../js/utils/transcribe";
 import { csi } from "../js/lib/utils/bolt";
-import { Motionflow, hostSdk } from "../js/sdk";
+import { hostSdk } from "../js/sdk";
 import * as panelStore from "../js/lib/userdata-store";
 import { getResolvedHostSync } from "../js/lib/utils/host-identity";
 import { getFontCatalog, resolveFontFace } from "../js/lib/utils/system-fonts";
@@ -61,6 +65,8 @@ interface IConfigurationValue {
   audioPresetPath: string;
   srcLang: string;
   translateTo: string;
+  chaptersSrcLang: string;
+  chaptersTranslateTo: string;
   presets: StylePreset[];
   selectedPresetId: string;
   stylesStatus: StylesSyncStatus;
@@ -78,6 +84,8 @@ interface IConfigurationValue {
   updateAudioPresetPath: (value: string) => void;
   updateSrcLang: (value: string) => void;
   updateTranslateTo: (value: string) => void;
+  updateChaptersSrcLang: (value: string) => void;
+  updateChaptersTranslateTo: (value: string) => void;
   selectPreset: (id: string, opts?: { applyToHost?: boolean }) => void;
   updateSelectedPreset: (patch: Partial<StylePreset>) => void;
   addPreset: (patch?: Partial<StylePreset>) => string;
@@ -86,7 +94,7 @@ interface IConfigurationValue {
   refreshStyles: () => Promise<void>;
   ensureStyleDownloaded: (styleId: string) => Promise<void>;
   /** Подтянуть controls.json для Styles UI (можно до Transcribe). */
-  ensureDefinitionLoaded: (styleId: string) => Promise<MogrtDefinition>;
+  ensureDefinitionLoaded: (styleId: string, opts?: { force?: boolean }) => Promise<MogrtDefinition>;
   /** Применить values выбранного пресета к caption MOGRT на таймлайне (full push). */
   applySelectedPresetToHost: () => Promise<void>;
   /** Подставить шрифт с клипа (systemName mogrt) в Typography без записи обратно в хост. */
@@ -103,6 +111,8 @@ const defaultValue: IConfigurationValue = {
   audioPresetPath: "",
   srcLang: "auto",
   translateTo: "off",
+  chaptersSrcLang: "auto",
+  chaptersTranslateTo: "off",
   presets: [],
   selectedPresetId: "",
   stylesStatus: "idle",
@@ -119,6 +129,8 @@ const defaultValue: IConfigurationValue = {
   updateAudioPresetPath: () => {},
   updateSrcLang: () => {},
   updateTranslateTo: () => {},
+  updateChaptersSrcLang: () => {},
+  updateChaptersTranslateTo: () => {},
   selectPreset: () => {},
   updateSelectedPreset: () => {},
   addPreset: () => "",
@@ -135,7 +147,16 @@ const STORAGE_KEY = "aitools-cep-config";
 
 type StoredConfig = Pick<
   IConfigurationValue,
-  "mode" | "lines" | "characters" | "fontSize" | "mogrtPath" | "audioPresetPath" | "srcLang" | "translateTo"
+  | "mode"
+  | "lines"
+  | "characters"
+  | "fontSize"
+  | "mogrtPath"
+  | "audioPresetPath"
+  | "srcLang"
+  | "translateTo"
+  | "chaptersSrcLang"
+  | "chaptersTranslateTo"
 >;
 
 const loadConfig = (): StoredConfig => {
@@ -152,6 +173,8 @@ const loadConfig = (): StoredConfig => {
       audioPresetPath: parsed.audioPresetPath ?? defaultValue.audioPresetPath,
       srcLang: parsed.srcLang ?? defaultValue.srcLang,
       translateTo: parsed.translateTo ?? defaultValue.translateTo,
+      chaptersSrcLang: parsed.chaptersSrcLang ?? defaultValue.chaptersSrcLang,
+      chaptersTranslateTo: parsed.chaptersTranslateTo ?? defaultValue.chaptersTranslateTo,
     };
   } catch {
     return defaultValue;
@@ -187,6 +210,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   const [audioPresetPath, setAudioPresetPath] = useState(initial.audioPresetPath);
   const [srcLang, setSrcLang] = useState(initial.srcLang);
   const [translateTo, setTranslateTo] = useState(initial.translateTo);
+  const [chaptersSrcLang, setChaptersSrcLang] = useState(initial.chaptersSrcLang);
+  const [chaptersTranslateTo, setChaptersTranslateTo] = useState(initial.chaptersTranslateTo);
   const [presets, setPresets] = useState<StylePreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [stylesStatus, setStylesStatus] = useState<StylesSyncStatus>("idle");
@@ -213,6 +238,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   const updateAudioPresetPath = (value: string) => setAudioPresetPath(value);
   const updateSrcLang = (value: string) => setSrcLang(value);
   const updateTranslateTo = (value: string) => setTranslateTo(value);
+  const updateChaptersSrcLang = (value: string) => setChaptersSrcLang(value);
+  const updateChaptersTranslateTo = (value: string) => setChaptersTranslateTo(value);
 
   const applyPreparedAssets = useCallback((paths: LocalStyleAssetPaths | null) => {
     setPresetAssets(paths);
@@ -254,12 +281,16 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     }
   }, [applySyncResult]);
 
-  const ensureDefinitionLoaded = useCallback(async (styleId: string) => {
-    const cached = definitionsRef.current[styleId];
-    if (cached?.clientControls?.length) return cached;
+  const ensureDefinitionLoaded = useCallback(async (styleId: string, opts?: { force?: boolean }) => {
+    if (!opts?.force) {
+      const cached = definitionsRef.current[styleId];
+      if (cached?.clientControls?.length) return cached;
 
-    const inflight = definitionLoadsRef.current.get(styleId);
-    if (inflight) return inflight;
+      const inflight = definitionLoadsRef.current.get(styleId);
+      if (inflight) return inflight;
+    } else {
+      definitionLoadsRef.current.delete(styleId);
+    }
 
     const load = (async () => {
       try {
@@ -270,7 +301,12 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
           controlsUrl: fromCatalog?.controlsUrl,
           previewImageUrl: fromCatalog?.previewImageUrl,
           previewVideoUrl: fromCatalog?.previewVideoUrl,
+          force: opts?.force,
         });
+        if (opts?.force && !definition.clientControls?.length) {
+          const prev = definitionsRef.current[styleId];
+          if (prev?.clientControls?.length) return prev;
+        }
         setDefinitions((prev) => {
           const existing = prev[styleId];
           if (existing?.clientControls?.length && !definition.clientControls?.length) {
@@ -282,7 +318,9 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
           setPresets((prev) =>
             prev.map((p) => {
               if (p.styleId !== styleId) return p;
-              if (p.source === "catalog" || !Object.keys(p.values || {}).length) {
+              if (p.source === "user") return p;
+              if (opts?.force && isPresetValuesDirty(p)) return p;
+              if (opts?.force || p.source === "catalog" || !Object.keys(p.values || {}).length) {
                 const values = defaultsFromDefinition(definition);
                 return {
                   ...p,
@@ -307,22 +345,21 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
 
   const ensureStyleDownloaded = useCallback(
     async (styleId: string) => {
-      const existing = presets.find((p) => p.styleId === styleId && p.source !== "catalog");
-      // локальный пакет мог быть скачан под другой хост (AE → только project.aep):
-      // для Premiere нужен именно mogrt — иначе перекачиваем пакет под текущий хост
-      const localPaths = getLocalStyleAssetPaths(styleId);
       const hostAppId = getResolvedHostSync() ?? csi.hostEnvironment?.appId;
-      const hasHostFile = hostAppId === "PPRO" ? !!localPaths?.mogrt : !!(localPaths?.aep || localPaths?.mogrt);
-      if (existing && existing.source === "downloaded" && !existing.updateAvailable && hasHostFile) {
+      const localPaths = getLocalStyleAssetPaths();
+      const hasHostFile =
+        hostAppId === "PPRO" ? !!localPaths?.mogrt : !!(localPaths?.aep || localPaths?.mogrt);
+
+      if (hasHostFile) {
         applyPreparedAssets(localPaths);
-        // пакет уже есть — но definition мог не подтянуться раньше
         await ensureDefinitionLoaded(styleId);
         return;
       }
 
       const fromCatalog = presets.find((p) => p.styleId === styleId);
       const { preset, definition } = await downloadStylePackage(styleId, {
-        files: fromCatalog?.files,
+        // Master download ignores these; keep true so preflight/UI stay sane.
+        files: { mogrt: true, aep: true, definition: !!fromCatalog?.files?.definition },
         name: fromCatalog?.name,
         controlsUrl: fromCatalog?.controlsUrl,
         previewImageUrl: fromCatalog?.previewImageUrl,
@@ -344,7 +381,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         const without = prev.filter((p) => p.id !== styleId);
         return [...without, nextPreset];
       });
-      applyPreparedAssets(getLocalStyleAssetPaths(styleId));
+      applyPreparedAssets(getLocalStyleAssetPaths());
     },
     [applyPreparedAssets, ensureDefinitionLoaded, presets],
   );
@@ -436,12 +473,6 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       const hostApi = hostSdk();
       return hostApi
         .applyCaptionStyleValues({ props, sequenceId, compId, trackIndex })
-        .then((wrapped) => {
-          if (wrapped && wrapped.ok) {
-            const data = wrapped.data as { fontId?: string } | null;
-            if (data?.fontId) syncSelectedPresetFontFromHost(data.fontId);
-          }
-        })
         .catch((err) => {
           console.warn("[Styles] applyCaptionStyleValues failed", err);
         })
@@ -459,7 +490,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         })
         .then(() => undefined);
     },
-    [definitions, syncSelectedPresetFontFromHost],
+    [definitions],
   );
 
   /** Пушим values в caption-клипы: debounce + один in-flight evalScript, только дельта. */
@@ -485,33 +516,70 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     [definitions, flushStyleValuesToHost],
   );
 
+  const resolveDefinitionForApply = useCallback(async (styleId: string): Promise<MogrtDefinition> => {
+    let force = false;
+    try {
+      force = await refreshCaptionControlsIfRemoteNewer();
+    } catch {
+      force = false;
+    }
+    if (force) clearCaptionControlsCache();
+    return ensureDefinitionLoaded(styleId, { force });
+  }, [ensureDefinitionLoaded]);
+
+  const valuesForHostApply = (preset: StylePreset, definition: MogrtDefinition) => {
+    const base = Object.keys(preset.values || {}).length
+      ? { ...preset.values }
+      : defaultsFromDefinition(definition);
+    if (preset.source === "user") return base;
+    return withCatalogApplyValues(base, definition);
+  };
+
+  const persistCatalogApplyValues = (presetId: string, values: ControlValues, definition: MogrtDefinition) => {
+    setPresets((prev) =>
+      prev.map((p) => {
+        if (p.id !== presetId) return p;
+        if (!isPresetValuesDirty(p)) {
+          return { ...p, values, origin: makeOrigin(p.name, values) };
+        }
+        const originValues = { ...p.origin.values };
+        const font = findFontControl(definition);
+        if (font && values[font.id] !== undefined) originValues[font.id] = values[font.id];
+        for (const item of CATALOG_LAYOUT_OVERRIDES) {
+          const control = findControlBySource(definition, item.source);
+          if (control && values[control.id] !== undefined) originValues[control.id] = values[control.id];
+        }
+        return { ...p, values, origin: { ...p.origin, values: originValues } };
+      }),
+    );
+  };
+
   const applySelectedPresetToHost = useCallback(async (): Promise<void> => {
-    const selected = presets.find((p) => p.id === selectedPresetId);
+    const selected = presetsRef.current.find((p) => p.id === selectedPresetIdRef.current);
     if (!selected) return;
     if (!readCaptionHostRef()) return;
 
-    const definition = await ensureDefinitionLoaded(selected.styleId);
+    const definition = await resolveDefinitionForApply(selected.styleId);
     if (!definition?.clientControls?.length) return;
 
-    const values = Object.keys(selected.values || {}).length
-      ? selected.values
-      : defaultsFromDefinition(definition);
+    const latest = presetsRef.current.find((p) => p.id === selected.id) ?? selected;
+    const values = valuesForHostApply(latest, definition);
+    if (latest.source !== "user") persistCatalogApplyValues(latest.id, values, definition);
 
     if (applyValuesTimer.current) clearTimeout(applyValuesTimer.current);
-    await flushStyleValuesToHost(selected.styleId, values, true, definition);
-  }, [presets, selectedPresetId, ensureDefinitionLoaded, flushStyleValuesToHost]);
+    await flushStyleValuesToHost(latest.styleId, values, true, definition);
+  }, [ensureDefinitionLoaded, flushStyleValuesToHost, resolveDefinitionForApply]);
 
   const selectPresetGen = useRef(0);
 
-  /** Выбор в UI. applyToHost: смена пресета в редакторе — импорт mogrt/aep и замена projectItem. */
+  /** Выбор в UI. Shared master — смена пресета только пушит values (без replaceSource). */
   const selectPreset = (id: string, opts?: { applyToHost?: boolean }) => {
-    const previous = presets.find((p) => p.id === selectedPresetId);
     setSelectedPresetId(id);
     setAcquireStatus("idle");
     const target = presets.find((p) => p.id === id);
     if (!target) return;
 
-    const paths = getLocalStyleAssetPaths(target.styleId);
+    const paths = getLocalStyleAssetPaths();
     if (paths?.mogrt || paths?.aep) {
       applyPreparedAssets(paths);
     } else {
@@ -525,68 +593,32 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
 
     void (async () => {
       try {
-        const definition = await ensureDefinitionLoaded(target.styleId);
+        const definition = applyToHost
+          ? await resolveDefinitionForApply(target.styleId)
+          : await ensureDefinitionLoaded(target.styleId);
         if (selectPresetGen.current !== gen) return;
         if (!applyToHost) return;
 
         const hostRef = readCaptionHostRef();
         if (!hostRef) return;
 
-        const sameSource = previous?.styleId === target.styleId;
-        if (!sameSource) {
-          setAcquireStatus("downloading");
-          await ensureStyleDownloaded(target.styleId);
-          if (selectPresetGen.current !== gen) return;
-          const nextPaths = getLocalStyleAssetPaths(target.styleId);
-          applyPreparedAssets(nextPaths);
-          const hostApi = hostSdk();
-          if (Motionflow.host === "PPRO" && !nextPaths?.mogrt) {
-            console.warn("[Styles] applyStyleProject skipped: no .mogrt for Premiere");
-            setAcquireStatus("error");
-            return;
-          }
-          if (Motionflow.host === "AE" && !nextPaths?.aep && !nextPaths?.mogrt) {
-            console.warn("[Styles] applyStyleProject skipped: no .aep for After Effects");
-            setAcquireStatus("error");
-            return;
-          }
-          setAcquireStatus("applying");
-          const catalog = presets.find((p) => p.styleId === target.styleId && p.source !== "user");
-          const wrapped = await hostApi.applyStyleProject({
-            styleId: target.styleId,
-            styleName: catalog?.name || target.name,
-            aepPath: nextPaths?.aep,
-            mogrtPath: nextPaths?.mogrt,
-            sequenceId: hostRef.sequenceId,
-            trackIndex: hostRef.trackIndex,
-            compId: hostRef.compId,
-            captionsJsxPath: getBundledCaptionsJsxPath() ?? undefined,
-          });
-          if (selectPresetGen.current !== gen) return;
-          if (!wrapped.ok) {
-            console.warn("[Styles] applyStyleProject failed", wrapped.error);
-            setAcquireStatus("error");
-            return;
-          }
-          const result = wrapped.data as { applied?: boolean; reason?: string; fontId?: string } | null;
-          if (result && result.applied === false) {
-            console.warn("[Styles] applyStyleProject", result.reason);
-            setAcquireStatus("error");
-            return;
-          }
-          if (result?.fontId) syncSelectedPresetFontFromHost(result.fontId);
-        }
+        // Ensure shared master is on disk (no per-style project swap).
+        setAcquireStatus("downloading");
+        await ensureStyleDownloaded(target.styleId);
+        if (selectPresetGen.current !== gen) return;
+        applyPreparedAssets(getLocalStyleAssetPaths());
 
         if (!definition?.clientControls?.length) {
           setAcquireStatus("ready");
           return;
         }
-        const values = Object.keys(target.values || {}).length
-          ? target.values
-          : defaultsFromDefinition(definition);
+        setAcquireStatus("applying");
+        const latest = presetsRef.current.find((p) => p.id === id) ?? target;
+        const values = valuesForHostApply(latest, definition);
+        if (latest.source !== "user") persistCatalogApplyValues(latest.id, values, definition);
         if (Object.keys(values).length) {
           lastPushedProps.current = null;
-          pushStyleValuesToHost(target.styleId, values, { full: true, definition });
+          pushStyleValuesToHost(latest.styleId, values, { full: true, definition });
         }
         setAcquireStatus("ready");
       } catch (err) {
@@ -676,9 +708,31 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     panelStore.setItem(
       STORAGE_KEY,
-      JSON.stringify({ mode, lines, characters, fontSize, mogrtPath, audioPresetPath, srcLang, translateTo }),
+      JSON.stringify({
+        mode,
+        lines,
+        characters,
+        fontSize,
+        mogrtPath,
+        audioPresetPath,
+        srcLang,
+        translateTo,
+        chaptersSrcLang,
+        chaptersTranslateTo,
+      }),
     );
-  }, [mode, lines, characters, fontSize, mogrtPath, audioPresetPath, srcLang, translateTo]);
+  }, [
+    mode,
+    lines,
+    characters,
+    fontSize,
+    mogrtPath,
+    audioPresetPath,
+    srcLang,
+    translateTo,
+    chaptersSrcLang,
+    chaptersTranslateTo,
+  ]);
 
   useEffect(() => {
     if (stylesStatus !== "ready") return;
@@ -697,6 +751,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         audioPresetPath,
         srcLang,
         translateTo,
+        chaptersSrcLang,
+        chaptersTranslateTo,
         presets,
         selectedPresetId,
         stylesStatus,
@@ -713,6 +769,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         updateAudioPresetPath,
         updateSrcLang,
         updateTranslateTo,
+        updateChaptersSrcLang,
+        updateChaptersTranslateTo,
         selectPreset,
         updateSelectedPreset,
         addPreset,

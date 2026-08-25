@@ -60,8 +60,8 @@ const callGenerations = async (
   chunks: CaptionsChunk[],
   target: GenerationTarget,
   signal?: AbortSignal,
-  // ISO-код языка (см. TRANSLATE_TARGETS в ChaptersTab) — когда задан, ВСЕ
-  // запрошенные поля (не только транскрипт) выводятся на этом языке
+  // ISO-код языка (src / translate / детект) — когда задан, ВСЕ запрошенные
+  // поля (не только транскрипт) выводятся на этом языке
   language?: string,
   meter?: { chaptersReceipt?: string; durationSeconds?: number },
 ): Promise<GenerationResponse> => {

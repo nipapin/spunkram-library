@@ -17,13 +17,14 @@ import { describeForExport } from "../../utils/describeForExport";
 import { getUserIdentity } from "../../api";
 import { reportSupportError } from "../../api/support";
 import { authErrorMessage, getLocalStyleAssetPaths, matchPresetByStyleName } from "../../styles";
-import { patchCaptionsRawData, toHostCaptionPayload, captionsRawJsonToChunks, groupingModeFromSegmentType } from "../../utils/captionHostPayload";
+import { toHostCaptionPayload, packTranscriptionToChunks, withSyncedRawWords, groupingModeFromSegmentType } from "../../utils/captionHostPayload";
 import {
   captionsToChunks,
   clampTranscriptionToSpeechStart,
   grouping,
   moveWordToAdjacent,
   normalize,
+  rebuildWords,
   splitIntoWords,
   transcribe,
   type AppliedSegmentConfig,
@@ -92,27 +93,6 @@ const findCaptionIndex = (captions: Caption[], t: number): number | null => {
     if (dist === 0) break;
   }
   return bestIndex;
-};
-
-// пересобрать слова из отредактированного текста: то же число слов — таймкоды 1:1,
-// иначе время диапазона перераспределяется пропорционально длине слов
-const rebuildWords = (orig: CaptionsChunk[], text: string): CaptionsChunk[] => {
-  const tokens = text.trim().split(/\s+/).filter(Boolean);
-  if (!tokens.length || !orig.length) return [];
-  if (tokens.length === orig.length) {
-    return orig.map((w, i) => ({ text: tokens[i], timestamp: w.timestamp }));
-  }
-  const start = orig[0].timestamp[0];
-  const end = orig[orig.length - 1].timestamp[1];
-  const span = Math.max(0, end - start);
-  const totalChars = tokens.reduce((sum, t) => sum + t.length, 0) || tokens.length;
-  let cursor = start;
-  return tokens.map((tok, i) => {
-    const dur = i === tokens.length - 1 ? end - cursor : span * (tok.length / totalChars);
-    const ws = cursor;
-    cursor += dur;
-    return { text: tok, timestamp: [ws, cursor] as [number, number] };
-  });
 };
 
 const isAfterEffects = () => cepHostAppId() === "AEFT";
@@ -200,11 +180,13 @@ export const CaptionsApp = ({
   charactersRef.current = characters;
 
   const persist = (next: TranscribeResult) => {
+    dataRef.current = next;
     panelStore.setItem(STORAGE_KEY, JSON.stringify(next));
     setData(next);
   };
 
   const persistCustomSegments = (next: CaptionsChunk[] | null) => {
+    customSegmentsRef.current = next;
     if (next) panelStore.setItem(CUSTOM_SEGMENTS_KEY, JSON.stringify(next));
     else panelStore.removeItem(CUSTOM_SEGMENTS_KEY);
     setCustomSegments(next);
@@ -243,6 +225,7 @@ export const CaptionsApp = ({
       durationSeconds: metaRef.current.durationSeconds,
       mogrtPath,
       aepPath,
+      styleName: presets.find((p) => p.id === selectedPresetId)?.name,
       rawWords: source.raw?.words,
       mode: modeRef.current,
       lines: linesRef.current,
@@ -324,13 +307,17 @@ export const CaptionsApp = ({
           ? groupingModeFromSegmentType(loaded.segmentType)
           : modeRef.current;
       const nextLines =
-        typeof loaded.lineCount === "number" ? loaded.lineCount : linesRef.current;
+        typeof loaded.lineCount === "number"
+          ? Math.max(1, Math.round(loaded.lineCount))
+          : linesRef.current;
       const nextChars =
-        typeof loaded.charsPerLine === "number" ? loaded.charsPerLine : charactersRef.current;
+        typeof loaded.charsPerLine === "number"
+          ? Math.max(1, Math.round(loaded.charsPerLine))
+          : charactersRef.current;
 
       updateMode(nextMode);
-      if (typeof loaded.lineCount === "number") updateLines(loaded.lineCount);
-      if (typeof loaded.charsPerLine === "number") updateCharacters(loaded.charsPerLine);
+      if (typeof loaded.lineCount === "number") updateLines(nextLines);
+      if (typeof loaded.charsPerLine === "number") updateCharacters(nextChars);
 
       const dataFromTimeline: TranscribeResult = normalize({
         chunk: { chunks: [] },
@@ -424,7 +411,7 @@ export const CaptionsApp = ({
     if (selected) {
       try {
         await ensureStyleDownloaded(selected.styleId);
-        const paths = getLocalStyleAssetPaths(selected.styleId);
+        const paths = getLocalStyleAssetPaths();
         if (paths?.mogrt) activeMogrtPath = paths.mogrt;
         if (paths?.aep) activeAepPath = paths.aep;
       } catch (e) {
@@ -514,6 +501,7 @@ export const CaptionsApp = ({
         durationSeconds: nextMeta.durationSeconds,
         mogrtPath: activeMogrtPath,
         aepPath: activeAepPath,
+        styleName: selected?.name,
         rawWords: normalized.raw?.words,
         mode,
         lines,
@@ -577,17 +565,12 @@ export const CaptionsApp = ({
       persistAppliedConfig({ mode, lines, characters });
 
       if (hostRef) {
-        // Apply style values only if the selected preset is a custom/user template.
-        // Built-in (catalog/downloaded) templates use their default styling from the .aep/.mogrt.
-        if (selected?.source === "user") {
-          try {
-            await applySelectedPresetToHost();
-          } catch {
-            // style did not apply — captions are already on the timeline
-          }
+        // Shared master: catalog presets are JSON overlays — always push values after create.
+        try {
+          await applySelectedPresetToHost();
+        } catch {
+          // style did not apply — captions are already on the timeline
         }
-        const fontId = typeof createResult?.fontId === "string" ? createResult.fontId.trim() : "";
-        if (fontId) syncSelectedPresetFontFromHost(fontId);
       }
 
       try {
@@ -665,17 +648,21 @@ export const CaptionsApp = ({
   };
 
   // пушим правку текста в уже созданный caption на таймлайне (если Create Captions уже запускался).
-  // Payload — единая форма с опциональными полями под оба хоста: evalTS() типизирует
-  // updateCaptionText по пересечению сигнатур ppro.ts/aeft.ts, так что аргумент должен
-  // структурно подходить под обе сразу, а не под одну из двух через ветвление
-  const pushLiveEdit = (_index: number, text: string, caption?: Caption) => {
+  // Всегда пишем полный v4 dump всего транскрипта — один сегмент в Store hidden
+  // затирает остальные captions_batch_* и субтитры пропадают.
+  const pushLiveEdit = (source: TranscribeResult) => {
     const hostRef = metaRef.current.hostRef;
     if (!hostRef) return;
+    // разбивку считаем по свежим данным: captions в стейте пересоберутся только
+    // на следующем рендере, а в пак она нужна уже сейчас
+    const resegmented = grouping(
+      source,
+      { mode: modeRef.current, lines: linesRef.current, characters: charactersRef.current },
+      { customSegments: customSegmentsRef.current },
+    );
+    const captionChunks = packTranscriptionToChunks(source, resegmented);
+    if (!captionChunks.length) return;
     const premiere = isPremiere();
-    const captionsRawData = caption
-      ? patchCaptionsRawData(dataRef.current?.raw?.words, { ...caption, text }, text)
-      : undefined;
-    const captionChunks = captionsRawData ? captionsRawJsonToChunks(captionsRawData) : undefined;
     hostSdk()
       .updateCaptionText({
       trackIndex: premiere ? (hostRef as { trackIndex: number }).trackIndex : undefined,
@@ -684,7 +671,7 @@ export const CaptionsApp = ({
         premiere && "sequenceId" in hostRef ? hostRef.sequenceId : undefined,
       compId: !premiere ? (hostRef as { compId: number }).compId : undefined,
       captionIndex: !premiere ? 0 : undefined,
-      text,
+      text: source.words?.text || "",
       captionChunks,
     })
       .then((r) => {
@@ -696,39 +683,58 @@ export const CaptionsApp = ({
     });
   };
 
+  const applyWordTextEdit = (source: TranscribeResult, caption: Caption, text: string): TranscribeResult => {
+    const wordChunks = source.words.chunks ?? [];
+    const indices =
+      caption.edit.target === "words"
+        ? caption.edit.indices
+        : (caption.words ?? []).map((w) => w.gi);
+    const orig = indices.map((i) => wordChunks[i]).filter(Boolean);
+    if (!indices.length || !orig.length) {
+      return withSyncedRawWords(source, wordChunks);
+    }
+    const rebuilt = rebuildWords(orig, text);
+    if (!rebuilt.length) {
+      return withSyncedRawWords(source, wordChunks);
+    }
+    const chunks = [...wordChunks];
+    chunks.splice(indices[0], indices.length, ...rebuilt);
+    return withSyncedRawWords(source, chunks);
+  };
+
   // правка текста одного caption — по режиму пишем в нужный chunk-массив
   const handleSaveCaption = useCallback((caption: Caption, index: number, text: string) => {
     const source = dataRef.current;
     if (!source) return;
+    const trimmed = text.trim();
 
     if (caption.edit.target === "sentence") {
       const idx = caption.edit.index;
-      const chunks = (source.chunk.chunks ?? []).map((c, i) => (i === idx ? { ...c, text: text.trim() } : c));
-      persist({ ...source, chunk: { ...source.chunk, chunks } });
-      pushLiveEdit(index, text.trim(), { ...caption, text: text.trim() });
+      const sentenceChunks = (source.chunk.chunks ?? []).map((c, i) =>
+        i === idx ? { ...c, text: trimmed } : c,
+      );
+      const next = applyWordTextEdit(
+        { ...source, chunk: { ...source.chunk, chunks: sentenceChunks } },
+        caption,
+        trimmed,
+      );
+      persist(next);
+      pushLiveEdit(next);
       return;
     }
 
     // words/custom: правку всегда фиксируем как ручную разбивку (customSegments) —
     // иначе следующий пересчёт по characters стирал бы переносы строк, которые
     // пользователь расставил вручную в textarea (см. captionsFromChunks).
-    // Слова (words.chunks) синхронизируем отдельно с новым текстом: отображение
-    // рисуется по caption.words, а не по тексту сегмента, так что без этого
-    // карточка продолжала бы показывать старые слова.
+    // manual — правленый сегмент читается as is, правила lines/characters на него
+    // больше не распространяются.
     const segsBefore = ensureCustomSegments();
-    const indices = caption.edit.indices;
-    const wordChunks = source.words.chunks ?? [];
-    if (indices.length && wordChunks.length) {
-      const orig = indices.map((i) => wordChunks[i]);
-      const rebuilt = rebuildWords(orig, text);
-      const chunks = [...wordChunks];
-      chunks.splice(indices[0], indices.length, ...rebuilt);
-      persist({ ...source, words: { ...source.words, chunks } });
-    }
+    const next = applyWordTextEdit(source, caption, trimmed);
+    persist(next);
 
-    const segs = segsBefore.map((c, i) => (i === index ? { ...c, text: text.trim() } : c));
+    const segs = segsBefore.map((c, i) => (i === index ? { ...c, text: trimmed, manual: true } : c));
     persistCustomSegments(segs);
-    pushLiveEdit(index, text.trim(), { ...caption, text: text.trim() });
+    pushLiveEdit(next);
   }, []);
 
   // split: режем предложение по слову (слово начинает новое предложение)

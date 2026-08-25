@@ -5,7 +5,8 @@ import { getBundledCaptionsJsxPath } from "../utils/captionsJsx";
 import { defaultsFromDefinition } from "../presets";
 import type { MogrtDefinition } from "../presets/types";
 import { loadLocalPackage } from "./localStore";
-import { downloadStylePackage, ensureDefinitionForStyle, makeOrigin, previewFromValues } from "./sync";
+import { MASTER_STYLE_ID } from "./paths";
+import { downloadStylePackage, ensureDefinitionForStyle, hasLocalMasterTemplate, makeOrigin, previewFromValues } from "./sync";
 import type { CaptionCatalogEntry, StylePreset } from "./types";
 
 export interface LocalStyleAssetPaths {
@@ -36,9 +37,12 @@ const fileExists = (p?: string): boolean => {
   }
 };
 
-/** Локальные пути к project.aep / project.mogrt (null в browser preview). */
-export const getLocalStyleAssetPaths = (styleId: string): LocalStyleAssetPaths | null => {
-  const pkg = loadLocalPackage(styleId);
+/**
+ * Local paths to the shared master.aep / master.mogrt.
+ * `styleId` is ignored — all presets share one template.
+ */
+export const getLocalStyleAssetPaths = (_styleId?: string): LocalStyleAssetPaths | null => {
+  const pkg = loadLocalPackage(MASTER_STYLE_ID);
   if (!pkg || pkg.dir.startsWith("memory://")) return null;
   const aep = pkg.manifest.files.aep ? path.join(pkg.dir, pkg.manifest.files.aep) : undefined;
   const mogrt = pkg.manifest.files.mogrt ? path.join(pkg.dir, pkg.manifest.files.mogrt) : undefined;
@@ -81,17 +85,16 @@ const presetFromLocal = (
 };
 
 /**
- * 1) при необходимости POST /api/captions (session + subscription)
- * 2) сохранить проект в AppData
- * 3) вернуть локальные пути
+ * 1) ensure shared master.aep/mogrt in AppData (POST id=master)
+ * 2) load controls.json for this preset
+ * 3) return local master paths
  */
 export const acquirePresetProject = async (
   target: Pick<StylePreset, "id" | "name" | "styleId" | "files" | "controlsUrl" | "previewImageUrl" | "previewVideoUrl">,
   options?: { forceDownload?: boolean },
 ): Promise<PreparedPresetProject> => {
   const hostAppId = cepHostAppId() ?? undefined;
-  const local = loadLocalPackage(target.styleId);
-  const paths = local ? getLocalStyleAssetPaths(target.styleId) : null;
+  const paths = getLocalStyleAssetPaths();
   const definition = await ensureDefinitionForStyle(target.styleId, {
     name: target.name,
     files: target.files,
@@ -100,9 +103,10 @@ export const acquirePresetProject = async (
     previewVideoUrl: target.previewVideoUrl,
   });
 
-  if (local && !options?.forceDownload && hostHasNeededFile(paths, hostAppId)) {
+  if (!options?.forceDownload && hasLocalMasterTemplate(hostAppId) && hostHasNeededFile(paths, hostAppId)) {
+    const master = loadLocalPackage(MASTER_STYLE_ID);
     return {
-      preset: presetFromLocal(target, definition, local.manifest.version),
+      preset: presetFromLocal(target, definition, master?.manifest.version || "local"),
       definition,
       paths,
     };
@@ -115,17 +119,18 @@ export const acquirePresetProject = async (
     controlsUrl: target.controlsUrl,
     previewImageUrl: target.previewImageUrl,
     previewVideoUrl: target.previewVideoUrl,
+    force: options?.forceDownload,
   });
 
   return {
     preset,
     definition: downloadedDef.clientControls?.length ? downloadedDef : definition,
-    paths: getLocalStyleAssetPaths(target.styleId),
+    paths: getLocalStyleAssetPaths(),
   };
 };
 
 /**
- * Import the caption .mogrt/.aep and replace the selected clip/layer source.
+ * Import the shared caption .mogrt/.aep (first placement only).
  * Style values are applied afterwards via applyCaptionStyleValues.
  */
 export const applyPresetProjectInHost = async (

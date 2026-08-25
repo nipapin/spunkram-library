@@ -1,6 +1,6 @@
 import { cepProcessEnv, fs, os, path } from "@/lib/cep/node";
 
-/** PostScript name stored in MOGRT Caption Font control. */
+/** PostScript system name stored in MGT / Essential Graphics `Caption Font` as `{ systemName }`. */
 export type FontFace = {
   id: string;
   family: string;

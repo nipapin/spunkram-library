@@ -1,6 +1,11 @@
 import { fs, os, path } from "../lib/cep/node";
-import type { Caption, GroupingMode, ScribeWord } from "../utils/transcribe";
-import { captionsRawJsonToChunks, SEGMENT_TYPE_INDEX } from "../../shared/caption-system";
+import type { Caption, CaptionsChunk, CaptionWord, GroupingMode, ScribeWord, TranscribeResult } from "../utils/transcribe";
+import {
+  packToChunkLayers,
+  SEGMENT_TYPE_INDEX,
+  type CaptionBreak,
+  type CaptionPackToken,
+} from "../../shared/caption-system";
 import { getBundledCaptionsJsxPath } from "./captionsJsx";
 
 export { captionsRawJsonToChunks } from "../../shared/caption-system";
@@ -38,6 +43,7 @@ export type HostCaptionPayload = {
   charsPerLine: number;
   mogrtPath?: string;
   aepPath?: string;
+  styleName?: string;
   /** AE only: expression library the template loads as `footage("captions.jsx")`. */
   captionsJsxPath?: string;
 };
@@ -110,28 +116,194 @@ export const toCaptionsRawData = (
   return JSON.stringify(tokens);
 };
 
-/** Патч текстов word-токенов в полном Scribe dump после live-edit карточки. */
+/**
+ * Разбивка панели → флаги по глобальному индексу слова (`CaptionWord.gi`, он же
+ * индекс в `words.chunks`). Это всё, что нужно captions.jsx, чтобы нарисовать
+ * сегменты as is: конец строки и конец сегмента.
+ */
+export const captionBreaks = (captions: Caption[]): Record<number, CaptionBreak> => {
+  const out: Record<number, CaptionBreak> = {};
+  for (const caption of captions) {
+    const words = caption.words ?? [];
+    if (!words.length) continue;
+    const counts = caption.lineWordCounts ?? [];
+    const total = counts.reduce((sum, n) => sum + n, 0);
+    if (counts.length > 1 && total === words.length) {
+      let pos = 0;
+      for (let li = 0; li < counts.length - 1; li++) {
+        pos += counts[li];
+        out[words[pos - 1].gi] = "line";
+      }
+    }
+    out[words[words.length - 1].gi] = "segment";
+  }
+  return out;
+};
+
+/**
+ * Как scribeToTranscription: в `words.chunks` попадают только словесные токены с
+ * текстом, значит и `gi` считается по ним же. Пак считает словом любой непустой
+ * токен, поэтому нумеровать маркеры его правилом нельзя — флаги съедут на
+ * первом же audio_event.
+ */
+const isPanelWord = (token: CaptionPackToken): boolean => {
+  if (token.type && token.type !== "word") return false;
+  return String(token.text ?? "").trim() !== "";
+};
+
+/** Scribe-дамп → токены пака: словам в позициях с разбивкой ставим флаг. */
+const withBreaks = (
+  tokens: CaptionPackToken[],
+  breaks: Record<number, CaptionBreak>,
+): CaptionPackToken[] => {
+  let gi = 0;
+  return tokens.map((token) => {
+    if (!isPanelWord(token)) return token;
+    const brk = breaks[gi];
+    gi++;
+    return brk ? { ...token, breakAfter: brk } : token;
+  });
+};
+
+/** Слова caption-ов → токены пака (word + spacing), когда Scribe-дампа нет. */
+const wordsToPackTokens = (
+  words: CaptionWord[],
+  breaks: Record<number, CaptionBreak>,
+): CaptionPackToken[] => {
+  const tokens: CaptionPackToken[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    tokens.push({
+      text: w.text,
+      start: w.timestamp[0],
+      end: w.timestamp[1],
+      type: "word",
+      breakAfter: breaks[w.gi] ?? null,
+    });
+    if (i < words.length - 1) {
+      tokens.push({
+        text: "",
+        start: w.timestamp[1],
+        end: words[i + 1].timestamp[0],
+        type: "spacing",
+      });
+    }
+  }
+  return tokens;
+};
+
+/** words.chunks → Scribe tokens (word + spacing) for v4 pack. */
+export const chunksToScribeWords = (chunks: CaptionsChunk[]): ScribeWord[] => {
+  const tokens: ScribeWord[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const w = chunks[i];
+    tokens.push({
+      text: w.text,
+      start: w.timestamp[0],
+      end: w.timestamp[1],
+      type: "word",
+      speaker_id: null,
+    });
+    if (i < chunks.length - 1) {
+      tokens.push({
+        text: "",
+        start: w.timestamp[1],
+        end: chunks[i + 1].timestamp[0],
+        type: "spacing",
+        speaker_id: null,
+      });
+    }
+  }
+  return tokens;
+};
+
+/**
+ * Keep Scribe `raw.words` aligned with `words.chunks` after a text edit.
+ * If counts diverge (user added/removed words), rebuild the dump so we never
+ * pack a single caption and wipe the rest of Store hidden.
+ */
+export const syncRawWordsFromChunks = (
+  rawWords: ScribeWord[] | undefined,
+  chunks: CaptionsChunk[],
+): ScribeWord[] => {
+  if (!chunks.length) return [];
+  if (!rawWords?.length) return chunksToScribeWords(chunks);
+  let wordCount = 0;
+  for (let i = 0; i < rawWords.length; i++) {
+    const t = rawWords[i];
+    if (t.type && t.type !== "word") continue;
+    wordCount++;
+  }
+  if (wordCount !== chunks.length) return chunksToScribeWords(chunks);
+  let wi = 0;
+  return rawWords.map((t) => {
+    if (t.type && t.type !== "word") return cloneScribeWord(t);
+    const chunk = chunks[wi++];
+    const next = cloneScribeWord(t);
+    next.text = chunk.text;
+    next.start = chunk.timestamp[0];
+    next.end = chunk.timestamp[1];
+    return next;
+  });
+};
+
+export const withSyncedRawWords = (
+  source: TranscribeResult,
+  wordChunks: CaptionsChunk[],
+): TranscribeResult => {
+  const rawWords = syncRawWordsFromChunks(source.raw?.words, wordChunks);
+  return {
+    ...source,
+    words: { ...source.words, chunks: wordChunks },
+    raw: source.raw ? { ...source.raw, words: rawWords } : { words: rawWords },
+  };
+};
+
+/**
+ * Full v4 batches for the whole transcript. Empty array = nothing to write (do not wipe host).
+ * `captions` — текущая разбивка панели: без неё пак уедет без маркеров и mogrt
+ * снова начнёт считать сегменты сам.
+ */
+export const packTranscriptionToChunks = (
+  source: TranscribeResult,
+  captions?: Caption[],
+): string[] => {
+  const wordChunks = source.words?.chunks ?? [];
+  const tokens = source.raw?.words?.length
+    ? source.raw.words
+    : chunksToScribeWords(wordChunks);
+  if (!tokens.length) return [];
+  const packed = packToChunkLayers(
+    captions?.length ? withBreaks(tokens, captionBreaks(captions)) : tokens,
+  );
+  for (let i = 0; i < packed.length; i++) {
+    if (packed[i]) return packed;
+  }
+  return [];
+};
+
+/** @deprecated use withSyncedRawWords + packTranscriptionToChunks — never pack a single caption. */
 export const patchCaptionsRawData = (
   rawWords: ScribeWord[] | undefined,
   caption: Caption,
   newText: string,
 ): string => {
-  if (!rawWords?.length) return toCaptionsRawData({ ...caption, text: newText });
-  const words = rawWords.map(cloneScribeWord);
   const captionWords = caption.words ?? [];
   const newTokens = newText.trim().split(/\s+/).filter(Boolean);
-  const first = captionWords[0]?.timestamp[0];
-  const last = captionWords[captionWords.length - 1]?.timestamp[1];
-  let wi = 0;
-  for (const token of words) {
-    if (token.type && token.type !== "word") continue;
-    if (typeof token.start !== "number") continue;
-    if (first != null && last != null && (token.start < first - 0.02 || token.start > last + 0.02)) {
-      continue;
+  if (!rawWords?.length) {
+    if (captionWords.length !== newTokens.length) {
+      return toCaptionsRawData({ ...caption, text: newText });
     }
-    if (wi < newTokens.length) token.text = newTokens[wi++];
+    const patched = captionWords.map((w, i) => ({
+      text: newTokens[i],
+      timestamp: w.timestamp,
+    }));
+    return JSON.stringify(chunksToScribeWords(patched));
   }
-  return JSON.stringify(words);
+  return JSON.stringify(syncRawWordsFromChunks(rawWords, captionWords.map((w, i) => ({
+    text: i < newTokens.length ? newTokens[i] : w.text,
+    timestamp: w.timestamp,
+  }))));
 };
 
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
@@ -184,6 +356,7 @@ export const toHostCaptionPayload = (
     durationSeconds?: number;
     mogrtPath?: string;
     aepPath?: string;
+    styleName?: string;
     rawWords?: ScribeWord[];
     mode?: GroupingMode;
     lines?: number;
@@ -206,28 +379,26 @@ export const toHostCaptionPayload = (
       .filter(Boolean)
       .join(" ") || "Captions";
   const fallbackWords = captions.flatMap((c) => c.words ?? []);
-  const captionsRawData = opts.rawWords?.length
-    ? toFullCaptionsRawData(opts.rawWords)
-    : toCaptionsRawData({
-        text,
-        timestamp: [0, duration],
-        lines: [text],
-        words: fallbackWords,
-        edit: { target: "words", indices: fallbackWords.map((_, i) => i) },
-      });
+  // в пак кладём разбивку панели — mogrt рисует сегменты as is
+  const breaks = captionBreaks(captions);
+  const packTokens = opts.rawWords?.length
+    ? withBreaks(opts.rawWords, breaks)
+    : wordsToPackTokens(fallbackWords, breaks);
 
   return [
     {
       text,
       timestamp: [start, end] as [number, number],
       words: [],
-      captionChunks: captionsRawJsonToChunks(captionsRawData),
-      captionsRawData,
+      captionChunks: packToChunkLayers(packTokens),
+      // тот же поток, что ушёл в chunks: если хост перепакует JSON, маркеры не потеряются
+      captionsRawData: JSON.stringify(packTokens),
       segmentType: segmentTypeIndex(opts.mode ?? "custom"),
       lineCount: Math.max(1, opts.lines ?? 2),
       charsPerLine: Math.max(1, opts.characters ?? 20),
       mogrtPath: opts.mogrtPath,
       aepPath: opts.aepPath,
+      styleName: opts.styleName,
       captionsJsxPath: getBundledCaptionsJsxPath() ?? undefined,
     },
   ];

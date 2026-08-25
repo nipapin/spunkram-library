@@ -76,6 +76,31 @@ export type CaptionPackToken = {
   start?: number | null;
   end?: number | null;
   type?: string | null;
+  /**
+   * Разбивка, уже посчитанная панелью: перенос строки / конец сегмента после
+   * этого слова. captions.jsx рисует её as is и ничего не пересчитывает.
+   */
+  breakAfter?: CaptionBreak | null;
+};
+
+export type CaptionBreak = "line" | "segment";
+
+/**
+ * Разметка сегментов едет в паке служебными строками: пустой текст + отрицательный
+ * wordIndex. Прежние captions.jsx видят такую строку как spacing и пропускают её
+ * (тайминг нулевой, тишину она не удлиняет), поэтому пак читается и старым SDK.
+ */
+export const CAPTION_MARK = {
+  /** нулевая строка пака: разбивка лежит в данных */
+  present: -4,
+  line: -2,
+  segment: -3,
+} as const;
+
+const breakFromWordIndex = (wordIndex: number): CaptionBreak | null => {
+  if (wordIndex === CAPTION_MARK.line) return "line";
+  if (wordIndex === CAPTION_MARK.segment) return "segment";
+  return null;
 };
 
 const MS = 1000;
@@ -182,7 +207,6 @@ export const packToChunkLayers = (
   captions: CaptionPackToken[] | null | undefined,
 ): string[] => {
   const list = captions || [];
-  const n = list.length;
   const rows: string[] = [];
   const starts: number[] = [];
   const ends: number[] = [];
@@ -191,22 +215,40 @@ export const packToChunkLayers = (
   let lastSec = 0;
   let i: number;
 
-  for (i = 0; i < n; i++) {
-    const text = packTokenText(list[i]);
-    const startMs = toMs(list[i].start);
-    const endMs = toMs(list[i].end);
-    const word = text !== "";
-    const wordIndex = word ? wcount : -1;
-    if (word) wcount++;
-    rows.push(startMs + "~" + endMs + "~" + wordIndex + "~" + escapeRowText(text));
+  const pushRow = (startMs: number, endMs: number, wordIndex: number, text: string): void => {
+    rows.push(startMs + "~" + endMs + "~" + wordIndex + "~" + text);
     starts.push(startMs);
     ends.push(endMs);
-    isWord.push(word);
+    isWord.push(text !== "");
     let sec = Math.floor(startMs / MS);
     if (sec > lastSec) lastSec = sec;
     sec = Math.floor(endMs / MS + LUT_HOLD_PAD);
     if (sec > lastSec) lastSec = sec;
+  };
+
+  let marked = false;
+  for (i = 0; i < list.length; i++) {
+    if (list[i].breakAfter) {
+      marked = true;
+      break;
+    }
   }
+  if (marked) pushRow(0, 0, CAPTION_MARK.present, "");
+
+  for (i = 0; i < list.length; i++) {
+    const text = packTokenText(list[i]);
+    const startMs = toMs(list[i].start);
+    const endMs = toMs(list[i].end);
+    const word = text !== "";
+    pushRow(startMs, endMs, word ? wcount : -1, escapeRowText(text));
+    if (word) wcount++;
+    const brk = word ? list[i].breakAfter : null;
+    if (brk) {
+      pushRow(endMs, endMs, brk === "segment" ? CAPTION_MARK.segment : CAPTION_MARK.line, "");
+    }
+  }
+
+  const n = rows.length;
   if (lastSec < 0) lastSec = 0;
   if (lastSec > MAX_LUT_SEC - 1) lastSec = MAX_LUT_SEC - 1;
   const secCount = n ? lastSec + 1 : 0;
@@ -386,10 +428,12 @@ const parseV4Row = (row: string): CaptionPackToken => {
   if (t1 < 0 || t2 < 0 || t3 < 0) {
     return { text: "", start: 0, end: 0 };
   }
+  const wordIndex = parseInt(row.substring(t2 + 1, t3), 10);
   return {
     start: parseInt(row.substring(0, t1), 10) / MS,
     end: parseInt(row.substring(t1 + 1, t2), 10) / MS,
     text: unescapeRowText(row.substring(t3 + 1)),
+    breakAfter: breakFromWordIndex(wordIndex),
   };
 };
 

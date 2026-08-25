@@ -207,8 +207,16 @@ const ControlField = ({
   if (control.type === ControlType.Slider || control.type === ControlType.Angle) {
     const num = typeof raw === "number" ? raw : Number(raw) || 0;
     const hasRange = typeof control.min === "number" && typeof control.max === "number";
-    const min = hasRange ? (control.min as number) : control.type === ControlType.Angle ? -360 : 0;
-    const max = hasRange ? (control.max as number) : control.type === ControlType.Angle ? 360 : 100;
+    const min = hasRange
+      ? Math.min(control.min as number, num)
+      : control.type === ControlType.Angle
+        ? -360
+        : 0;
+    const max = hasRange
+      ? Math.max(control.max as number, num)
+      : control.type === ControlType.Angle
+        ? 360
+        : 100;
     const span = Math.max(0.0001, max - min);
     const step = span <= 1 ? 0.01 : span <= 10 ? 0.1 : span <= 100 ? 0.5 : 1;
 

@@ -18,9 +18,15 @@ export const uiName = (control: ClientControl, locale = "en_US"): string => {
 
 export const isGroup = (c: ClientControl) => c.type === ControlType.Group;
 
-/** Группа с `hidden` в uiName — не показываем её и всех детей. */
-export const isHiddenUiGroup = (control: ClientControl): boolean =>
-  isGroup(control) && uiName(control).toLowerCase().includes("hidden");
+/**
+ * Hidden from Styles UI (flag from controls.json, or legacy name containing "hidden").
+ * Values are still applied to the shared master template.
+ */
+export const isHiddenUiGroup = (control: ClientControl): boolean => {
+  if (!isGroup(control)) return false;
+  if (control.hidden === true) return true;
+  return uiName(control).toLowerCase().includes("hidden");
+};
 
 const isCepWrittenControl = (control: ClientControl): boolean =>
   (CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(uiName(control));
@@ -71,9 +77,10 @@ const groupChildren = (control: ClientControl, byId: Map<string, ClientControl>)
   if (!isGroup(control) || !Array.isArray(control.value)) return [];
   const kids: ClientControl[] = [];
   for (const id of control.value) {
-    if (typeof id !== "string") continue;
-    const child = byId.get(id);
-    if (child) kids.push(child);
+    if (typeof id === "string") {
+      const child = byId.get(id);
+      if (child) kids.push(child);
+    }
   }
   return kids;
 };
@@ -102,7 +109,7 @@ const buildNode = (
   return { kind: "group", control, children };
 };
 
-/** Styles tree — order is the groups array in controls.json. */
+/** Styles tree — order is the groups array in controls.json. Hidden groups omitted. */
 export const buildUiTree = (definition: MogrtDefinition): ControlTreeNode[] => {
   const byId = indexControls(definition);
   return getRootGroups(definition)
@@ -111,32 +118,14 @@ export const buildUiTree = (definition: MogrtDefinition): ControlTreeNode[] => {
     .filter((n) => n.kind !== "group" || n.children.length > 0);
 };
 
-/** id контролов внутри hidden-групп — не Styles UI и не preset.values. */
-const hiddenControlIds = (definition: MogrtDefinition): Set<string> => {
-  const byId = indexControls(definition);
-  const skip = new Set<string>();
-  const mark = (control: ClientControl) => {
-    if (skip.has(control.id)) return;
-    skip.add(control.id);
-    if (!isGroup(control) || !Array.isArray(control.value)) return;
-    for (const id of control.value) {
-      if (typeof id !== "string") continue;
-      const child = byId.get(id);
-      if (child) mark(child);
-    }
-  };
-  for (const c of definition.clientControls ?? []) {
-    if (isHiddenUiGroup(c)) mark(c);
-  }
-  return skip;
-};
-
-/** Дефолтные значения по uiPath (группы, hidden и CEP-written System props пропускаем). */
+/**
+ * Default values for every leaf that should be written to the host.
+ * Includes hidden-group leaves (shared master look). Skips CEP-written system props.
+ */
 export const defaultsFromDefinition = (definition: MogrtDefinition): ControlValues => {
-  const skipIds = hiddenControlIds(definition);
   const values: ControlValues = {};
   for (const c of definition.clientControls ?? []) {
-    if (isGroup(c) || skipIds.has(c.id)) continue;
+    if (isGroup(c)) continue;
     if ((CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(uiName(c))) continue;
     values[c.id] = cloneValue(c.value as ControlValue);
   }
@@ -149,10 +138,17 @@ export const getControlValue = (values: ControlValues, control: ClientControl): 
   return cloneValue(control.value as ControlValue);
 };
 
-/** PostScript id stored by font-menu / Caption Font. */
+/** PostScript system name for Caption Font EP — plain string only. */
 export const fontIdFromValue = (value: ControlValue | undefined): string => {
-  if (typeof value === "string") return value;
-  if (isLocalizedStr(value)) return value.strDB?.[0]?.str ?? "";
+  if (typeof value === "string") return value.trim();
+  if (isLocalizedStr(value)) return (value.strDB?.[0]?.str ?? "").trim();
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const rec = value as Record<string, unknown>;
+    for (const key of ["systemName", "fontEditValue", "postscriptName", "postScriptName", "fontName", "font"]) {
+      const raw = rec[key];
+      if (typeof raw === "string" && raw.trim()) return raw.trim();
+    }
+  }
   return "";
 };
 
@@ -160,7 +156,9 @@ export const isFontControl = (control: ClientControl): boolean => {
   if (control.type === ControlType.FontMenu) return true;
   if (control.fonteditinfo) return true;
   const name = uiName(control).toLowerCase();
-  return name === "caption font" || name === "font";
+  if (name === "caption font" || name === "font") return true;
+  const source = String(control.source || control.essentialName || "").toLowerCase();
+  return source.startsWith("caption font");
 };
 
 export const findFontControl = (definition?: MogrtDefinition | null): ClientControl | null => {
@@ -177,14 +175,16 @@ export const findControlByNames = (
   definition: MogrtDefinition,
   names: string[],
 ): ClientControl | null => {
-  let nodes = buildUiTree(definition);
+  // Walk full tree including hidden groups (swatches / lookups may target them).
+  const byId = indexControls(definition);
+  let current: ClientControl[] = getRootGroups(definition);
   let found: ClientControl | null = null;
 
   for (const name of names) {
-    const match = nodes.find((n) => uiName(n.control) === name);
+    const match = current.find((c) => uiName(c) === name);
     if (!match) return null;
-    found = match.control;
-    nodes = match.kind === "group" ? match.children : [];
+    found = match;
+    current = isGroup(match) ? groupChildren(match, byId) : [];
   }
   return found;
 };
@@ -217,6 +217,11 @@ export type StylePropPayload = {
   source?: string;
 };
 
+/**
+ * Flat list of leaf props for host apply.
+ * Includes hidden-group leaves (Enabled, Global, Follow, animation, reveal).
+ * Skips CEP-written system props (Segment Type, batches, …).
+ */
 export const stylePropsFromValues = (
   definition: MogrtDefinition,
   values: ControlValues,
@@ -226,7 +231,7 @@ export const stylePropsFromValues = (
   const leafCounts: Record<string, number> = {};
 
   const walk = (control: ClientControl, path: string[], seen: Set<string>) => {
-    if (isHiddenUiGroup(control) || seen.has(control.id)) return;
+    if (seen.has(control.id)) return;
     const nextSeen = new Set(seen);
     nextSeen.add(control.id);
     const name = uiName(control);
@@ -241,7 +246,7 @@ export const stylePropsFromValues = (
       }
       return;
     }
-    // captions_batch_* / system text — не Styles; Caption Font оставляем
+    // captions_batch_* / Segment Type / Line Count / … — CEP-owned
     if ((CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(name)) return;
     const current = values[control.id];
     const raw = current !== undefined ? current : cloneValue(control.value as ControlValue);
@@ -250,24 +255,34 @@ export const stylePropsFromValues = (
     if (font && !fontId) return;
     const leafIndex = leafCounts[name] ?? 0;
     leafCounts[name] = leafIndex + 1;
-    const essentialPath = control.essentialName
-      ? String(control.essentialName)
+    // Flat mogrt: match key is controls.json `source` (Layer>Effects>Name>Kind).
+    const matchKey = control.source || control.essentialName || "";
+    const essentialPath = matchKey
+      ? String(matchKey)
           .replace(/>/g, "/")
           .split("/")
           .map((s) => s.trim())
           .filter(Boolean)
       : [];
-    const value =
-      font || isLocalizedStr(raw)
-        ? fontId || raw
-        : raw;
+    if (font) {
+      out.push({
+        path: ["Caption Font"],
+        type: ControlType.FontMenu,
+        value: fontId,
+        leafIndex,
+        essentialName: "Caption Font",
+        source: "Caption Font",
+      });
+      return;
+    }
+    const value = isLocalizedStr(raw) ? fontId || raw : raw;
     out.push({
       path: essentialPath.length ? essentialPath : nextPath,
       type: control.type,
       value,
       leafIndex,
-      essentialName: control.essentialName,
-      source: control.source,
+      essentialName: matchKey || control.essentialName,
+      source: control.source || matchKey || undefined,
     });
   };
 
@@ -286,8 +301,54 @@ export const stylePropsFromValues = (
   return out;
 };
 
+/** Host-only layout for catalog (non-user) styles — not the dumped controls.json defaults. */
+export const CATALOG_LAYOUT_OVERRIDES: { source: string; value: number }[] = [
+  { source: "Captions_Settings>Effects>Padding>Slider", value: 350 },
+  { source: "Captions_Settings>Effects>Scale>Slider", value: 200 },
+];
+
+const normalizeSourceKey = (s: string): string =>
+  String(s || "")
+    .replace(/\//g, ">")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+
+export const findControlBySource = (
+  definition: MogrtDefinition,
+  source: string,
+): ClientControl | null => {
+  const want = normalizeSourceKey(source);
+  if (!want) return null;
+  for (const c of definition.clientControls ?? []) {
+    if (isGroup(c)) continue;
+    if (normalizeSourceKey(String(c.source || c.essentialName || "")) === want) return c;
+  }
+  return null;
+};
+
+/**
+ * Catalog / downloaded apply: font from controls.json, plus Padding=350 / Scale=200.
+ * User presets keep their own values.
+ */
+export const withCatalogApplyValues = (
+  values: ControlValues,
+  definition: MogrtDefinition,
+): ControlValues => {
+  const next = { ...values };
+  const font = findFontControl(definition);
+  if (font) {
+    const fontId = fontIdFromValue(font.value as ControlValue);
+    if (fontId) next[font.id] = fontId;
+  }
+  for (const item of CATALOG_LAYOUT_OVERRIDES) {
+    const control = findControlBySource(definition, item.source);
+    if (control) next[control.id] = item.value;
+  }
+  return next;
+};
+
 const stylePropKey = (prop: StylePropPayload): string =>
-  prop.essentialName || prop.path.join("\0");
+  prop.source || prop.essentialName || prop.path.join("\0");
 
 /** Только изменившиеся листья — полный список на каждый слайдер вешает Premiere. */
 export const diffStyleProps = (

@@ -39,6 +39,9 @@ export interface ClientControl {
   essentialName?: string;
   source?: string;
   uiPath?: string;
+  /** Hidden from Styles UI; still applied to host (shared master template). */
+  hidden?: boolean;
+  sourceLayer?: string;
 }
 
 export interface MogrtDefinition {

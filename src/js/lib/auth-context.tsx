@@ -158,7 +158,11 @@ function authFromSession(session: MotionflowAccountSession): MotionflowAuth {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefsState] = useState<PrefSettings>(() => readPrefSettings());
-  const [auth, setAuth] = useState<MotionflowAuth>(() => readMotionflowAuth());
+  const [auth, setAuth] = useState<MotionflowAuth>(() => {
+    const stored = readMotionflowAuth();
+    syncAiIdentity(stored);
+    return stored;
+  });
   const [savedAccounts, setSavedAccounts] = useState<MotionflowAccountSession[]>(() =>
     listAccountSessions(),
   );

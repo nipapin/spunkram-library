@@ -31,18 +31,33 @@ export interface ControlsLeaf {
 export interface ControlsGroup {
   name: string;
   type: "group";
+  /** New dump: hide from Styles UI but still apply values. */
+  hidden?: boolean;
+  sourceLayer?: string;
   controls?: ControlsNode[];
 }
 
 export type ControlsNode = ControlsGroup | ControlsLeaf;
+
+export interface ControlsNamedValue {
+  name: string;
+  value?: unknown;
+}
 
 export interface ControlsDocument {
   version?: number;
   composition?: string;
   templateName?: string;
   enabledLayers?: string[];
+  /** Legacy root groups. */
   groups?: ControlsGroup[];
+  /** New dump root groups (same shape as groups). */
+  ui?: ControlsGroup[];
   controls?: ControlsLeaf[];
+  /** Baked animation curves — applied as text Essential props. */
+  animation?: ControlsNamedValue[];
+  /** Reveal effect params — applied by name. */
+  revealConfig?: ControlsNamedValue[];
 }
 
 const loc = (str: string): LocalizedStr => ({ strDB: [{ localeString: "en_US", str }] });
@@ -67,12 +82,49 @@ const KIND_TO_TYPE: Record<string, number> = {
   font: ControlType.FontMenu,
 };
 
+/** Trailing AE property-type tokens in `source` paths. */
+const SOURCE_KIND_TAILS = new Set([
+  "menu",
+  "slider",
+  "checkbox",
+  "color",
+  "point",
+  "angle",
+  "text",
+  "source text",
+]);
+
+/**
+ * Prefer the raw controls.json `source` as the host match key — flat mogrts
+ * expose displayName exactly as `Layer>Effects>Name>Kind`.
+ * Also keep a stripped `/`-path for nested Essential Properties (AE).
+ */
+export const sourceToEssentialName = (source: string | undefined | null): string | undefined => {
+  if (!source || typeof source !== "string") return undefined;
+  const trimmed = source.trim();
+  return trimmed || undefined;
+};
+
+/** Nested AE EP path without the trailing kind leaf (Menu/Slider/…). */
+export const sourceToNestedPath = (source: string | undefined | null): string | undefined => {
+  if (!source || typeof source !== "string") return undefined;
+  const parts = source
+    .replace(/>/g, "/")
+    .split("/")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!parts.length) return undefined;
+  const last = parts[parts.length - 1].toLowerCase();
+  if (SOURCE_KIND_TAILS.has(last) && parts.length > 1) parts.pop();
+  return parts.join("/") || undefined;
+};
+
 export const isControlsDocument = (raw: unknown): raw is ControlsDocument => {
   if (!raw || typeof raw !== "object") return false;
   const o = raw as Record<string, unknown>;
   // Already-converted in-memory tree (persisted as controls.json).
   if (Array.isArray(o.clientControls)) return false;
-  return Array.isArray(o.groups) || Array.isArray(o.controls);
+  return Array.isArray(o.groups) || Array.isArray(o.controls) || Array.isArray(o.ui);
 };
 
 const isGroupNode = (node: ControlsNode): node is ControlsGroup =>
@@ -111,6 +163,15 @@ const leafValue = (kind: string, value: unknown): ControlValue => {
   if (kind === "point") return asPoint(value);
   if (kind === "checkbox") return value === true || value === 1 || value === "1";
   if (kind === "color" && Array.isArray(value)) return value.map((n) => Number(n) || 0);
+  if (kind === "font-menu" || kind === "fontmenu" || kind === "font") {
+    if (typeof value === "string") return value;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const rec = value as Record<string, unknown>;
+      if (typeof rec.systemName === "string") return rec.systemName;
+      if (typeof rec.str === "string") return rec.str;
+    }
+    return "";
+  }
   if (typeof value === "number") return value;
   if (typeof value === "boolean") return value;
   if (typeof value === "string") return value;
@@ -119,6 +180,27 @@ const leafValue = (kind: string, value: unknown): ControlValue => {
 };
 
 const leafType = (kind: string): number => KIND_TO_TYPE[kind] ?? ControlType.Slider;
+
+const namedValueAsControlValue = (value: unknown): ControlValue => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return value;
+  if (typeof value === "boolean") return value;
+  if (Array.isArray(value)) {
+    if (value.length >= 2 && value.every((n) => typeof n === "number")) {
+      return value.length === 2 ? { x: value[0], y: value[1] } : (value as number[]);
+    }
+    return value as number[];
+  }
+  return String(value ?? "");
+};
+
+const inferKindFromName = (name: string, value: unknown): string => {
+  if (typeof value === "string") return "text";
+  if (Array.isArray(value) && value.length >= 3) return "color";
+  if (Array.isArray(value) && value.length === 2) return "point";
+  if (typeof value === "number") return "slider";
+  return "text";
+};
 
 export const controlsToDefinition = (doc: ControlsDocument): MogrtDefinition => {
   const clientControls: ClientControl[] = [];
@@ -137,13 +219,14 @@ export const controlsToDefinition = (doc: ControlsDocument): MogrtDefinition => 
     return next;
   };
 
-  const convert = (node: ControlsNode, parentPath: string): string => {
+  const convert = (node: ControlsNode, parentPath: string, parentHidden?: boolean): string => {
     if (isGroupNode(node)) {
       const name = node.name || "Group";
       const path = parentPath ? `${parentPath} / ${name}` : name;
+      const groupHidden = parentHidden === true || node.hidden === true;
       const childIds: string[] = [];
       for (const child of node.controls ?? []) {
-        childIds.push(convert(child, path));
+        childIds.push(convert(child, path, groupHidden));
       }
       const control: ClientControl = {
         id: uniqueId(`group:${path}`),
@@ -151,6 +234,8 @@ export const controlsToDefinition = (doc: ControlsDocument): MogrtDefinition => 
         uiName: loc(name),
         value: childIds,
         groupexpanded: false,
+        hidden: groupHidden,
+        sourceLayer: node.sourceLayer,
       };
       clientControls.push(control);
       return control.id;
@@ -167,6 +252,7 @@ export const controlsToDefinition = (doc: ControlsDocument): MogrtDefinition => 
       min = Math.min(min, value);
       max = Math.max(max, value);
     }
+    const rawSource = leaf.source || leaf.essentialName;
     const control: ClientControl = {
       id: uniqueId(path),
       type: leafType(kind),
@@ -175,20 +261,59 @@ export const controlsToDefinition = (doc: ControlsDocument): MogrtDefinition => 
       min,
       max,
       menucontent: kind === "menu" ? menucontentFor(name, leaf.options) : undefined,
-      essentialName: leaf.essentialName,
-      source: leaf.source,
+      // Flat mogrt displayName === source (with `>` and kind leaf).
+      essentialName: leaf.essentialName || sourceToEssentialName(rawSource),
+      source: rawSource,
       uiPath: path,
+      hidden: parentHidden === true,
     };
     clientControls.push(control);
     return control.id;
   };
 
   const roots: ControlsNode[] =
-    doc.groups && doc.groups.length
-      ? doc.groups
-      : [{ name: "Style", type: "group", controls: doc.controls ?? [] }];
+    doc.ui && doc.ui.length
+      ? doc.ui
+      : doc.groups && doc.groups.length
+        ? doc.groups
+        : [{ name: "Style", type: "group", controls: doc.controls ?? [] }];
 
   for (const group of roots) convert(group, "");
+
+  // animation / revealConfig — not shown in Styles UI; applied with the preset.
+  const appendNamed = (items: ControlsNamedValue[] | undefined, bucket: string) => {
+    if (!items?.length) return;
+    const childIds: string[] = [];
+    for (const item of items) {
+      if (!item || typeof item.name !== "string" || !item.name.trim()) continue;
+      const name = item.name.trim();
+      const kind = inferKindFromName(name, item.value);
+      const path = `${bucket} / ${name}`;
+      const control: ClientControl = {
+        id: uniqueId(path),
+        type: leafType(kind),
+        uiName: loc(name),
+        value: namedValueAsControlValue(item.value),
+        essentialName: name,
+        uiPath: path,
+        hidden: true,
+      };
+      clientControls.push(control);
+      childIds.push(control.id);
+    }
+    if (!childIds.length) return;
+    clientControls.push({
+      id: uniqueId(`group:${bucket}`),
+      type: ControlType.Group,
+      uiName: loc(bucket),
+      value: childIds,
+      groupexpanded: false,
+      hidden: true,
+    });
+  };
+
+  appendNamed(doc.animation, "Animation");
+  appendNamed(doc.revealConfig, "Reveal");
 
   return {
     schema: "controls",

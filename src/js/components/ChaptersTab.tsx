@@ -1,9 +1,9 @@
-import { Bookmark, Check, ChevronRight, Copy, Globe, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
+import { Bookmark, Check, ChevronRight, Copy, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useConfiguration } from "../../context/ConfigurationWrapper";
-import { SRC_LANGS, TRANSLATE_TARGETS } from "../data/languages";
 import { EditableChapterRow } from "./EditableChapterRow";
 import { GeneratedTextSection } from "./GeneratedTextSection";
+import { LanguageRow } from "./LanguageRow";
 import type { DescribeProgress } from "./ProgressDialog";
 import "./ChaptersTab.scss";
 import { TitleSuggestions } from "./TitleSuggestions";
@@ -107,7 +107,8 @@ export const ChaptersTab = ({
   onAddMarkers,
   addingMarkers,
 }: ChaptersTabProps) => {
-  const { srcLang, translateTo, updateSrcLang, updateTranslateTo } = useConfiguration();
+  const { chaptersSrcLang, chaptersTranslateTo, updateChaptersSrcLang, updateChaptersTranslateTo } =
+    useConfiguration();
   const [chaptersCopied, setChaptersCopied] = useState(false);
   const [descriptionCopied, setDescriptionCopied] = useState(false);
   const [markersAdded, setMarkersAdded] = useState(false);
@@ -211,28 +212,13 @@ export const ChaptersTab = ({
         </div>
 
         <div className="chapters-tab__landing-footer">
-          <div className="card chapters-tab__lang-row">
-            <Globe size={15} />
-            <select className="select" value={srcLang} onChange={(e) => updateSrcLang(e.target.value)}>
-              {SRC_LANGS.map((l) => (
-                <option key={l.value} value={l.value}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-            <select
-              className="select"
-              value={translateTo}
-              onChange={(e) => updateTranslateTo(e.target.value)}
-              style={{ color: translateTo === "off" ? undefined : "var(--accent)" }}
-            >
-              {TRANSLATE_TARGETS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <LanguageRow
+            srcLang={chaptersSrcLang}
+            translateTo={chaptersTranslateTo}
+            onSrcLang={updateChaptersSrcLang}
+            onTranslateTo={updateChaptersTranslateTo}
+            showArrow
+          />
 
           <button
             type="button"

@@ -22,6 +22,9 @@ import {
   downloadVoiceoverFile,
   fetchVoiceoverCatalog,
   generateVoiceover,
+  preloadVoiceoverPreviews,
+  resolveVoicePreviewUrl,
+  subscribeVoicePreviews,
   type VoiceoverLanguage,
   type VoiceoverResult,
   type VoiceoverVoice,
@@ -258,7 +261,10 @@ function DropdownSelect<T extends { id: string }>({
 function VoicePreview({ voice }: { voice: VoiceoverVoice | undefined }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
-  const previewUrl = voice?.preview_url?.trim() || "";
+  const [, setPreviewTick] = useState(0);
+  const previewUrl = resolveVoicePreviewUrl(voice);
+
+  useEffect(() => subscribeVoicePreviews(() => setPreviewTick((n) => n + 1)), []);
 
   useEffect(() => {
     setPlaying(false);
@@ -319,7 +325,7 @@ function VoicePreview({ voice }: { voice: VoiceoverVoice | undefined }) {
         <audio
           ref={audioRef}
           src={previewUrl}
-          preload="none"
+          preload="auto"
           onEnded={() => setPlaying(false)}
           onPause={() => setPlaying(false)}
         />
@@ -485,6 +491,7 @@ export const VoiceoverApp = ({
       } else if (catalog.languages[0]) {
         setLanguageBoost(catalog.languages[0].id);
       }
+      void preloadVoiceoverPreviews();
     });
     return () => {
       cancelled = true;
