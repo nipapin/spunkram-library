@@ -1,4 +1,11 @@
-import type { ClientControl, ControlValue, LocalizedStr, MogrtDefinition, PointValue } from "./types";
+import type {
+  CaptionInitValue,
+  ClientControl,
+  ControlValue,
+  LocalizedStr,
+  MogrtDefinition,
+  PointValue,
+} from "./types";
 import { ControlType } from "./types";
 
 /** Caption mogrt dump — the only Styles source. */
@@ -42,6 +49,8 @@ export type ControlsNode = ControlsGroup | ControlsLeaf;
 export interface ControlsNamedValue {
   name: string;
   value?: unknown;
+  kind?: string;
+  source?: string;
 }
 
 export interface ControlsDocument {
@@ -58,6 +67,8 @@ export interface ControlsDocument {
   animation?: ControlsNamedValue[];
   /** Reveal effect params — applied by name. */
   revealConfig?: ControlsNamedValue[];
+  /** EP snapshot — applied by `name` on caption create / style change. */
+  init?: ControlsNamedValue[];
 }
 
 const loc = (str: string): LocalizedStr => ({ strDB: [{ localeString: "en_US", str }] });
@@ -315,12 +326,34 @@ export const controlsToDefinition = (doc: ControlsDocument): MogrtDefinition => 
   appendNamed(doc.animation, "Animation");
   appendNamed(doc.revealConfig, "Reveal");
 
+  const init = parseInit(doc.init);
+
   return {
     schema: "controls",
     capsuleName: doc.templateName || doc.composition,
     enabledLayers: doc.enabledLayers,
     clientControls,
+    controlsDocument: doc as unknown as Record<string, unknown>,
+    ...(init.length ? { init } : {}),
   };
+};
+
+const parseInit = (raw: unknown): CaptionInitValue[] => {
+  if (!Array.isArray(raw)) return [];
+  const out: CaptionInitValue[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.name !== "string") continue;
+    const name = rec.name.trim();
+    if (!name) continue;
+    const entry: CaptionInitValue = { name, value: rec.value };
+    if (typeof rec.kind === "string" && rec.kind.trim()) entry.kind = rec.kind.trim();
+    if (typeof rec.source === "string" && rec.source.trim()) entry.source = rec.source.trim();
+    out.push(entry);
+  }
+  return out;
 };
 
 /** Parse `controls.json` into the in-memory Styles tree. */
@@ -329,7 +362,13 @@ export const normalizeDefinition = (raw: unknown): MogrtDefinition => {
   if (isControlsDocument(raw)) return controlsToDefinition(raw);
   const def = raw as MogrtDefinition;
   if (Array.isArray(def.clientControls)) {
-    return def.schema === "controls" ? def : { ...def, schema: "controls" };
+    const init = Array.isArray(def.init) ? parseInit(def.init) : [];
+    const next = def.schema === "controls" ? def : { ...def, schema: "controls" as const };
+    const withInit = init.length ? { ...next, init } : next;
+    if (isControlsDocument(raw) && !withInit.controlsDocument) {
+      return { ...withInit, controlsDocument: raw as unknown as Record<string, unknown> };
+    }
+    return withInit;
   }
   return { clientControls: [] };
 };

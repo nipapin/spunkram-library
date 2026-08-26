@@ -32,17 +32,17 @@ export const StyleTab = () => {
   } = useConfiguration();
 
   const selected = presets.find((p) => p.id === selectedPresetId) ?? presets[0];
-  const definition = selected ? definitions[selected.styleId] : undefined;
+  const definition = selected ? definitions[selected.source === "user" ? selected.id : selected.styleId] : undefined;
   const hasControls = !!(definition?.clientControls?.length);
   const [loadingDefinition, setLoadingDefinition] = useState(false);
   const [definitionError, setDefinitionError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!selected?.styleId || hasControls) return;
+    if (!selected?.id || hasControls) return;
     let cancelled = false;
     setLoadingDefinition(true);
     setDefinitionError(null);
-    ensureDefinitionLoaded(selected.styleId)
+    ensureDefinitionLoaded(selected.id)
       .then((def) => {
         if (cancelled) return;
         if (!def?.clientControls?.length) {
@@ -59,7 +59,7 @@ export const StyleTab = () => {
     return () => {
       cancelled = true;
     };
-  }, [selected?.styleId, hasControls, ensureDefinitionLoaded]);
+  }, [selected?.id, hasControls, ensureDefinitionLoaded]);
 
   const { onChange } = useStyleUndo(selected ?? EMPTY_PRESET, updateSelectedPreset);
   const dirty = selected ? isPresetDirty(selected) : false;

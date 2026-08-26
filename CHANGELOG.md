@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Captions Styles: apply `controls.json` `init[]` to Essential Graphics by name on caption create and style change
+- Captions Styles: Save as New writes a local `user-styles/{id}/controls.json` (parent dump + sliders, caption chunks cleared)
 - Captions Styles: re-fetch `controls.json` on apply when local `Base/manifest.json` is older than R2
 - Captions: write Segment Type by name as 0-based (Words=0, Custom=1); Lines / caption → Line Count; Characters / line → Chars Per Line
 - Styles: `font-menu` is a family + weight picker (not a slider), with OS font catalog like Figma/Adobe
@@ -25,7 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Captions Styles: catalog (non-user) apply sets `Captions_Settings>Effects>Padding` to 350 and `Scale` to 200
+- Captions Styles: catalog slider edits stay on the current mogrt/comp only; apply always uses the original CDN `init`
+- Captions Styles: catalog (non-user) apply uses `controls.json` `init` when present; otherwise Padding=350 / Scale=200
 - Captions CEP writes v4 lookup tables + offset batches into `captions_batch_01`…`15` (same codec as `captions.jsx`). Legacy `text~start~end~~` still reads back.
 - Captions: match Base Simple mogrt — `Store hidden` / `Bridge hidden`, spacing as empty string (`wordIndex: -1`), do not treat `Captions_Raw_Data` as a CEP-written field. Pause Gap / Hold Duration are user style (Global).
 - Captions: hide RE-SEGMENT UI; add rounded content panel under Transcribe/Styles tabs

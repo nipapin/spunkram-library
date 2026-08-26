@@ -44,11 +44,23 @@ export interface ClientControl {
   sourceLayer?: string;
 }
 
+/** controls.json `init[]` — EP snapshot written on caption create / style change. */
+export interface CaptionInitValue {
+  name: string;
+  value?: unknown;
+  kind?: string;
+  source?: string;
+}
+
 export interface MogrtDefinition {
   capsuleName?: string;
   schema?: "controls";
   enabledLayers?: string[];
   clientControls: ClientControl[];
+  /** Full Essential Graphics snapshot from controls.json `init`. */
+  init?: CaptionInitValue[];
+  /** Raw `controls.json` — cloned on Save as New. */
+  controlsDocument?: Record<string, unknown>;
   [key: string]: unknown;
 }
 

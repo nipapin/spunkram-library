@@ -2,6 +2,7 @@ import { findControlByAnyNames } from "./clientControls";
 import type { MogrtDefinition } from "./types";
 
 export type {
+  CaptionInitValue,
   ClientControl,
   ControlTreeNode,
   ControlValue,
@@ -12,6 +13,7 @@ export type {
 export { ControlType } from "./types";
 export {
   buildUiTree,
+  catalogApplyValues,
   defaultsFromDefinition,
   findControlByNames,
   findControlByAnyNames,
@@ -25,14 +27,23 @@ export {
   isGroup,
   isHiddenUiGroup,
   isPointValue,
+  matchControlForInit,
+  stylePropsFromInit,
   stylePropsFromValues,
   diffStyleProps,
   withCatalogApplyValues,
+  withInitApplyValues,
   uiName,
   CATALOG_LAYOUT_OVERRIDES,
 } from "./clientControls";
 export type { StylePropPayload } from "./clientControls";
 export { hexToRgba, rgbaToHex } from "./color";
+export {
+  buildUserControlsDocument,
+  definitionCacheKey,
+  isChunkOrSystemInitName,
+  mergeInitWithValues,
+} from "./userControls";
 export {
   CONTROLS_FILE,
   controlsToDefinition,

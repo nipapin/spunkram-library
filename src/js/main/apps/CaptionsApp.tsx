@@ -361,9 +361,9 @@ export const CaptionsApp = ({
       }
       const fontId = typeof loaded.fontId === "string" ? loaded.fontId.trim() : "";
       if (fontId) {
-        const styleId = matched?.styleId;
-        if (styleId) {
-          void ensureDefinitionLoaded(styleId).then(() => {
+        const styleKey = matched?.id;
+        if (styleKey) {
+          void ensureDefinitionLoaded(styleKey).then(() => {
             syncSelectedPresetFontFromHost(fontId);
           });
         } else {

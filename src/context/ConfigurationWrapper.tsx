@@ -7,10 +7,13 @@ import {
   isPresetDirty,
   isPresetValuesDirty,
   loadLocalState,
+  loadUserControlsDefinition,
   makeOrigin,
   presetSwatchColors,
   refreshCaptionControlsIfRemoteNewer,
+  removeUserControls,
   saveLocalState,
+  saveUserControls,
   syncCaptionStyles,
   type AcquirePresetStatus,
   type LocalStyleAssetPaths,
@@ -19,17 +22,18 @@ import {
 } from "../js/styles";
 import { friendlyErrorMessage } from "../js/utils/user-error";
 import {
-  CATALOG_LAYOUT_OVERRIDES,
+  catalogApplyValues,
   ControlType,
   defaultsFromDefinition,
+  definitionCacheKey,
   diffStyleProps,
-  findControlBySource,
   findFontControl,
   fontIdFromValue,
+  stylePropsFromInit,
   stylePropsFromValues,
-  withCatalogApplyValues,
   type StylePropPayload,
 } from "../js/presets";
+import { buildUserControlsDocument } from "../js/presets/userControls";
 import type { ControlValues, MogrtDefinition } from "../js/presets";
 import type { GroupingMode } from "../js/utils/transcribe";
 import { csi } from "../js/lib/utils/bolt";
@@ -181,12 +185,18 @@ const loadConfig = (): StoredConfig => {
   }
 };
 
-const persistStylesUiState = (presets: StylePreset[], selectedPresetId: string) => {
+const persistStylesUiState = (
+  presets: StylePreset[],
+  selectedPresetId: string,
+  definitions: Record<string, MogrtDefinition>,
+) => {
   const favorites: Record<string, boolean> = {};
-  const downloadedEdits: Record<string, StylePreset> = {};
   for (const p of presets) {
     if (p.favorite) favorites[p.id] = true;
-    if (p.source === "downloaded") downloadedEdits[p.id] = p;
+    if (p.source !== "user") continue;
+    const def = definitions[p.id];
+    if (!def?.clientControls?.length && !def?.init?.length && !def?.controlsDocument) continue;
+    saveUserControls(p.id, buildUserControlsDocument(def, p.values));
   }
   const prev = loadLocalState();
   saveLocalState({
@@ -194,7 +204,7 @@ const persistStylesUiState = (presets: StylePreset[], selectedPresetId: string) 
     selectedPresetId,
     favorites,
     userPresets: presets.filter((p) => p.source === "user"),
-    downloadedEdits,
+    downloadedEdits: {},
   });
 };
 
@@ -250,7 +260,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   const applySyncResult = useCallback(
     (result: Awaited<ReturnType<typeof syncCaptionStyles>>) => {
       setPresets(result.presets);
-      setDefinitions(result.definitions);
+      setDefinitions((prev) => ({ ...prev, ...result.definitions }));
       setSelectedPresetId(result.selectedPresetId);
       setStylesError(result.error ?? null);
       setStylesStatus("ready");
@@ -282,20 +292,63 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   }, [applySyncResult]);
 
   const ensureDefinitionLoaded = useCallback(async (styleId: string, opts?: { force?: boolean }) => {
+    const preset =
+      presetsRef.current.find((p) => p.id === styleId) ??
+      presetsRef.current.find((p) => p.styleId === styleId && p.source !== "user");
+    const isUser = preset?.source === "user";
+    const cacheKey = preset ? definitionCacheKey(preset) : styleId;
+    const catalogStyleId = preset?.styleId ?? styleId;
+
     if (!opts?.force) {
-      const cached = definitionsRef.current[styleId];
+      const cached = definitionsRef.current[cacheKey];
       if (cached?.clientControls?.length) return cached;
 
-      const inflight = definitionLoadsRef.current.get(styleId);
+      const inflight = definitionLoadsRef.current.get(cacheKey);
       if (inflight) return inflight;
     } else {
-      definitionLoadsRef.current.delete(styleId);
+      definitionLoadsRef.current.delete(cacheKey);
     }
 
     const load = (async () => {
       try {
-        const fromCatalog = presetsRef.current.find((p) => p.styleId === styleId);
-        const definition = await ensureDefinitionForStyle(styleId, {
+        if (isUser && preset) {
+          let definition = loadUserControlsDefinition(preset.id);
+          if (!definition?.clientControls?.length) {
+            const parent = presetsRef.current.find(
+              (p) => p.styleId === catalogStyleId && p.source !== "user",
+            );
+            const parentDef = await ensureDefinitionForStyle(catalogStyleId, {
+              files: parent?.files ?? preset.files,
+              name: parent?.name ?? preset.name,
+              controlsUrl: parent?.controlsUrl ?? preset.controlsUrl,
+              previewImageUrl: parent?.previewImageUrl ?? preset.previewImageUrl,
+              previewVideoUrl: parent?.previewVideoUrl ?? preset.previewVideoUrl,
+              force: opts?.force,
+            });
+            const doc = buildUserControlsDocument(parentDef, preset.values || {});
+            saveUserControls(preset.id, doc);
+            definition = loadUserControlsDefinition(preset.id) ?? parentDef;
+          }
+          if (opts?.force && !definition.clientControls?.length) {
+            const prev = definitionsRef.current[cacheKey];
+            if (prev?.clientControls?.length) return prev;
+          }
+          setDefinitions((prev) => ({ ...prev, [cacheKey]: definition as MogrtDefinition }));
+          if (definition?.clientControls?.length && !Object.keys(preset.values || {}).length) {
+            const values = defaultsFromDefinition(definition);
+            setPresets((prev) =>
+              prev.map((p) =>
+                p.id === preset.id ? { ...p, values, origin: makeOrigin(p.name, values) } : p,
+              ),
+            );
+          }
+          return definition as MogrtDefinition;
+        }
+
+        const fromCatalog = presetsRef.current.find(
+          (p) => p.styleId === catalogStyleId && p.source !== "user",
+        );
+        const definition = await ensureDefinitionForStyle(catalogStyleId, {
           files: fromCatalog?.files,
           name: fromCatalog?.name,
           controlsUrl: fromCatalog?.controlsUrl,
@@ -304,42 +357,38 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
           force: opts?.force,
         });
         if (opts?.force && !definition.clientControls?.length) {
-          const prev = definitionsRef.current[styleId];
+          const prev = definitionsRef.current[cacheKey];
           if (prev?.clientControls?.length) return prev;
         }
         setDefinitions((prev) => {
-          const existing = prev[styleId];
+          const existing = prev[cacheKey];
           if (existing?.clientControls?.length && !definition.clientControls?.length) {
             return prev;
           }
-          return { ...prev, [styleId]: definition };
+          return { ...prev, [cacheKey]: definition };
         });
         if (definition.clientControls?.length) {
           setPresets((prev) =>
             prev.map((p) => {
-              if (p.styleId !== styleId) return p;
+              if (p.styleId !== catalogStyleId) return p;
               if (p.source === "user") return p;
-              if (opts?.force && isPresetValuesDirty(p)) return p;
-              if (opts?.force || p.source === "catalog" || !Object.keys(p.values || {}).length) {
-                const values = defaultsFromDefinition(definition);
-                return {
-                  ...p,
-                  values,
-                  origin: makeOrigin(p.name, values),
-                  source: p.source === "catalog" ? "downloaded" : p.source,
-                };
-              }
-              return p;
+              const values = defaultsFromDefinition(definition);
+              return {
+                ...p,
+                values,
+                origin: makeOrigin(p.name, values),
+                source: p.source === "catalog" ? "downloaded" : p.source,
+              };
             }),
           );
         }
         return definition;
       } finally {
-        definitionLoadsRef.current.delete(styleId);
+        definitionLoadsRef.current.delete(cacheKey);
       }
     })();
 
-    definitionLoadsRef.current.set(styleId, load);
+    definitionLoadsRef.current.set(cacheKey, load);
     return load;
   }, []);
 
@@ -394,7 +443,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       const presetId = selectedPresetIdRef.current;
       const selected = presetsRef.current.find((p) => p.id === presetId);
       if (!selected) return;
-      const definition = definitionsRef.current[selected.styleId];
+      const definition = definitionsRef.current[definitionCacheKey(selected)];
       const control = findFontControl(definition);
       if (!control) return;
       const current = fontIdFromValue(selected.values[control.id]);
@@ -430,6 +479,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     styleId: string;
     values: ControlValues;
     full: boolean;
+    applyInit: boolean;
     definition?: MogrtDefinition;
   } | null>(null);
   const lastPushedProps = useRef<{ styleId: string; props: StylePropPayload[] } | null>(null);
@@ -440,17 +490,21 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       values: ControlValues,
       full: boolean,
       definitionOverride?: MogrtDefinition,
+      applyInit = false,
     ): Promise<void> => {
-      const definition = definitionOverride ?? definitions[styleId];
+      const definition = definitionOverride ?? definitions[styleId] ?? definitionsRef.current[styleId];
       if (!definition?.clientControls?.length) return Promise.resolve();
-      const nextProps = stylePropsFromValues(definition, values);
+      const uiProps = stylePropsFromValues(definition, values);
+      const initProps = applyInit ? stylePropsFromInit(definition) : [];
+      const nextProps = initProps.length ? initProps : uiProps;
       if (!nextProps.length) return Promise.resolve();
 
+      const cacheProps = uiProps.length ? uiProps : nextProps;
       const prev = lastPushedProps.current;
       const props =
-        full || !prev || prev.styleId !== styleId ? nextProps : diffStyleProps(prev.props, nextProps);
+        full || !prev || prev.styleId !== styleId ? nextProps : diffStyleProps(prev.props, cacheProps);
       if (!props.length) {
-        lastPushedProps.current = { styleId, props: nextProps };
+        lastPushedProps.current = { styleId, props: cacheProps };
         return Promise.resolve();
       }
 
@@ -469,7 +523,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       }
 
       applyInFlight.current = true;
-      lastPushedProps.current = { styleId, props: nextProps };
+      lastPushedProps.current = { styleId, props: cacheProps };
       const hostApi = hostSdk();
       return hostApi
         .applyCaptionStyleValues({ props, sequenceId, compId, trackIndex })
@@ -486,6 +540,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
             pending.values,
             pending.full,
             pending.definition,
+            pending.applyInit,
           );
         })
         .then(() => undefined);
@@ -495,7 +550,11 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
 
   /** Пушим values в caption-клипы: debounce + один in-flight evalScript, только дельта. */
   const pushStyleValuesToHost = useCallback(
-    (styleId: string, values: ControlValues, opts?: { full?: boolean; definition?: MogrtDefinition }) => {
+    (
+      styleId: string,
+      values: ControlValues,
+      opts?: { full?: boolean; definition?: MogrtDefinition; applyInit?: boolean },
+    ) => {
       const definition = opts?.definition ?? definitions[styleId];
       if (!definition?.clientControls?.length) return;
       if (applyValuesTimer.current) clearTimeout(applyValuesTimer.current);
@@ -506,17 +565,18 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
             styleId,
             values,
             full: !!opts?.full || !!prev?.full,
+            applyInit: !!opts?.applyInit || !!prev?.applyInit,
             definition: opts?.definition ?? prev?.definition,
           };
           return;
         }
-        void flushStyleValuesToHost(styleId, values, !!opts?.full, definition);
+        void flushStyleValuesToHost(styleId, values, !!opts?.full, definition, !!opts?.applyInit);
       }, 40);
     },
     [definitions, flushStyleValuesToHost],
   );
 
-  const resolveDefinitionForApply = useCallback(async (styleId: string): Promise<MogrtDefinition> => {
+  const resolveDefinitionForApply = useCallback(async (preset: StylePreset): Promise<MogrtDefinition> => {
     let force = false;
     try {
       force = await refreshCaptionControlsIfRemoteNewer();
@@ -524,7 +584,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       force = false;
     }
     if (force) clearCaptionControlsCache();
-    return ensureDefinitionLoaded(styleId, { force });
+    return ensureDefinitionLoaded(preset.id, { force });
   }, [ensureDefinitionLoaded]);
 
   const valuesForHostApply = (preset: StylePreset, definition: MogrtDefinition) => {
@@ -532,24 +592,15 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       ? { ...preset.values }
       : defaultsFromDefinition(definition);
     if (preset.source === "user") return base;
-    return withCatalogApplyValues(base, definition);
+    return catalogApplyValues(base, definition);
   };
 
-  const persistCatalogApplyValues = (presetId: string, values: ControlValues, definition: MogrtDefinition) => {
+  const resetCatalogPresetValues = (presetId: string, definition: MogrtDefinition) => {
+    const values = defaultsFromDefinition(definition);
     setPresets((prev) =>
       prev.map((p) => {
-        if (p.id !== presetId) return p;
-        if (!isPresetValuesDirty(p)) {
-          return { ...p, values, origin: makeOrigin(p.name, values) };
-        }
-        const originValues = { ...p.origin.values };
-        const font = findFontControl(definition);
-        if (font && values[font.id] !== undefined) originValues[font.id] = values[font.id];
-        for (const item of CATALOG_LAYOUT_OVERRIDES) {
-          const control = findControlBySource(definition, item.source);
-          if (control && values[control.id] !== undefined) originValues[control.id] = values[control.id];
-        }
-        return { ...p, values, origin: { ...p.origin, values: originValues } };
+        if (p.id !== presetId || p.source === "user") return p;
+        return { ...p, values, origin: makeOrigin(p.name, values) };
       }),
     );
   };
@@ -559,15 +610,16 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     if (!selected) return;
     if (!readCaptionHostRef()) return;
 
-    const definition = await resolveDefinitionForApply(selected.styleId);
-    if (!definition?.clientControls?.length) return;
+    const definition = await resolveDefinitionForApply(selected);
+    if (!definition?.clientControls?.length && !definition?.init?.length) return;
 
     const latest = presetsRef.current.find((p) => p.id === selected.id) ?? selected;
+    const cacheKey = definitionCacheKey(latest);
     const values = valuesForHostApply(latest, definition);
-    if (latest.source !== "user") persistCatalogApplyValues(latest.id, values, definition);
+    if (latest.source !== "user") resetCatalogPresetValues(latest.id, definition);
 
     if (applyValuesTimer.current) clearTimeout(applyValuesTimer.current);
-    await flushStyleValuesToHost(latest.styleId, values, true, definition);
+    await flushStyleValuesToHost(cacheKey, values, true, definition, true);
   }, [ensureDefinitionLoaded, flushStyleValuesToHost, resolveDefinitionForApply]);
 
   const selectPresetGen = useRef(0);
@@ -594,8 +646,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     void (async () => {
       try {
         const definition = applyToHost
-          ? await resolveDefinitionForApply(target.styleId)
-          : await ensureDefinitionLoaded(target.styleId);
+          ? await resolveDefinitionForApply(target)
+          : await ensureDefinitionLoaded(target.id);
         if (selectPresetGen.current !== gen) return;
         if (!applyToHost) return;
 
@@ -608,18 +660,17 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         if (selectPresetGen.current !== gen) return;
         applyPreparedAssets(getLocalStyleAssetPaths());
 
-        if (!definition?.clientControls?.length) {
+        if (!definition?.clientControls?.length && !definition?.init?.length) {
           setAcquireStatus("ready");
           return;
         }
         setAcquireStatus("applying");
         const latest = presetsRef.current.find((p) => p.id === id) ?? target;
+        const cacheKey = definitionCacheKey(latest);
         const values = valuesForHostApply(latest, definition);
-        if (latest.source !== "user") persistCatalogApplyValues(latest.id, values, definition);
-        if (Object.keys(values).length) {
-          lastPushedProps.current = null;
-          pushStyleValuesToHost(latest.styleId, values, { full: true, definition });
-        }
+        if (latest.source !== "user") resetCatalogPresetValues(latest.id, definition);
+        lastPushedProps.current = null;
+        pushStyleValuesToHost(cacheKey, values, { full: true, definition, applyInit: true });
         setAcquireStatus("ready");
       } catch (err) {
         if (selectPresetGen.current !== gen) return;
@@ -643,19 +694,45 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       }),
     );
     if (patch.values && selected) {
-      pushStyleValuesToHost(selected.styleId, patch.values);
+      pushStyleValuesToHost(definitionCacheKey(selected), patch.values);
+      if (selected.source === "user") {
+        const def = definitionsRef.current[selected.id];
+        if (def) {
+          const doc = buildUserControlsDocument(def, patch.values);
+          saveUserControls(selected.id, doc);
+          setDefinitions((prev) => ({
+            ...prev,
+            [selected.id]: {
+              ...def,
+              init: Array.isArray(doc.init) ? (doc.init as MogrtDefinition["init"]) : def.init,
+              controlsDocument: doc,
+            },
+          }));
+        }
+      }
     }
   };
 
   const addPreset = (patch?: Partial<StylePreset>) => {
     const selected = presets.find((p) => p.id === selectedPresetId);
     const styleId = patch?.styleId ?? selected?.styleId ?? "";
-    const definition = definitions[styleId];
+    const parentKey = selected ? definitionCacheKey(selected) : styleId;
+    const parentDef = definitions[parentKey] ?? definitions[styleId];
     const id = "user-" + Date.now();
     const name = patch?.name ?? "New Preset";
-    const values: ControlValues = definition
-      ? { ...defaultsFromDefinition(definition), ...patch?.values }
-      : { ...(patch?.values ?? {}) };
+    const sliderValues: ControlValues = {
+      ...(parentDef ? defaultsFromDefinition(parentDef) : {}),
+      ...(patch?.values ?? selected?.values ?? {}),
+    };
+    const doc = parentDef ? buildUserControlsDocument(parentDef, sliderValues) : { init: [] };
+    saveUserControls(id, doc);
+    const userDef = loadUserControlsDefinition(id) ?? parentDef;
+    if (userDef) {
+      setDefinitions((prev) => ({ ...prev, [id]: userDef }));
+    }
+    const values: ControlValues = userDef
+      ? defaultsFromDefinition(userDef)
+      : sliderValues;
     const preset: StylePreset = {
       id,
       name,
@@ -669,17 +746,12 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       controlsUrl: patch?.controlsUrl ?? selected?.controlsUrl,
       previewImageUrl: patch?.previewImageUrl ?? selected?.previewImageUrl,
       previewVideoUrl: patch?.previewVideoUrl ?? selected?.previewVideoUrl,
+      files: selected?.files ?? patch?.files,
     };
     setPresets((prev) => [...prev, preset]);
     setSelectedPresetId(id);
-    if (definition?.clientControls?.length) {
-      pushStyleValuesToHost(styleId, values, { full: true, definition });
-    } else if (styleId) {
-      void ensureDefinitionLoaded(styleId).then((def) => {
-        if (def?.clientControls?.length) {
-          pushStyleValuesToHost(styleId, values, { full: true, definition: def });
-        }
-      });
+    if (userDef?.clientControls?.length || userDef?.init?.length) {
+      pushStyleValuesToHost(id, values, { full: true, definition: userDef, applyInit: true });
     }
     return id;
   };
@@ -691,6 +763,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       const target = prev.find((p) => p.id === id);
       // серверные стили из каталога не удаляем — только user
       if (!target || target.source !== "user") return prev;
+      removeUserControls(id);
       const next = prev.filter((p) => p.id !== id);
       if (selectedPresetId === id) setSelectedPresetId(next[0]?.id ?? "");
       return next;
@@ -736,8 +809,8 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (stylesStatus !== "ready") return;
-    persistStylesUiState(presets, selectedPresetId);
-  }, [presets, selectedPresetId, stylesStatus]);
+    persistStylesUiState(presets, selectedPresetId, definitions);
+  }, [presets, selectedPresetId, stylesStatus, definitions]);
 
   return (
     <ConfigurationContext.Provider

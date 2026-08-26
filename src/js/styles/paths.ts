@@ -51,6 +51,23 @@ export const getLocalStatePath = (): string | null => {
   return root ? path.join(root, "styles-state.json") : null;
 };
 
+/** AppData/user-styles/{id}/controls.json — Save as New dumps. */
+export const getUserStylesDir = (): string | null => {
+  const root = getStylesRoot();
+  return root ? path.join(root, "user-styles") : null;
+};
+
+export const getUserStyleDir = (presetId: string): string | null => {
+  const dir = getUserStylesDir();
+  if (!dir || !presetId) return null;
+  return path.join(dir, styleIdToDirName(presetId));
+};
+
+export const getUserControlsPath = (presetId: string): string | null => {
+  const dir = getUserStyleDir(presetId);
+  return dir ? path.join(dir, "controls.json") : null;
+};
+
 /** Локальная копия CDN `{Brand} Captions/Base/manifest.json`. */
 export const getCdnBaseManifestPath = (): string | null => {
   const root = getStylesRoot();

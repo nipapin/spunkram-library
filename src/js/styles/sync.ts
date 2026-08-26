@@ -14,9 +14,11 @@ import {
   loadCdnBaseManifest,
   loadLocalPackage,
   loadLocalState,
+  loadUserControlsDefinition,
   saveCdnBaseManifest,
   saveLocalPackage,
   saveLocalState,
+  saveUserControls,
 } from "./localStore";
 import { MASTER_AEP_FILE, MASTER_MOGRT_FILE, MASTER_STYLE_ID } from "./paths";
 import type {
@@ -33,6 +35,7 @@ import { csi } from "../lib/utils/bolt";
 import { getActiveBrand } from "../lib/utils/brandTheme";
 import { getResolvedHostSync } from "../lib/utils/host-identity";
 import { defaultsFromDefinition, findControlByAnyNames, isColorArray, rgbaToHex } from "../presets";
+import { buildUserControlsDocument } from "../presets/userControls";
 import type { ControlValues, MogrtDefinition } from "../presets/types";
 
 const cloneValues = (values: ControlValues): ControlValues =>
@@ -503,27 +506,12 @@ export const syncCaptionStyles = async (options?: {
     const base = catalogToPreset(item, favorite, masterReady);
 
     if (masterReady) {
-      const edit = localState.downloadedEdits[item.id];
-      if (edit && edit.styleVersion === masterVersion) {
-        presets.push({
-          ...base,
-          name: edit.name,
-          values: edit.values,
-          origin: edit.origin,
-          favorite,
-          preview: edit.preview ?? base.preview,
-          styleVersion: masterVersion,
-          source: "downloaded",
-          updateAvailable: masterUpdated,
-        });
-      } else {
-        presets.push({
-          ...base,
-          styleVersion: masterVersion,
-          source: "downloaded",
-          updateAvailable: masterUpdated,
-        });
-      }
+      presets.push({
+        ...base,
+        styleVersion: masterVersion,
+        source: "downloaded",
+        updateAvailable: masterUpdated,
+      });
     } else {
       presets.push(base);
     }
@@ -531,8 +519,34 @@ export const syncCaptionStyles = async (options?: {
 
   for (const user of localState.userPresets) {
     const parent = catalog.find((c) => c.id === user.styleId);
+    let userDef = loadUserControlsDefinition(user.id);
+    if (!userDef?.clientControls?.length && user.styleId) {
+      try {
+        const parentDef = await ensureDefinitionForStyle(user.styleId, {
+          name: user.name,
+          files: user.files ?? parent?.files,
+          controlsUrl: user.controlsUrl ?? parent?.controlsUrl,
+          previewImageUrl: user.previewImageUrl ?? parent?.previewImageUrl,
+          previewVideoUrl: user.previewVideoUrl ?? parent?.previewVideoUrl,
+        });
+        if (parentDef.clientControls?.length || parentDef.init?.length) {
+          const doc = buildUserControlsDocument(parentDef, user.values || {});
+          saveUserControls(user.id, doc);
+          userDef = loadUserControlsDefinition(user.id);
+        }
+      } catch {
+        // keep legacy values-only preset
+      }
+    }
+    if (userDef) definitions[user.id] = userDef;
+    const values =
+      userDef && !Object.keys(user.values || {}).length
+        ? defaultsFromDefinition(userDef)
+        : user.values;
     presets.push({
       ...user,
+      values,
+      origin: user.origin?.values ? user.origin : makeOrigin(user.name, values),
       favorite: localState.favorites[user.id] ?? user.favorite,
       source: "user",
       controlsUrl: user.controlsUrl ?? parent?.controlsUrl ?? null,
@@ -553,6 +567,7 @@ export const syncCaptionStyles = async (options?: {
   saveLocalState({
     ...localState,
     selectedPresetId,
+    downloadedEdits: {},
   });
 
   return {

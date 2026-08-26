@@ -6,6 +6,8 @@ import {
   getStylePackageDir,
   getStylesDir,
   getStylesRoot,
+  getUserControlsPath,
+  getUserStyleDir,
 } from "./paths";
 import type {
   LocalCdnBaseManifest,
@@ -15,6 +17,8 @@ import type {
   StylePreset,
 } from "./types";
 import { EMPTY_DEFINITION } from "./types";
+import { normalizeDefinition } from "../presets/controlsSchema";
+import type { MogrtDefinition } from "../presets/types";
 
 export const LOCAL_STATE_VERSION = 1;
 
@@ -54,6 +58,7 @@ const writeJson = (filePath: string, data: unknown): boolean => {
 const MEMORY_KEY = "aitools-cep-styles-state";
 const MEMORY_PACKAGES_KEY = "aitools-cep-style-packages";
 const MEMORY_CDN_BASE_KEY = "aitools-cep-captions-cdn-base";
+const MEMORY_USER_CONTROLS_KEY = "aitools-cep-user-controls";
 
 type MemoryPackages = Record<string, { manifest: LocalStyleManifest }>;
 
@@ -68,7 +73,7 @@ const readMemoryState = (): StylesLocalState => {
       selectedPresetId: parsed.selectedPresetId ?? "",
       favorites: parsed.favorites ?? {},
       userPresets: Array.isArray(parsed.userPresets) ? parsed.userPresets : [],
-      downloadedEdits: parsed.downloadedEdits ?? {},
+      downloadedEdits: {},
     };
   } catch {
     return emptyState();
@@ -104,7 +109,7 @@ export const loadLocalState = (): StylesLocalState => {
     selectedPresetId: fromDisk.selectedPresetId ?? "",
     favorites: fromDisk.favorites ?? {},
     userPresets: Array.isArray(fromDisk.userPresets) ? fromDisk.userPresets : [],
-    downloadedEdits: fromDisk.downloadedEdits ?? {},
+    downloadedEdits: {},
   };
 };
 
@@ -251,4 +256,72 @@ export const removeUserPreset = (presetId: string): void => {
   state.userPresets = state.userPresets.filter((p) => p.id !== presetId);
   if (state.selectedPresetId === presetId) state.selectedPresetId = "";
   saveLocalState(state);
+  removeUserControls(presetId);
+};
+
+const readMemoryUserControls = (): Record<string, Record<string, unknown>> => {
+  try {
+    const raw = localStorage.getItem(MEMORY_USER_CONTROLS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, Record<string, unknown>>) : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeMemoryUserControls = (docs: Record<string, Record<string, unknown>>) => {
+  localStorage.setItem(MEMORY_USER_CONTROLS_KEY, JSON.stringify(docs));
+};
+
+export const loadUserControlsDocument = (presetId: string): Record<string, unknown> | null => {
+  const filePath = getUserControlsPath(presetId);
+  if (!filePath) {
+    const mem = readMemoryUserControls()[presetId];
+    return mem ?? null;
+  }
+  return readJson<Record<string, unknown>>(filePath);
+};
+
+export const loadUserControlsDefinition = (presetId: string): MogrtDefinition | null => {
+  const doc = loadUserControlsDocument(presetId);
+  if (!doc) return null;
+  const parsed = normalizeDefinition(doc);
+  return parsed.clientControls?.length || parsed.init?.length ? parsed : null;
+};
+
+export const saveUserControls = (presetId: string, doc: Record<string, unknown>): boolean => {
+  const filePath = getUserControlsPath(presetId);
+  if (!filePath) {
+    const mem = readMemoryUserControls();
+    mem[presetId] = doc;
+    writeMemoryUserControls(mem);
+    return true;
+  }
+  const dir = getUserStyleDir(presetId);
+  if (dir && !ensureDir(dir)) return false;
+  return writeJson(filePath, doc);
+};
+
+export const removeUserControls = (presetId: string): void => {
+  const dir = getUserStyleDir(presetId);
+  if (!dir || !isCepFs() || !fs.existsSync?.(dir)) {
+    const mem = readMemoryUserControls();
+    delete mem[presetId];
+    writeMemoryUserControls(mem);
+    return;
+  }
+  try {
+    fs.rmSync?.(dir, { recursive: true, force: true });
+  } catch {
+    // ignore
+  }
+};
+
+export const hasUserControls = (presetId: string): boolean => {
+  const filePath = getUserControlsPath(presetId);
+  if (!filePath) return !!readMemoryUserControls()[presetId];
+  try {
+    return !!fs.existsSync?.(filePath);
+  } catch {
+    return false;
+  }
 };

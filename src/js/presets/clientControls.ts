@@ -121,6 +121,7 @@ export const buildUiTree = (definition: MogrtDefinition): ControlTreeNode[] => {
 /**
  * Default values for every leaf that should be written to the host.
  * Includes hidden-group leaves (shared master look). Skips CEP-written system props.
+ * `init` overlays matching EP names so Styles sliders match the create/style-change write.
  */
 export const defaultsFromDefinition = (definition: MogrtDefinition): ControlValues => {
   const values: ControlValues = {};
@@ -129,7 +130,7 @@ export const defaultsFromDefinition = (definition: MogrtDefinition): ControlValu
     if ((CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(uiName(c))) continue;
     values[c.id] = cloneValue(c.value as ControlValue);
   }
-  return values;
+  return withInitApplyValues(values, definition);
 };
 
 export const getControlValue = (values: ControlValues, control: ClientControl): ControlValue => {
@@ -327,8 +328,8 @@ export const findControlBySource = (
 };
 
 /**
- * Catalog / downloaded apply: font from controls.json, plus Padding=350 / Scale=200.
- * User presets keep their own values.
+ * Catalog / downloaded apply (legacy dumps without `init`):
+ * font from controls.json, plus Padding=350 / Scale=200.
  */
 export const withCatalogApplyValues = (
   values: ControlValues,
@@ -345,6 +346,151 @@ export const withCatalogApplyValues = (
     if (control) next[control.id] = item.value;
   }
   return next;
+};
+
+const KIND_TYPE: Record<string, number> = {
+  checkbox: ControlType.Checkbox,
+  slider: ControlType.Slider,
+  angle: ControlType.Angle,
+  color: ControlType.Color,
+  point: ControlType.Point,
+  text: ControlType.Text,
+  menu: ControlType.Menu,
+  "font-menu": ControlType.FontMenu,
+  fontmenu: ControlType.FontMenu,
+  font: ControlType.FontMenu,
+};
+
+const isCepWrittenName = (name: string): boolean =>
+  (CEP_WRITTEN_SYSTEM_NAMES as readonly string[]).includes(name);
+
+const initValueToControlValue = (value: unknown, type: number): ControlValue => {
+  if (type === ControlType.Point) {
+    if (isPointValue(value)) return { ...value };
+    if (Array.isArray(value) && value.length >= 2) {
+      return { x: Number(value[0]) || 0, y: Number(value[1]) || 0 };
+    }
+    return { x: 0, y: 0 };
+  }
+  if (type === ControlType.Checkbox) return value === true || value === 1 || value === "1";
+  if (type === ControlType.Color && Array.isArray(value)) return value.map((n) => Number(n) || 0);
+  if (type === ControlType.FontMenu) {
+    const fontId = fontIdFromValue(value as ControlValue);
+    return fontId || (typeof value === "string" ? value : "");
+  }
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") return value;
+  if (Array.isArray(value)) return value as number[];
+  if (isPointValue(value)) return { ...value };
+  return 0;
+};
+
+const typeForInitName = (
+  name: string,
+  kind: string | undefined,
+  value: unknown,
+  matched?: ClientControl,
+): number => {
+  if (name === "Caption Font" || name === "Font") return ControlType.FontMenu;
+  if (matched) return matched.type;
+  const fromKind = KIND_TYPE[String(kind || "").toLowerCase()];
+  if (fromKind) return fromKind;
+  if (typeof value === "boolean") return ControlType.Checkbox;
+  if (isColorArray(value)) return ControlType.Color;
+  if (isPointValue(value)) return ControlType.Point;
+  if (Array.isArray(value) && value.length === 2 && value.every((n) => typeof n === "number")) {
+    return ControlType.Point;
+  }
+  if (typeof value === "string") return ControlType.Text;
+  return ControlType.Slider;
+};
+
+export const matchControlForInit = (
+  definition: MogrtDefinition,
+  name: string,
+  occ: number,
+): ClientControl | undefined => {
+  const hits: ClientControl[] = [];
+  for (const c of definition.clientControls ?? []) {
+    if (isGroup(c)) continue;
+    if (uiName(c) === name) hits.push(c);
+  }
+  if (hits[occ]) return hits[occ];
+  const bySource = findControlBySource(definition, name);
+  if (bySource) return bySource;
+  return hits[0];
+};
+
+/**
+ * Overlay controls.json `init` onto Styles values (match by Essential Graphics name).
+ */
+export const withInitApplyValues = (values: ControlValues, definition: MogrtDefinition): ControlValues => {
+  const init = definition.init;
+  if (!init?.length) return values;
+  const next = { ...values };
+  const nameCounts: Record<string, number> = {};
+  for (let i = 0; i < init.length; i++) {
+    const name = String(init[i].name || "").trim();
+    if (!name || isCepWrittenName(name)) continue;
+    const occ = nameCounts[name] ?? 0;
+    nameCounts[name] = occ + 1;
+    const matched = matchControlForInit(definition, name, occ);
+    if (!matched) continue;
+    const type = typeForInitName(name, init[i].kind, init[i].value, matched);
+    next[matched.id] = initValueToControlValue(init[i].value, type);
+  }
+  return next;
+};
+
+/** Catalog apply: `init` snapshot when present, else legacy font/Padding/Scale. */
+export const catalogApplyValues = (
+  values: ControlValues,
+  definition: MogrtDefinition,
+): ControlValues => {
+  if (definition.init?.length) return withInitApplyValues(values, definition);
+  return withCatalogApplyValues(values, definition);
+};
+
+/**
+ * Loop `controls.json` `init`: match Essential Graphics by `name`, write `value`.
+ * Skips CEP-owned system props (batches, Segment Type, Line Count, …).
+ */
+export const stylePropsFromInit = (definition: MogrtDefinition): StylePropPayload[] => {
+  const init = definition.init;
+  if (!init?.length) return [];
+  const nameCounts: Record<string, number> = {};
+  const out: StylePropPayload[] = [];
+  for (let i = 0; i < init.length; i++) {
+    const item = init[i];
+    const name = String(item.name || "").trim();
+    if (!name || isCepWrittenName(name)) continue;
+    const occ = nameCounts[name] ?? 0;
+    nameCounts[name] = occ + 1;
+    const matched = matchControlForInit(definition, name, occ);
+    const type = typeForInitName(name, item.kind, item.value, matched);
+    const value = initValueToControlValue(item.value, type);
+    if (type === ControlType.FontMenu) {
+      const fontId = fontIdFromValue(value);
+      if (!fontId) continue;
+      out.push({
+        path: ["Caption Font"],
+        type: ControlType.FontMenu,
+        value: fontId,
+        leafIndex: occ,
+        essentialName: "Caption Font",
+        source: "Caption Font",
+      });
+      continue;
+    }
+    out.push({
+      path: [name],
+      type,
+      value,
+      leafIndex: occ,
+      essentialName: name,
+      source: name,
+    });
+  }
+  return out;
 };
 
 const stylePropKey = (prop: StylePropPayload): string =>
