@@ -196,6 +196,9 @@ export function friendlyErrorMessage(err: unknown): string {
   }
 
   if (err instanceof CaptionApiError) {
+    if (err.code === "PROJECT_NOT_READY") {
+      return "This caption style isn’t ready to download yet. Try another style.";
+    }
     if (err.message && !/^HTTP\s+\d+/i.test(err.message) && !looksLikeInternalError(err.message)) {
       return err.message;
     }

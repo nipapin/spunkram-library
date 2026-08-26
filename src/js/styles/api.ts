@@ -1,5 +1,6 @@
 import { CAPTIONS_ENDPOINTS, apiUrl, getUserIdentity, type UserIdentity } from "../api";
 import { getBrand, type BrandId } from "@brands";
+import { getActiveBrand } from "../lib/utils/brandTheme";
 import { CONTROLS_FILE, normalizeDefinition } from "../presets/controlsSchema";
 import { cepHttpRequest } from "../lib/api/cep-http";
 import type { MogrtDefinition } from "../presets/types";
@@ -19,6 +20,7 @@ import {
   readLocalProjectFile,
   scanLocalCaptionsCatalog,
 } from "./localSource";
+import { packIdFromStyleId, packProjectFileName } from "./paths";
 
 export class CaptionApiError extends Error {
   status: number;
@@ -400,6 +402,38 @@ const userPayload = (user?: UserIdentity) => {
   return out;
 };
 
+/** Public CDN `{Brand}/{Pack}/{Pack}.mogrt|aep` — used when POST still looks for master.*. */
+const downloadPackFromPublicCdn = async (
+  id: string,
+  file: CaptionProjectFile,
+  brand: BrandId,
+): Promise<CaptionDownloadResult | null> => {
+  if (file !== "aep" && file !== "mogrt") return null;
+  const packId = packIdFromStyleId(id) || id.trim();
+  if (!packId) return null;
+  const fileName = packProjectFileName(packId, file);
+  const url = publicCaptionFileUrl(packId, fileName, brand);
+  try {
+    const response = await fetch(withCacheBust(url), {
+      method: "GET",
+      cache: "no-store",
+      headers: { Accept: "application/octet-stream", ...NO_CACHE_HEADERS },
+    });
+    if (!response.ok) return null;
+    const buffer = await response.arrayBuffer();
+    if (!buffer.byteLength) return null;
+    return {
+      buffer,
+      filename: fileName,
+      file,
+      byteLength: buffer.byteLength,
+      contentHash: hashArrayBuffer(buffer),
+    };
+  } catch {
+    return null;
+  }
+};
+
 /**
  * POST /api/captions — скачать `{Pack}.mogrt` / `{Pack}.aep` (binary).
  * `id` is the pack name (`Base`, `Bounce`, …), not a per-style folder.
@@ -417,17 +451,17 @@ export const downloadCaptionProject = async (
 ): Promise<CaptionDownloadResult & { unchanged?: boolean }> => {
   if (isCaptionsLocalOverrideActive(brand)) {
     const local = readLocalProjectFile(id, file, brand);
-    if (!local) {
-      throw new CaptionApiError("Project file not found.", 404, "PROJECT_NOT_READY");
+    if (local) {
+      if (
+        onlyIfChanged?.contentHash &&
+        local.contentHash &&
+        onlyIfChanged.contentHash === local.contentHash
+      ) {
+        return { ...local, unchanged: true };
+      }
+      return local;
     }
-    if (
-      onlyIfChanged?.contentHash &&
-      local.contentHash &&
-      onlyIfChanged.contentHash === local.contentHash
-    ) {
-      return { ...local, unchanged: true };
-    }
-    return local;
+    // Folder set but this pack file is missing — fall through to API/CDN.
   }
 
   const identity = user ?? getUserIdentity();
@@ -480,6 +514,11 @@ export const downloadCaptionProject = async (
       code = err.code;
     } catch {
       // binary / empty body
+    }
+    if (response.status === 404 || code === "PROJECT_NOT_READY") {
+      const b = brand ?? getActiveBrand();
+      const fromCdn = await downloadPackFromPublicCdn(id, file, b);
+      if (fromCdn) return fromCdn;
     }
     throw new CaptionApiError(message, response.status, code);
   }

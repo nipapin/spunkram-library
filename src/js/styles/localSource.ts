@@ -104,7 +104,11 @@ export const getCaptionsLocalRoot = (brand?: BrandId): string | null => {
   return stored;
 };
 
-export const isCaptionsLocalOverrideActive = (brand?: BrandId): boolean => !!getCaptionsLocalRoot(brand);
+/** True only when Settings has a real folder. Empty / missing path is always false. */
+export const isCaptionsLocalOverrideActive = (brand?: BrandId): boolean => {
+  if (!getStoredCaptionsLocalRoot()) return false;
+  return !!getCaptionsLocalRoot(brand);
+};
 
 /** Same segment rules as `publicCaptionFileUrl` — styleId + fileName under local root. */
 export const captionsLocalFile = (
