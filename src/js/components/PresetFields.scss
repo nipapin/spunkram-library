@@ -255,6 +255,12 @@
   }
 }
 
+.preset-fields__menu {
+  flex: 1;
+  min-width: 0;
+  max-width: 160px;
+}
+
 .preset-fields__select {
   flex: 1;
   min-width: 0;

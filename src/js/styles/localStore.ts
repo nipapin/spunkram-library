@@ -201,7 +201,7 @@ export const loadLocalPackage = (styleId: string): LocalStylePackage | null => {
   };
 };
 
-/** Persist only project.mogrt / project.aep. controls.json is fetched from CDN. */
+/** Persist only `{Pack}.mogrt` / `{Pack}.aep`. controls.json is fetched from CDN. */
 export const saveLocalPackage = (
   manifest: LocalStyleManifest,
   assets?: { aep?: ArrayBuffer | Uint8Array; mogrt?: ArrayBuffer | Uint8Array },

@@ -55,7 +55,7 @@ export interface StylePreset {
   id: string;
   name: string;
   favorite: boolean;
-  /** id на сервере (`Category/Caption Folder`). */
+  /** id на сервере (`Pack/Caption Folder`). */
   styleId: string;
   /** версия/метка локального пакета (downloadedAt). */
   styleVersion: string;
@@ -95,9 +95,9 @@ export interface LocalStyleManifest {
   version: string;
   downloadedAt: string;
   files: {
-    /** Shared master — usually `master.aep` */
+    /** Pack project — `{Pack}.aep` */
     aep?: string;
-    /** Shared master — usually `master.mogrt` */
+    /** Pack project — `{Pack}.mogrt` */
     mogrt?: string;
   };
   /** Fingerprint of last downloaded project file (R2 / CDN). */

@@ -20,7 +20,8 @@ import {
   saveLocalState,
   saveUserControls,
 } from "./localStore";
-import { MASTER_AEP_FILE, MASTER_MOGRT_FILE, MASTER_STYLE_ID } from "./paths";
+import { getLocalOverrideAssetPaths, isCaptionsLocalOverrideActive } from "./localSource";
+import { packIdFromStyleId, packProjectFileName } from "./paths";
 import type {
   CaptionCatalogCategory,
   CaptionCatalogEntry,
@@ -182,12 +183,14 @@ export const ensureDefinitionForStyle = async (
     force?: boolean;
   },
 ): Promise<MogrtDefinition> => {
-  if (!options?.force) {
+  const brand = getActiveBrand();
+  const localOverride = isCaptionsLocalOverrideActive(brand);
+  // Always re-read controls.json from disk when admin local source is active.
+  if (!options?.force && !localOverride) {
     const cached = controlsCache.get(styleId);
     if (cached) return cached;
   }
 
-  const brand = getActiveBrand();
   const url = resolveControlsUrl(
     {
       id: styleId,
@@ -200,11 +203,11 @@ export const ensureDefinitionForStyle = async (
 
   try {
     const parsed = await fetchCaptionControls(url, brand);
-    controlsCache.set(styleId, parsed);
+    if (!localOverride) controlsCache.set(styleId, parsed);
     return parsed;
   } catch {
     const empty = EMPTY_DEFINITION;
-    controlsCache.set(styleId, empty);
+    if (!localOverride) controlsCache.set(styleId, empty);
     return empty;
   }
 };
@@ -261,9 +264,20 @@ const fingerprintsMatch = (
   return false;
 };
 
-/** Whether AppData already has the host's shared master template. */
-export const hasLocalMasterTemplate = (hostAppId?: string): boolean => {
-  const pkg = loadLocalPackage(MASTER_STYLE_ID);
+/** Whether AppData already has this pack's host template (`{Pack}.aep` / `{Pack}.mogrt`). */
+export const hasLocalPackTemplate = (packId: string, hostAppId?: string): boolean => {
+  if (!packId) return false;
+
+  const override = getLocalOverrideAssetPaths(packId);
+  if (override) {
+    const aepOk = !!override.aep;
+    const mogrtOk = !!override.mogrt;
+    if (hostAppId === "PPRO") return mogrtOk || aepOk;
+    if (hostAppId === "AEFT") return aepOk || mogrtOk;
+    return aepOk || mogrtOk;
+  }
+
+  const pkg = loadLocalPackage(packId);
   if (!pkg || pkg.dir.startsWith("memory://")) return false;
   const aep = pkg.manifest.files.aep ? path.join(pkg.dir, pkg.manifest.files.aep) : undefined;
   const mogrt = pkg.manifest.files.mogrt ? path.join(pkg.dir, pkg.manifest.files.mogrt) : undefined;
@@ -274,27 +288,43 @@ export const hasLocalMasterTemplate = (hostAppId?: string): boolean => {
   return aepOk || mogrtOk;
 };
 
+const uniquePackIds = (styleIds: string[]): string[] => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of styleIds) {
+    const packId = packIdFromStyleId(id);
+    if (!packId || seen.has(packId)) continue;
+    seen.add(packId);
+    out.push(packId);
+  }
+  return out;
+};
+
 /**
- * POST /api/captions `{ id: "master", file }` → AppData/styles/master/master.aep|mogrt.
- * One shared template for all caption presets.
+ * POST /api/captions `{ id: packName, file }` → AppData/styles/{Pack}/{Pack}.aep|mogrt.
+ * One template per pack; styles in the same pack share it.
  */
-export const downloadMasterTemplate = async (
+export const downloadPackTemplate = async (
+  packId: string,
   options?: DownloadStyleOptions,
 ): Promise<{ updated: boolean }> => {
+  if (!packId) {
+    throw new Error("No caption pack id");
+  }
   const hostAppId = options?.hostAppId ?? getResolvedHostSync() ?? csi.hostEnvironment?.appId;
-  // Shared master is always brand-level — catalog per-style `files` flags are not authoritative
-  // (they may be false until the API sees Base/master.*). Prefer host format.
+  // Pack projects are always brand-level — catalog per-style `files` flags are not authoritative
+  // (they may be false until the API sees {Pack}/{Pack}.*). Prefer host format.
   const fileFlags = { mogrt: true, aep: true, definition: false as const };
   const file = options?.file ?? pickProjectFile(fileFlags, hostAppId);
   if (!file || file === "definition") {
-    throw new Error("No master template available (mogrt/aep)");
+    throw new Error("No pack template available (mogrt/aep)");
   }
 
-  const existing = loadLocalPackage(MASTER_STYLE_ID);
+  const existing = loadLocalPackage(packId);
   const localFp = options?.force || !existing ? null : localProjectFingerprint(existing, file);
 
   const downloaded = await downloadCaptionProject(
-    MASTER_STYLE_ID,
+    packId,
     file,
     undefined,
     getActiveBrand(),
@@ -322,13 +352,14 @@ export const downloadMasterTemplate = async (
   }
 
   if (!downloaded.buffer.byteLength) {
-    throw new Error("Empty master template download");
+    throw new Error("Empty pack template download");
   }
 
   const version = new Date().toISOString();
+  const fileName = packProjectFileName(packId, file);
   const manifest: LocalStyleManifest = {
-    id: MASTER_STYLE_ID,
-    name: "Master Caption Template",
+    id: packId,
+    name: packId,
     version,
     downloadedAt: version,
     files: {
@@ -337,20 +368,20 @@ export const downloadMasterTemplate = async (
     },
     remote: { file, ...remoteFp },
   };
-  if (file === "aep") manifest.files.aep = MASTER_AEP_FILE;
-  if (file === "mogrt") manifest.files.mogrt = MASTER_MOGRT_FILE;
+  if (file === "aep") manifest.files.aep = fileName;
+  if (file === "mogrt") manifest.files.mogrt = fileName;
 
   const assets: { aep?: ArrayBuffer; mogrt?: ArrayBuffer } = {};
   if (file === "aep") assets.aep = downloaded.buffer;
   if (file === "mogrt") assets.mogrt = downloaded.buffer;
 
   const saved = saveLocalPackage(manifest, assets);
-  if (!saved) throw new Error("Failed to save master caption template locally");
+  if (!saved) throw new Error("Failed to save pack caption template locally");
   return { updated: true };
 };
 
 /**
- * Ensure the shared master template is on disk for the current host.
+ * Ensure this style's pack template is on disk for the current host.
  * Also loads controls.json for `styleId` (preset values).
  */
 export const downloadStylePackage = async (
@@ -360,12 +391,13 @@ export const downloadStylePackage = async (
   preset: StylePreset;
   definition: MogrtDefinition;
 }> => {
-  await downloadMasterTemplate(options);
+  const packId = packIdFromStyleId(styleId);
+  await downloadPackTemplate(packId, options);
 
   const fileFlags = options?.files ?? { mogrt: true, aep: true, definition: true };
-  const master = loadLocalPackage(MASTER_STYLE_ID);
+  const pack = loadLocalPackage(packId);
   const name = options?.name || styleId.split("/").pop() || styleId;
-  const version = master?.manifest.version || new Date().toISOString();
+  const version = pack?.manifest.version || new Date().toISOString();
 
   const definition = await ensureDefinitionForStyle(styleId, {
     name,
@@ -395,15 +427,16 @@ export const downloadStylePackage = async (
 };
 
 /**
- * Refresh the shared master template when CDN Base version bumps.
- * `styleId` is ignored (kept for call-site compatibility).
+ * Refresh this style's pack template when CDN Base version bumps.
  */
 export const refreshStylePackageIfRemoteChanged = async (
-  _styleId?: string,
+  styleId?: string,
   options?: DownloadStyleOptions,
 ): Promise<{ updated: boolean; updateAvailable: boolean; error?: boolean }> => {
+  const packId = styleId ? packIdFromStyleId(styleId) : "";
+  if (!packId) return { updated: false, updateAvailable: false, error: true };
   try {
-    const result = await downloadMasterTemplate({ ...options, force: options?.force ?? true });
+    const result = await downloadPackTemplate(packId, { ...options, force: options?.force ?? true });
     return { updated: result.updated, updateAvailable: false };
   } catch {
     return { updated: false, updateAvailable: false, error: true };
@@ -413,10 +446,15 @@ export const refreshStylePackageIfRemoteChanged = async (
 /**
  * On style apply: if local Base/manifest.json is older than R2, drop the
  * controls.json cache so the next fetch gets the current dump.
- * Master mogrt/aep refresh runs in the background and persists the new version.
+ * Pack mogrt/aep refresh runs in the background and persists the new version.
  */
-export const refreshCaptionControlsIfRemoteNewer = async (): Promise<boolean> => {
+export const refreshCaptionControlsIfRemoteNewer = async (styleId?: string): Promise<boolean> => {
   const brand = getActiveBrand();
+  if (isCaptionsLocalOverrideActive(brand)) {
+    clearCaptionControlsCache();
+    return true;
+  }
+
   const remote = await fetchCaptionsCdnBaseManifest(brand);
   if (!remote) return false;
   const local = loadCdnBaseManifest();
@@ -424,7 +462,15 @@ export const refreshCaptionControlsIfRemoteNewer = async (): Promise<boolean> =>
     return false;
   }
   clearCaptionControlsCache();
-  void refreshStylePackageIfRemoteChanged(MASTER_STYLE_ID, { force: true }).then((r) => {
+  if (!styleId) {
+    saveCdnBaseManifest({
+      version: remote.version,
+      fetchedAt: new Date().toISOString(),
+      brand,
+    });
+    return true;
+  }
+  void refreshStylePackageIfRemoteChanged(styleId, { force: true }).then((r) => {
     if (r.error) return;
     saveCdnBaseManifest({
       version: remote.version,
@@ -438,9 +484,9 @@ export const refreshCaptionControlsIfRemoteNewer = async (): Promise<boolean> =>
 /**
  * При загрузке расширения / Refresh:
  * 1) GET /api/captions — сетка только из каталога
- * 2) shared master.aep/mogrt в AppData/styles/master/
+ * 2) pack `{Pack}.aep`/`{Pack}.mogrt` в AppData/styles/{Pack}/ (если уже скачан)
  * 3) user presets (Save as New) — отдельная секция Users
- * 4) CDN `{Brand} Captions/Base/manifest.json` — если version изменилась, перекачать master
+ * 4) CDN `{Brand} Captions/Base/manifest.json` — если version изменилась, перекачать локальные паки
  */
 export const syncCaptionStyles = async (options?: {
   checkRemoteUpdates?: boolean;
@@ -462,11 +508,10 @@ export const syncCaptionStyles = async (options?: {
   }
 
   const hostAppId = getResolvedHostSync() ?? csi.hostEnvironment?.appId;
-  const masterPkg = loadLocalPackage(MASTER_STYLE_ID);
-  const masterReady = hasLocalMasterTemplate(hostAppId);
-  let masterUpdated = false;
+  const catalogPackIds = uniquePackIds(catalog.map((c) => c.id));
+  const updatedPacks = new Set<string>();
 
-  if (checkRemote && catalog.length > 0) {
+  if (checkRemote && catalog.length > 0 && !isCaptionsLocalOverrideActive()) {
     const brand = getActiveBrand();
     const remoteManifest = await fetchCaptionsCdnBaseManifest(brand);
     const localManifest = loadCdnBaseManifest();
@@ -479,13 +524,16 @@ export const syncCaptionStyles = async (options?: {
       let persistRemote = true;
       clearCaptionControlsCache();
 
-      if (hadLocalSnapshot && masterReady) {
-        const result = await refreshStylePackageIfRemoteChanged(MASTER_STYLE_ID, {
-          hostAppId,
-          force: true,
-        });
-        masterUpdated = result.updated;
-        persistRemote = !result.error;
+      if (hadLocalSnapshot) {
+        const localPacks = catalogPackIds.filter((packId) => hasLocalPackTemplate(packId, hostAppId));
+        for (const packId of localPacks) {
+          const result = await refreshStylePackageIfRemoteChanged(packId, {
+            hostAppId,
+            force: true,
+          });
+          if (result.updated) updatedPacks.add(packId);
+          if (result.error) persistRemote = false;
+        }
       }
 
       if (persistRemote) {
@@ -496,21 +544,25 @@ export const syncCaptionStyles = async (options?: {
         });
       }
     }
+  } else if (isCaptionsLocalOverrideActive()) {
+    clearCaptionControlsCache();
   }
 
-  const masterVersion = masterPkg?.manifest.version || "";
   const presets: StylePreset[] = [];
 
   for (const item of catalog) {
     const favorite = !!localState.favorites[item.id];
-    const base = catalogToPreset(item, favorite, masterReady);
+    const packId = packIdFromStyleId(item.id);
+    const packReady = hasLocalPackTemplate(packId, hostAppId);
+    const base = catalogToPreset(item, favorite, packReady);
 
-    if (masterReady) {
+    if (packReady) {
+      const packPkg = loadLocalPackage(packId);
       presets.push({
         ...base,
-        styleVersion: masterVersion,
+        styleVersion: packPkg?.manifest.version || "",
         source: "downloaded",
-        updateAvailable: masterUpdated,
+        updateAvailable: updatedPacks.has(packId),
       });
     } else {
       presets.push(base);

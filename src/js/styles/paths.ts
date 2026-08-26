@@ -24,15 +24,19 @@ export const getStylesDir = (): string | null => {
 };
 
 /**
- * Shared host template id — one `master.aep` / `master.mogrt` for all presets.
- * POST /api/captions `{ id: "master", file: "aep"|"mogrt" }`.
+ * Catalog style id is `{Pack}/{Style}`. Pack name is the POST `/api/captions` id
+ * and the stem of `{Brand} Captions/{Pack}/{Pack}.aep|mogrt`.
  */
-export const MASTER_STYLE_ID = "master";
-export const MASTER_AEP_FILE = "master.aep";
-export const MASTER_MOGRT_FILE = "master.mogrt";
+export const packIdFromStyleId = (styleId: string): string => {
+  const parts = styleId.replace(/\\/g, "/").split("/").filter((p) => p && p !== "." && p !== "..");
+  return parts[0] || styleId.trim();
+};
+
+export const packProjectFileName = (packId: string, file: "aep" | "mogrt"): string =>
+  `${packId}.${file}`;
 
 /**
- * id с сервера: `Category/Caption Folder`.
+ * id с сервера: `Pack/Caption Folder`.
  * На диске `/` недопустим как имя — заменяем на `__`.
  */
 export const styleIdToDirName = (styleId: string): string =>
@@ -43,8 +47,8 @@ export const getStylePackageDir = (styleId: string): string | null => {
   return dir ? path.join(dir, styleIdToDirName(styleId)) : null;
 };
 
-/** AppData/styles/master/ — shared aep/mogrt cache. */
-export const getMasterPackageDir = (): string | null => getStylePackageDir(MASTER_STYLE_ID);
+/** AppData/styles/{Pack}/ — cached `{Pack}.aep` / `{Pack}.mogrt`. */
+export const getPackPackageDir = (packId: string): string | null => getStylePackageDir(packId);
 
 export const getLocalStatePath = (): string | null => {
   const root = getStylesRoot();

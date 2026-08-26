@@ -1,4 +1,5 @@
 .style-tab {
+  position: relative;
   flex: 1;
   min-height: 0;
   // Match `.tabs` width: panel already has horizontal margin
@@ -7,6 +8,23 @@
   flex-direction: column;
   gap: 12px;
   overflow: auto;
+}
+
+.style-tab--busy {
+  overflow: hidden;
+}
+
+.style-tab__busy {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--text-primary, #fcfcfc);
+  font-size: 12px;
 }
 
 .style-tab__section-label {

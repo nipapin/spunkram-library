@@ -47,8 +47,8 @@ export const CAPTIONS_ENDPOINTS = {
   /** GET — дерево категорий → captions (публичный) */
   catalog: "/api/captions",
   /**
-   * POST — скачать project.mogrt / project.aep
-   * Body: { id, file?: "mogrt" | "aep" }
+   * POST — скачать `{Pack}.mogrt` / `{Pack}.aep`
+   * Body: { id: packName, file?: "mogrt" | "aep" }
    * Требует session cookie + подписку.
    */
   download: "/api/captions",

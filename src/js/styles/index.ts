@@ -20,11 +20,11 @@ export { EMPTY_DEFINITION } from "./types";
 
 export {
   colorIdsFromDefinition,
-  downloadMasterTemplate,
+  downloadPackTemplate,
   downloadStylePackage,
   ensureDefinitionForStyle,
   clearCaptionControlsCache,
-  hasLocalMasterTemplate,
+  hasLocalPackTemplate,
   isPresetDirty,
   isPresetValuesDirty,
   makeOrigin,
@@ -54,6 +54,12 @@ export {
 } from "./api";
 export type { CaptionDownloadResult } from "./api";
 export {
+  getCaptionsLocalRoot,
+  getStoredCaptionsLocalRoot,
+  isCaptionsLocalOverrideActive,
+  setCaptionsLocalRoot,
+} from "./localSource";
+export {
   loadCdnBaseManifest,
   loadLocalPackage,
   loadLocalState,
@@ -69,17 +75,16 @@ export {
 } from "./localStore";
 export {
   getCdnBaseManifestPath,
-  getMasterPackageDir,
+  getPackPackageDir,
   getStylePackageDir,
   getStylesDir,
   getStylesRoot,
   getUserControlsPath,
   getUserStyleDir,
   getUserStylesDir,
+  packIdFromStyleId,
+  packProjectFileName,
   styleIdToDirName,
-  MASTER_AEP_FILE,
-  MASTER_MOGRT_FILE,
-  MASTER_STYLE_ID,
 } from "./paths";
 export {
   acquireAndApplyPreset,

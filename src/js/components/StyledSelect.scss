@@ -22,8 +22,13 @@
   cursor: pointer;
   text-align: left;
 
-  &:hover {
+  &:hover:not(:disabled) {
     border-color: var(--border-strong, var(--text-faint));
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   svg {
@@ -38,6 +43,11 @@
 
 .styled-select__btn--accent {
   color: var(--accent);
+}
+
+.styled-select__btn--placeholder {
+  color: var(--text-faint, var(--text-dim));
+  font-weight: 500;
 }
 
 .styled-select__label {

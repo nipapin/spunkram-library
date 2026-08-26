@@ -411,7 +411,7 @@ export const CaptionsApp = ({
     if (selected) {
       try {
         await ensureStyleDownloaded(selected.styleId);
-        const paths = getLocalStyleAssetPaths();
+        const paths = getLocalStyleAssetPaths(selected.styleId);
         if (paths?.mogrt) activeMogrtPath = paths.mogrt;
         if (paths?.aep) activeAepPath = paths.aep;
       } catch (e) {

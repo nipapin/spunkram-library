@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Check,
-  ChevronDown,
   FolderPlus,
   List,
   Loader2,
@@ -37,6 +35,7 @@ import { friendlyErrorMessage } from "@/utils/user-error";
 import { textGenerationsCost, withGenerationCostLabel } from "../../utils/generationCost";
 import { rangeFillStyle } from "../../utils/rangeFillStyle";
 import { ScrubNumber } from "../../components/ScrubNumber";
+import { StyledSelect } from "../../components/StyledSelect";
 import "./VoiceoverApp.scss";
 
 const HISTORY_STORAGE_KEY = storageKey("voiceoverHistory");
@@ -155,107 +154,6 @@ function playbackUrlFor(item: VoiceoverHistoryItem): string | null {
 
 function emotionLabel(id: string): string {
   return EMOTION_OPTIONS.find((e) => e.id === id)?.name ?? id;
-}
-
-function DropdownSelect<T extends { id: string }>({
-  items,
-  value,
-  onChange,
-  labelFor,
-  placeholder,
-}: {
-  items: T[];
-  value: string;
-  onChange: (id: string) => void;
-  labelFor: (item: T) => string;
-  placeholder: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const listId = useId();
-  const selected = items.find((v) => v.id === value);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointer = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={listId}
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          "flex w-full items-center gap-2 rounded-lg border border-white/10 bg-background/50 px-2.5 py-2 text-left text-xs text-foreground transition-colors",
-          "hover:border-primary/40",
-          open && "border-primary/50",
-        )}
-      >
-        <span className="min-w-0 flex-1 truncate">
-          {selected ? labelFor(selected) : placeholder}
-        </span>
-        <ChevronDown
-          className={cn(
-            "size-3.5 shrink-0 text-muted-foreground transition-transform",
-            open && "rotate-180",
-          )}
-        />
-      </button>
-
-      {open && (
-        <ul
-          id={listId}
-          role="listbox"
-          className={cn(
-            "absolute left-0 right-0 top-[calc(100%+4px)] z-40 max-h-44 overflow-y-auto rounded-xl",
-            "border border-white/10 bg-card/95 py-1 shadow-xl backdrop-blur-md",
-            "ring-1 ring-inset ring-white/5",
-          )}
-        >
-          {items.map((item) => {
-            const active = item.id === value;
-            return (
-              <li key={item.id} role="option" aria-selected={active}>
-                <button
-                  type="button"
-                  className={cn(
-                    "flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs transition-colors",
-                    active
-                      ? "bg-primary/15 text-foreground"
-                      : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
-                  )}
-                  onClick={() => {
-                    onChange(item.id);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="min-w-0 flex-1 truncate">{labelFor(item)}</span>
-                  {active ? <Check className="size-3.5 shrink-0 text-primary" /> : null}
-                </button>
-              </li>
-            );
-          })}
-          {items.length === 0 && (
-            <li className="px-2.5 py-2 text-[11px] text-muted-foreground">No options</li>
-          )}
-        </ul>
-      )}
-    </div>
-  );
 }
 
 function VoicePreview({ voice }: { voice: VoiceoverVoice | undefined }) {
@@ -706,35 +604,35 @@ export const VoiceoverApp = ({
 
           <div className="voiceover-app__field">
             <label className="voiceover-app__label">Language</label>
-            <DropdownSelect
-              items={languages}
+            <StyledSelect
               value={languageBoost}
+              options={languages.map((l) => ({ value: l.id, label: l.name }))}
               onChange={setLanguageBoost}
-              labelFor={(l) => l.name}
               placeholder="Select language"
+              ariaLabel="Language"
             />
           </div>
 
           <div className="voiceover-app__voice-grid">
             <div className="min-w-0">
               <label className="voiceover-app__label">Voice</label>
-              <DropdownSelect
-                items={voices}
+              <StyledSelect
                 value={voiceId}
+                options={voices.map((v) => ({ value: v.id, label: v.name }))}
                 onChange={setVoiceId}
-                labelFor={(v) => v.name}
                 placeholder="Select voice"
+                ariaLabel="Voice"
               />
               <VoicePreview voice={selectedVoice} />
             </div>
             <div className="min-w-0">
               <label className="voiceover-app__label">Emotion</label>
-              <DropdownSelect
-                items={[...EMOTION_OPTIONS]}
+              <StyledSelect
                 value={emotion}
+                options={EMOTION_OPTIONS.map((e) => ({ value: e.id, label: e.name }))}
                 onChange={setEmotion}
-                labelFor={(e) => e.name}
                 placeholder="Select emotion"
+                ariaLabel="Emotion"
               />
             </div>
           </div>

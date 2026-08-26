@@ -66,6 +66,13 @@ export const StyleTab = () => {
   const valuesDirty = selected ? isPresetValuesDirty(selected) : false;
   const [pickerOpen, setPickerOpen] = useState(false);
   const otherPresets = presets.filter((p) => p.id !== selected?.id).length;
+  const busy = acquireStatus === "downloading" || acquireStatus === "applying";
+  const busyOverlay = busy ? (
+    <div className="style-tab__busy" aria-live="polite">
+      <span className="spinner" />
+      {acquireStatus === "downloading" ? "Downloading style…" : "Applying style…"}
+    </div>
+  ) : null;
 
   const changePreset = (
     <button
@@ -108,18 +115,14 @@ export const StyleTab = () => {
 
   if (hasControls && definition) {
     return (
-      <div className="style-tab thin-scroll" tabIndex={-1}>
+      <div className={`style-tab thin-scroll${busy ? " style-tab--busy" : ""}`} tabIndex={-1}>
+        {busyOverlay}
         <div className="style-tab__editing-head">
           <span className="style-tab__section-label">EDITING · {selected.name}</span>
           {selected.updateAvailable && <span className="style-tab__update-pill">Update available</span>}
         </div>
         {changePreset}
         {picker}
-        {(acquireStatus === "downloading" || acquireStatus === "applying") && (
-          <p className="style-tab__hint">
-            {acquireStatus === "downloading" ? "Downloading style…" : "Applying style…"}
-          </p>
-        )}
         {acquireStatus === "error" && (
           <p className="style-tab__hint">Couldn’t apply this style to the selected caption.</p>
         )}
@@ -163,7 +166,8 @@ export const StyleTab = () => {
   }
 
   return (
-    <div className="style-tab style-tab--empty thin-scroll">
+    <div className={`style-tab style-tab--empty thin-scroll${busy ? " style-tab--busy" : ""}`}>
+      {busyOverlay}
       <p>{selected.name}</p>
       <p className="style-tab__hint">
         {definitionError ||
@@ -171,11 +175,6 @@ export const StyleTab = () => {
       </p>
       {changePreset}
       {picker}
-      {(acquireStatus === "downloading" || acquireStatus === "applying") && (
-        <p className="style-tab__hint">
-          {acquireStatus === "downloading" ? "Downloading style…" : "Applying style…"}
-        </p>
-      )}
       {acquireStatus === "error" && (
         <p className="style-tab__hint">Couldn’t apply this style to the selected caption.</p>
       )}

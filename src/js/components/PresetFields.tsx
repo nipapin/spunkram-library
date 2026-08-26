@@ -20,6 +20,7 @@ import { rangeFillStyle } from "../utils/rangeFillStyle";
 import { FontPicker } from "./FontPicker";
 import { ScrubNumber } from "./ScrubNumber";
 import { ColorField } from "./ColorField";
+import { StyledSelect } from "./StyledSelect";
 import "./PresetFields.scss";
 
 const localizedText = (value: ControlValue): string => {
@@ -168,20 +169,16 @@ const ControlField = ({
     return (
       <div className="preset-fields__param">
         <span className="preset-fields__param-label">{label}</span>
-        <select
-          className="preset-fields__select"
-          value={selected}
-          onChange={(e) => onValue(control.id, Number(e.target.value))}
-        >
-          {options.map((opt, i) => {
-            const index = i + 1;
-            return (
-              <option key={index} value={index}>
-                {menuOptionLabel(opt)}
-              </option>
-            );
-          })}
-        </select>
+        <StyledSelect
+          className="preset-fields__menu"
+          ariaLabel={label}
+          value={String(selected)}
+          options={options.map((opt, i) => ({
+            value: String(i + 1),
+            label: menuOptionLabel(opt),
+          }))}
+          onChange={(v) => onValue(control.id, Number(v))}
+        />
       </div>
     );
   }

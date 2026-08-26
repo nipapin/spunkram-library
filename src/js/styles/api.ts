@@ -10,6 +10,15 @@ import type {
   CaptionProjectFile,
   CaptionsCdnBaseManifest,
 } from "./types";
+import {
+  captionsLocalFile,
+  isCaptionsLocalOverrideActive,
+  isLocalFsPath,
+  readLocalBaseManifest,
+  readLocalControlsFile,
+  readLocalProjectFile,
+  scanLocalCaptionsCatalog,
+} from "./localSource";
 
 export class CaptionApiError extends Error {
   status: number;
@@ -117,7 +126,10 @@ const asCategory = (raw: unknown): CaptionCatalogCategory | null => {
 /** Абсолютный URL для `<img>` / `<video>` (previewImageUrl / previewVideoUrl). */
 export const resolveMediaUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
-  return url.startsWith("http") ? url : apiUrl(url);
+  if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
+  // Absolute FS paths stay as-is for controls; previews should already be blob: from scan
+  if (isLocalFsPath(url)) return url;
+  return apiUrl(url);
 };
 
 const CAPTIONS_CDN_BASE = "https://cdn.motionflow.pro";
@@ -158,6 +170,10 @@ export const captionsCdnBaseManifestUrl = (brand: BrandId): string =>
 export const fetchCaptionsCdnBaseManifest = async (
   brand: BrandId,
 ): Promise<CaptionsCdnBaseManifest | null> => {
+  if (isCaptionsLocalOverrideActive(brand)) {
+    return readLocalBaseManifest(brand);
+  }
+
   const url = withCacheBust(captionsCdnBaseManifestUrl(brand));
   const parse = (text: string): CaptionsCdnBaseManifest | null => {
     try {
@@ -209,8 +225,14 @@ export const resolveControlsUrl = (
   },
   brand: BrandId,
 ): string => {
+  if (isCaptionsLocalOverrideActive(brand)) {
+    if (item.controlsUrl && isLocalFsPath(item.controlsUrl)) return item.controlsUrl;
+    const local = captionsLocalFile(item.id, CONTROLS_FILE, brand);
+    if (local) return local;
+  }
   const explicit = resolveMediaUrl(item.controlsUrl);
-  if (explicit) return explicit;
+  if (explicit && !isLocalFsPath(explicit)) return explicit;
+  if (item.controlsUrl && isLocalFsPath(item.controlsUrl)) return item.controlsUrl;
   return (
     siblingPublicUrl(item.previewImageUrl, CONTROLS_FILE) ||
     siblingPublicUrl(item.previewVideoUrl, CONTROLS_FILE) ||
@@ -248,6 +270,15 @@ export const fetchCaptionControls = async (
       return null;
     }
   };
+
+  if (isLocalFsPath(url)) {
+    const text = readLocalControlsFile(url);
+    if (text) {
+      const parsed = parse(text);
+      if (parsed) return parsed;
+    }
+    return { clientControls: [] };
+  }
 
   const load = async (target: string): Promise<MogrtDefinition | null> => {
     try {
@@ -292,6 +323,10 @@ export const fetchCaptionControls = async (
 
 /** GET /api/captions — публичный каталог. `brand` — явная фиксация (по умолчанию сервер отдаёт "gal"). */
 export const fetchCaptionsCatalog = async (brand?: BrandId): Promise<CaptionCatalogResponse> => {
+  if (brand ? isCaptionsLocalOverrideActive(brand) : isCaptionsLocalOverrideActive()) {
+    return scanLocalCaptionsCatalog(brand);
+  }
+
   const url = brand
     ? `${CAPTIONS_ENDPOINTS.catalog}?brand=${encodeURIComponent(brand)}`
     : CAPTIONS_ENDPOINTS.catalog;
@@ -366,7 +401,8 @@ const userPayload = (user?: UserIdentity) => {
 };
 
 /**
- * POST /api/captions — скачать project.mogrt / project.aep (binary).
+ * POST /api/captions — скачать `{Pack}.mogrt` / `{Pack}.aep` (binary).
+ * `id` is the pack name (`Base`, `Bounce`, …), not a per-style folder.
  * Auth: Bearer Motionflow CEP token (preferred); user id/email also in body.
  *
  * Pass `onlyIfChanged` to skip buffering when remote etag matches (or after
@@ -379,6 +415,21 @@ export const downloadCaptionProject = async (
   brand?: BrandId,
   onlyIfChanged?: { etag?: string; byteLength?: number; contentHash?: string },
 ): Promise<CaptionDownloadResult & { unchanged?: boolean }> => {
+  if (isCaptionsLocalOverrideActive(brand)) {
+    const local = readLocalProjectFile(id, file, brand);
+    if (!local) {
+      throw new CaptionApiError("Project file not found.", 404, "PROJECT_NOT_READY");
+    }
+    if (
+      onlyIfChanged?.contentHash &&
+      local.contentHash &&
+      onlyIfChanged.contentHash === local.contentHash
+    ) {
+      return { ...local, unchanged: true };
+    }
+    return local;
+  }
+
   const identity = user ?? getUserIdentity();
   const headers: Record<string, string> = {
     Accept: "application/octet-stream, application/json",

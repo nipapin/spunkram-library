@@ -69,6 +69,8 @@ export const StyledSelect = ({
   ariaLabel,
   accent = false,
   className,
+  disabled = false,
+  placeholder,
 }: {
   value: string;
   options: StyledSelectOption[];
@@ -76,6 +78,8 @@ export const StyledSelect = ({
   ariaLabel?: string;
   accent?: boolean;
   className?: string;
+  disabled?: boolean;
+  placeholder?: string;
 }) => {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -83,9 +87,10 @@ export const StyledSelect = ({
   const listRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const selected = useMemo(
-    () => options.find((o) => o.value === value) ?? options[0],
+    () => options.find((o) => o.value === value),
     [options, value],
   );
+  const displayLabel = selected?.label ?? placeholder ?? value;
 
   useEffect(() => {
     if (!open) return;
@@ -102,12 +107,17 @@ export const StyledSelect = ({
     el?.scrollIntoView({ block: "nearest" });
   }, [activeIndex, open]);
 
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
   const pick = (next: string) => {
     onChange(next);
     setOpen(false);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
     if (!open) {
       if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
         e.preventDefault();
@@ -136,19 +146,23 @@ export const StyledSelect = ({
       <button
         ref={btnRef}
         type="button"
-        className={`styled-select__btn ${open ? "styled-select__btn--open" : ""} ${accent ? "styled-select__btn--accent" : ""}`}
+        className={`styled-select__btn ${open ? "styled-select__btn--open" : ""} ${accent ? "styled-select__btn--accent" : ""} ${!selected && placeholder ? "styled-select__btn--placeholder" : ""}`}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
         aria-label={ariaLabel}
-        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((v) => !v);
+        }}
         onKeyDown={onKeyDown}
       >
-        <span className="styled-select__label">{selected?.label ?? value}</span>
+        <span className="styled-select__label">{displayLabel}</span>
         <ChevronDown size={12} />
       </button>
 
-      <Menu open={open} anchor={btnRef.current} onClose={() => setOpen(false)}>
+      <Menu open={open && !disabled} anchor={btnRef.current} onClose={() => setOpen(false)}>
         <div ref={listRef} id={listId} className="styled-select__list">
           {options.map((opt, i) => (
             <button

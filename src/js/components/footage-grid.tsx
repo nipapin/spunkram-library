@@ -4,8 +4,8 @@ import {
   loadPreviewObjectUrl,
   packPrefersWebmPreview,
   playSfxPreview,
+  releasePreviewObjectUrl,
   resolveItemPreviewMedia,
-  revokePreviewObjectUrls,
   stopSfxPreview,
 } from "@/lib/utils/pack-preview";
 import { resolvePreviewAspectRatio, type PackContentSection } from "@/lib/utils/pack-tree";
@@ -53,6 +53,41 @@ function subscribeExclusiveHover(listener: () => void): () => void {
 
 function clearExclusiveHover(): void {
   setExclusiveHoverId(null);
+}
+
+/**
+ * Retain a local-file blob URL for as long as `path` is set.
+ * Releases on change/unmount so Strict Mode remounts can reuse the same blob.
+ */
+function usePreviewObjectUrl(path: string | null): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!path) {
+      setUrl(null);
+      return;
+    }
+
+    let alive = true;
+    let retained = false;
+    void loadPreviewObjectUrl(path).then((next) => {
+      if (!next) return;
+      if (!alive) {
+        releasePreviewObjectUrl(path);
+        return;
+      }
+      retained = true;
+      setUrl(next);
+    });
+
+    return () => {
+      alive = false;
+      setUrl(null);
+      if (retained) releasePreviewObjectUrl(path);
+    };
+  }, [path]);
+
+  return url;
 }
 
 function closestScrollParent(el: HTMLElement | null): Element | null {
@@ -118,12 +153,8 @@ const PreviewCard = memo(function PreviewCard({
   const [hovered, setHovered] = useState(false);
   const [inView, setInView] = useState(false);
   const [posterFailed, setPosterFailed] = useState(false);
-  const [posterUrl, setPosterUrl] = useState<string | null>(null);
-  const [motionUrl, setMotionUrl] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const itemIdRef = useRef(item.id);
-  itemIdRef.current = item.id;
 
   const media = useMemo(
     () => resolveItemPreviewMedia(item, assetsPath, { preferWebm, useMp4 }),
@@ -152,31 +183,15 @@ const PreviewCard = memo(function PreviewCard({
     setHovered(false);
     setInView(false);
     setPosterFailed(false);
-    setPosterUrl(media.posterUrl);
-    setMotionUrl(null);
     if (exclusiveHoverId === item.id) clearExclusiveHover();
     stopSfxPreview(item.id);
-  }, [item.id, media.posterUrl]);
+  }, [item.id]);
 
-  // Load poster as soon as the card mounts / item changes (queued FS reads).
+  const posterUrl = usePreviewObjectUrl(media.posterPath);
+
   useEffect(() => {
-    if (media.posterUrl) {
-      setPosterUrl(media.posterUrl);
-      return;
-    }
-    if (!media.posterPath) return;
-
-    const id = item.id;
-    let cancelled = false;
-    void loadPreviewObjectUrl(media.posterPath).then((url) => {
-      if (cancelled || itemIdRef.current !== id || !url) return;
-      setPosterUrl(url);
-      setPosterFailed(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [item.id, media.posterPath, media.posterUrl]);
+    if (posterUrl) setPosterFailed(false);
+  }, [posterUrl]);
 
   // Sync exclusive hover: another card took over, or panel-wide clear.
   useEffect(() => {
@@ -213,29 +228,11 @@ const PreviewCard = memo(function PreviewCard({
 
   // AutoPlay ⇒ visible cards; otherwise hover-only.
   const wantMotion = playPreview ? inView : hovered;
-  const showMotion = !!motion && !!motionUrl && wantMotion;
   const wantAudio = isAudio && hovered && audioEnabled && !locked;
 
-  useEffect(() => {
-    if (!motion) return;
-    if (!wantMotion) return;
-
-    const id = item.id;
-    const path = motion.path;
-    let cancelled = false;
-    void loadPreviewObjectUrl(path).then((url) => {
-      if (cancelled || itemIdRef.current !== id || !url) return;
-      setMotionUrl(url);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [wantMotion, motion, item.id]);
-
-  // Drop motion when leaving hover / play mode so a recycled cell can't flash old video.
-  useEffect(() => {
-    if (!wantMotion) setMotionUrl(null);
-  }, [wantMotion]);
+  const motionUrl = usePreviewObjectUrl(wantMotion && motion ? motion.path : null);
+  const audioUrl = usePreviewObjectUrl(wantAudio ? audioPath : null);
+  const showMotion = !!motion && !!motionUrl && wantMotion;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -261,25 +258,18 @@ const PreviewCard = memo(function PreviewCard({
   }, [showMotion, isVideoMotion, motionUrl, shouldMute, playPreview]);
 
   useEffect(() => {
-    if (!wantAudio || !audioPath) {
+    if (!wantAudio || !audioUrl) {
       stopSfxPreview(item.id);
       return;
     }
-    const id = item.id;
-    let cancelled = false;
-    void loadPreviewObjectUrl(audioPath).then((url) => {
-      if (cancelled || itemIdRef.current !== id || !url) return;
-      playSfxPreview(id, url);
-    });
+    playSfxPreview(item.id, audioUrl);
     return () => {
-      cancelled = true;
-      stopSfxPreview(id);
+      stopSfxPreview(item.id);
     };
-  }, [wantAudio, audioPath, item.id]);
+  }, [wantAudio, audioUrl, item.id]);
 
-  const resolvedPoster = posterUrl ?? media.posterUrl;
   const gifSrc = showMotion && isGifMotion && motionUrl ? motionUrl : null;
-  const imgSrc = gifSrc || resolvedPoster || undefined;
+  const imgSrc = gifSrc || posterUrl || undefined;
   const showAudioIcon = isAudio && (!imgSrc || posterFailed);
 
   function handlePointerEnter() {
@@ -395,8 +385,8 @@ const PreviewCard = memo(function PreviewCard({
       {/* Keep poster mounted under video so hover never flashes a blank/broken frame. */}
       {imgSrc && !posterFailed && (
         <img
-          key={`${item.id}:poster:${resolvedPoster ?? "none"}`}
-          src={gifSrc || resolvedPoster || imgSrc}
+          key={`${item.id}:poster:${posterUrl ?? "none"}`}
+          src={gifSrc || posterUrl || imgSrc}
           alt=""
           onError={() => setPosterFailed(true)}
           className="absolute inset-0 size-full object-cover"
@@ -409,7 +399,7 @@ const PreviewCard = memo(function PreviewCard({
           key={`${item.id}:${motionUrl}`}
           ref={videoRef}
           src={motionUrl}
-          poster={resolvedPoster ?? undefined}
+          poster={posterUrl ?? undefined}
           muted={shouldMute}
           loop
           playsInline
@@ -568,13 +558,6 @@ export function FootageGrid({
       if (timeoutId) window.clearTimeout(timeoutId);
     };
   }, [contentKey, needsSkeleton]);
-
-  // Free blob URLs when category / query / pack content changes.
-  useEffect(() => {
-    return () => {
-      revokePreviewObjectUrls();
-    };
-  }, [contentKey]);
 
   if (sections.length === 0 || itemCount === 0) {
     return (

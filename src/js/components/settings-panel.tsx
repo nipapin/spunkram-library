@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUpCircle, FolderOpen, Loader2, RotateCcw, Settings2, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowUpCircle, FolderOpen, Loader2, RotateCcw, Settings2, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
+import { useConfiguration } from "../../context/ConfigurationWrapper";
 import { resolvePackEntitlementContextForScan } from "@/api/cep-market";
 import {
   asBool,
@@ -18,6 +19,13 @@ import { applyExtensionUpdate } from "@/utils/extension-update";
 import { friendlyErrorMessage } from "@/utils/user-error";
 import * as panelStore from "@/lib/userdata-store";
 import { clearAllActivePackStorageKeys } from "@/lib/utils/pack-host";
+import {
+  clearCaptionControlsCache,
+  getStoredCaptionsLocalRoot,
+  setCaptionsLocalRoot,
+} from "../styles";
+import { BRAND } from "@brands";
+import { StyledSelect } from "./StyledSelect";
 
 const ACCENT_PILL = "pill-brand";
 
@@ -118,6 +126,7 @@ function ConfirmDialog({
 
 export function SettingsPanel({ onBack }: { onBack: () => void }) {
   const { prefs, setPrefs, auth, signedIn, subscription } = useAuth();
+  const { refreshStyles } = useConfiguration();
   const [confirm, setConfirm] = useState<"reset" | "remove" | null>(null);
   const [busy, setBusy] = useState(false);
   const isAdmin = isReleaseAdminEmail(auth.email);
@@ -132,6 +141,8 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
   const [installProgress, setInstallProgress] = useState<string | undefined>();
   const [installError, setInstallError] = useState<string | null>(null);
   const [packagesScanMsg, setPackagesScanMsg] = useState<string | null>(null);
+  const [captionsLocalPath, setCaptionsLocalPath] = useState(() => getStoredCaptionsLocalRoot());
+  const [captionsSourceMsg, setCaptionsSourceMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -232,6 +243,29 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
         useCustomPathForAssets: 1,
       }),
     );
+  }
+
+  async function applyCaptionsLocalSource(folder: string | null) {
+    setCaptionsLocalRoot(folder);
+    setCaptionsLocalPath(folder || "");
+    clearCaptionControlsCache();
+    setCaptionsSourceMsg(folder ? "Using local Captions folder." : "Back to CDN / API.");
+    try {
+      await refreshStyles();
+    } catch {
+      setCaptionsSourceMsg("Path saved — reopen Captions to refresh the grid.");
+    }
+  }
+
+  function browseCaptionsSource() {
+    selectFolder(captionsLocalPath || "", "Select Captions source folder (R2 layout)", (folder) => {
+      if (!folder) return;
+      void applyCaptionsLocalSource(folder);
+    });
+  }
+
+  function clearCaptionsSource() {
+    void applyCaptionsLocalSource(null);
   }
 
   function reloadExtension() {
@@ -351,27 +385,25 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
             ) : (
               <>
                 <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Version</label>
-                <select
+                <StyledSelect
+                  className="mb-2"
                   value={selectedVersion}
-                  onChange={(e) => setSelectedVersion(e.target.value)}
+                  onChange={setSelectedVersion}
                   disabled={installBusy}
-                  className="mb-2 w-full rounded-lg border border-white/10 bg-background/50 px-2.5 py-2 text-xs text-foreground focus:border-primary/50"
-                >
-                  {versions.map((v) => {
+                  ariaLabel="Version"
+                  options={versions.map((v) => {
                     const tags: string[] = [];
                     if (v.channel === "beta") tags.push("beta");
                     else tags.push("stable");
                     if (v.version === EXTENSION_VERSION) tags.push("installed");
                     if (v.version === pointerBeta) tags.push("beta→");
                     if (v.version === pointerStable) tags.push("latest→");
-                    return (
-                      <option key={v.version} value={v.version}>
-                        v{v.version}
-                        {tags.length ? ` (${tags.join(", ")})` : ""}
-                      </option>
-                    );
+                    return {
+                      value: v.version,
+                      label: `v${v.version}${tags.length ? ` (${tags.join(", ")})` : ""}`,
+                    };
                   })}
-                </select>
+                />
                 <button
                   type="button"
                   disabled={!canInstall}
@@ -392,6 +424,36 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
                 {installError && <p className="mt-1.5 text-[11px] text-destructive">{installError}</p>}
               </>
             )}
+          </section>
+        )}
+
+        {isAdmin && (
+          <section className="mb-3 glass-card rounded-[20px] p-3 ring-1 ring-inset ring-primary/20">
+            <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Admin · Captions source
+            </h3>
+            <p className="mb-2 text-[10px] text-muted-foreground">
+              Local folder with the same layout as R2 (
+              <span className="text-foreground">{BRAND.captionsCdnPrefix}/</span>
+              ): <span className="text-foreground">{"{Pack}/{Pack}.aep|mogrt"}</span> + style
+              folders. Clear to use CDN / API again.
+            </p>
+            <PathBrowse value={captionsLocalPath} onBrowse={browseCaptionsSource} />
+            <div className="mt-2 flex gap-1.5">
+              <button
+                type="button"
+                disabled={!captionsLocalPath}
+                onClick={clearCaptionsSource}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-background/40 px-3 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10",
+                  !captionsLocalPath && "cursor-not-allowed opacity-40",
+                )}
+              >
+                <X className="size-3.5" />
+                Clear (use CDN)
+              </button>
+            </div>
+            {captionsSourceMsg ? <p className="mt-1.5 text-[10px] text-primary">{captionsSourceMsg}</p> : null}
           </section>
         )}
 

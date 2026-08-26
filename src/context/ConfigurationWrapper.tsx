@@ -395,7 +395,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   const ensureStyleDownloaded = useCallback(
     async (styleId: string) => {
       const hostAppId = getResolvedHostSync() ?? csi.hostEnvironment?.appId;
-      const localPaths = getLocalStyleAssetPaths();
+      const localPaths = getLocalStyleAssetPaths(styleId);
       const hasHostFile =
         hostAppId === "PPRO" ? !!localPaths?.mogrt : !!(localPaths?.aep || localPaths?.mogrt);
 
@@ -407,7 +407,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
 
       const fromCatalog = presets.find((p) => p.styleId === styleId);
       const { preset, definition } = await downloadStylePackage(styleId, {
-        // Master download ignores these; keep true so preflight/UI stay sane.
+        // Pack download ignores per-style `files`; keep true so preflight/UI stay sane.
         files: { mogrt: true, aep: true, definition: !!fromCatalog?.files?.definition },
         name: fromCatalog?.name,
         controlsUrl: fromCatalog?.controlsUrl,
@@ -430,7 +430,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         const without = prev.filter((p) => p.id !== styleId);
         return [...without, nextPreset];
       });
-      applyPreparedAssets(getLocalStyleAssetPaths());
+      applyPreparedAssets(getLocalStyleAssetPaths(styleId));
     },
     [applyPreparedAssets, ensureDefinitionLoaded, presets],
   );
@@ -579,7 +579,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
   const resolveDefinitionForApply = useCallback(async (preset: StylePreset): Promise<MogrtDefinition> => {
     let force = false;
     try {
-      force = await refreshCaptionControlsIfRemoteNewer();
+      force = await refreshCaptionControlsIfRemoteNewer(preset.styleId);
     } catch {
       force = false;
     }
@@ -619,19 +619,27 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
     if (latest.source !== "user") resetCatalogPresetValues(latest.id, definition);
 
     if (applyValuesTimer.current) clearTimeout(applyValuesTimer.current);
-    await flushStyleValuesToHost(cacheKey, values, true, definition, true);
+    pendingStyleApply.current = null;
+    setAcquireStatus("applying");
+    try {
+      await flushStyleValuesToHost(cacheKey, values, true, definition, true);
+      setAcquireStatus("ready");
+    } catch (err) {
+      console.warn("[Styles] applySelectedPresetToHost failed", err);
+      setAcquireStatus("error");
+    }
   }, [ensureDefinitionLoaded, flushStyleValuesToHost, resolveDefinitionForApply]);
 
   const selectPresetGen = useRef(0);
 
-  /** Выбор в UI. Shared master — смена пресета только пушит values (без replaceSource). */
+  /** Выбор в UI. Смена пресета пушит values (без replaceSource); pack template — общий на пак. */
   const selectPreset = (id: string, opts?: { applyToHost?: boolean }) => {
     setSelectedPresetId(id);
     setAcquireStatus("idle");
     const target = presets.find((p) => p.id === id);
     if (!target) return;
 
-    const paths = getLocalStyleAssetPaths();
+    const paths = getLocalStyleAssetPaths(target.styleId);
     if (paths?.mogrt || paths?.aep) {
       applyPreparedAssets(paths);
     } else {
@@ -654,11 +662,11 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         const hostRef = readCaptionHostRef();
         if (!hostRef) return;
 
-        // Ensure shared master is on disk (no per-style project swap).
+        // Ensure this pack's .aep/.mogrt is on disk (no per-style project swap).
         setAcquireStatus("downloading");
         await ensureStyleDownloaded(target.styleId);
         if (selectPresetGen.current !== gen) return;
-        applyPreparedAssets(getLocalStyleAssetPaths());
+        applyPreparedAssets(getLocalStyleAssetPaths(target.styleId));
 
         if (!definition?.clientControls?.length && !definition?.init?.length) {
           setAcquireStatus("ready");
@@ -670,7 +678,10 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         const values = valuesForHostApply(latest, definition);
         if (latest.source !== "user") resetCatalogPresetValues(latest.id, definition);
         lastPushedProps.current = null;
-        pushStyleValuesToHost(cacheKey, values, { full: true, definition, applyInit: true });
+        if (applyValuesTimer.current) clearTimeout(applyValuesTimer.current);
+        pendingStyleApply.current = null;
+        await flushStyleValuesToHost(cacheKey, values, true, definition, true);
+        if (selectPresetGen.current !== gen) return;
         setAcquireStatus("ready");
       } catch (err) {
         if (selectPresetGen.current !== gen) return;

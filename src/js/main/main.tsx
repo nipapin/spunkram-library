@@ -64,7 +64,6 @@ import {
   type PackContentSection,
 } from "@/lib/utils/pack-tree";
 import type { InstalledPackMeta, PackSettings, PackTreeItem, PackTreeNode } from "@/lib/utils/pack-types";
-import { revokePreviewObjectUrls } from "@/lib/utils/pack-preview";
 import { cn } from "@/lib/utils";
 import * as panelStore from "@/lib/userdata-store";
 import { storageKey } from "@brands";
@@ -565,7 +564,6 @@ function AppShell() {
   const [hasPendingNatives, setHasPendingNatives] = useState(false);
 
   const applyPack = useCallback((meta: InstalledPackMeta) => {
-    revokePreviewObjectUrls();
     loadInstalledPack(meta)
       .then((loaded) => {
         const nextTree = buildPackTree(loaded.pack.structure);

@@ -5,8 +5,9 @@ import { getBundledCaptionsJsxPath } from "../utils/captionsJsx";
 import { defaultsFromDefinition } from "../presets";
 import type { MogrtDefinition } from "../presets/types";
 import { loadLocalPackage } from "./localStore";
-import { MASTER_STYLE_ID } from "./paths";
-import { downloadStylePackage, ensureDefinitionForStyle, hasLocalMasterTemplate, makeOrigin, previewFromValues } from "./sync";
+import { getLocalOverrideAssetPaths } from "./localSource";
+import { packIdFromStyleId } from "./paths";
+import { downloadStylePackage, ensureDefinitionForStyle, hasLocalPackTemplate, makeOrigin, previewFromValues } from "./sync";
 import type { CaptionCatalogEntry, StylePreset } from "./types";
 
 export interface LocalStyleAssetPaths {
@@ -38,11 +39,17 @@ const fileExists = (p?: string): boolean => {
 };
 
 /**
- * Local paths to the shared master.aep / master.mogrt.
- * `styleId` is ignored — all presets share one template.
+ * Local paths to this style's pack `{Pack}.aep` / `{Pack}.mogrt`.
+ * Admin local override prefers live `{Pack}/{Pack}.*` under the chosen folder.
  */
-export const getLocalStyleAssetPaths = (_styleId?: string): LocalStyleAssetPaths | null => {
-  const pkg = loadLocalPackage(MASTER_STYLE_ID);
+export const getLocalStyleAssetPaths = (styleId: string): LocalStyleAssetPaths | null => {
+  const packId = packIdFromStyleId(styleId);
+  if (!packId) return null;
+
+  const override = getLocalOverrideAssetPaths(packId);
+  if (override) return override;
+
+  const pkg = loadLocalPackage(packId);
   if (!pkg || pkg.dir.startsWith("memory://")) return null;
   const aep = pkg.manifest.files.aep ? path.join(pkg.dir, pkg.manifest.files.aep) : undefined;
   const mogrt = pkg.manifest.files.mogrt ? path.join(pkg.dir, pkg.manifest.files.mogrt) : undefined;
@@ -85,16 +92,17 @@ const presetFromLocal = (
 };
 
 /**
- * 1) ensure shared master.aep/mogrt in AppData (POST id=master)
+ * 1) ensure this pack's .aep/.mogrt in AppData (POST id=packName)
  * 2) load controls.json for this preset
- * 3) return local master paths
+ * 3) return local pack paths
  */
 export const acquirePresetProject = async (
   target: Pick<StylePreset, "id" | "name" | "styleId" | "files" | "controlsUrl" | "previewImageUrl" | "previewVideoUrl">,
   options?: { forceDownload?: boolean },
 ): Promise<PreparedPresetProject> => {
   const hostAppId = cepHostAppId() ?? undefined;
-  const paths = getLocalStyleAssetPaths();
+  const packId = packIdFromStyleId(target.styleId);
+  const paths = getLocalStyleAssetPaths(target.styleId);
   const definition = await ensureDefinitionForStyle(target.styleId, {
     name: target.name,
     files: target.files,
@@ -103,10 +111,10 @@ export const acquirePresetProject = async (
     previewVideoUrl: target.previewVideoUrl,
   });
 
-  if (!options?.forceDownload && hasLocalMasterTemplate(hostAppId) && hostHasNeededFile(paths, hostAppId)) {
-    const master = loadLocalPackage(MASTER_STYLE_ID);
+  if (!options?.forceDownload && hasLocalPackTemplate(packId, hostAppId) && hostHasNeededFile(paths, hostAppId)) {
+    const pack = loadLocalPackage(packId);
     return {
-      preset: presetFromLocal(target, definition, master?.manifest.version || "local"),
+      preset: presetFromLocal(target, definition, pack?.manifest.version || "local"),
       definition,
       paths,
     };
@@ -125,12 +133,12 @@ export const acquirePresetProject = async (
   return {
     preset,
     definition: downloadedDef.clientControls?.length ? downloadedDef : definition,
-    paths: getLocalStyleAssetPaths(),
+    paths: getLocalStyleAssetPaths(target.styleId),
   };
 };
 
 /**
- * Import the shared caption .mogrt/.aep (first placement only).
+ * Import the pack caption .mogrt/.aep (first placement only).
  * Style values are applied afterwards via applyCaptionStyleValues.
  */
 export const applyPresetProjectInHost = async (

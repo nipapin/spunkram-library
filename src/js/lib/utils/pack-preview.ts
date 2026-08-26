@@ -6,8 +6,6 @@ import type { PackSettings, PackTreeItem } from "./pack-types";
 export type PreviewMotionKind = "webm" | "mp4" | "gif";
 
 export type ItemPreviewMedia = {
-  /** Static poster src (blob: URL) if already cached; otherwise null until lazy load. */
-  posterUrl: string | null;
   /** Absolute poster path — load via `loadPreviewObjectUrl` near viewport. */
   posterPath: string | null;
   /** Absolute motion path — blob URL created lazily on hover / play. */
@@ -22,7 +20,16 @@ const POSTER_EXTS = [".png", ".jpg", ".jpeg"] as const;
 /** Cap concurrent FS→blob reads so CEP main thread stays responsive. */
 const MAX_CONCURRENT_READS = 3;
 
-const objectUrlCache = new Map<string, string>();
+type ObjectUrlEntry = {
+  url: string;
+  refs: number;
+  revokeTimer: ReturnType<typeof setTimeout> | null;
+};
+
+const objectUrlCache = new Map<string, ObjectUrlEntry>();
+
+/** Let React unmount `<img>`/`<video>` before the blob is dropped (Strict Mode, filters). */
+const REVOKE_DELAY_MS = 250;
 
 type ReadJob = {
   path: string;
@@ -75,16 +82,35 @@ function mimeFromExt(filePath: string): string {
   }
 }
 
+function cancelScheduledRevoke(entry: ObjectUrlEntry): void {
+  if (!entry.revokeTimer) return;
+  clearTimeout(entry.revokeTimer);
+  entry.revokeTimer = null;
+}
+
+function retainEntry(entry: ObjectUrlEntry): string {
+  entry.refs += 1;
+  cancelScheduledRevoke(entry);
+  return entry.url;
+}
+
+function dropEntry(path: string, entry: ObjectUrlEntry): void {
+  cancelScheduledRevoke(entry);
+  URL.revokeObjectURL(entry.url);
+  objectUrlCache.delete(path);
+}
+
 /**
  * Read a local file via CEP Node and expose it as a blob: URL.
  * Native `C:\...` paths are parsed as scheme `c:` → ERR_UNKNOWN_URL_SCHEME.
  * `file://` is often blocked from the panel's http origin.
+ * Does not retain — callers that display the URL must use `loadPreviewObjectUrl`.
  */
 export function pathToObjectUrl(absolutePath: string): string | null {
   if (!absolutePath || !cepFsAvailable()) return null;
 
   const cached = objectUrlCache.get(absolutePath);
-  if (cached) return cached;
+  if (cached) return cached.url;
 
   try {
     const data = fs.readFileSync(absolutePath) as Buffer;
@@ -92,7 +118,7 @@ export function pathToObjectUrl(absolutePath: string): string | null {
     const bytes = new Uint8Array(data);
     const blob = new Blob([bytes], { type: mimeFromExt(absolutePath) });
     const url = URL.createObjectURL(blob);
-    objectUrlCache.set(absolutePath, url);
+    objectUrlCache.set(absolutePath, { url, refs: 0, revokeTimer: null });
     return url;
   } catch {
     return null;
@@ -120,32 +146,53 @@ function pumpReadQueue(): void {
 
 /**
  * Resolve a file to a blob URL with a concurrency-limited queue.
- * Prefer this over sync `pathToObjectUrl` from React render/effects for posters.
+ * Each successful call retains the URL — pair with `releasePreviewObjectUrl`.
  */
 export function loadPreviewObjectUrl(absolutePath: string): Promise<string | null> {
   if (!absolutePath) return Promise.resolve(null);
   const cached = objectUrlCache.get(absolutePath);
-  if (cached) return Promise.resolve(cached);
+  if (cached) return Promise.resolve(retainEntry(cached));
 
   return new Promise((resolve) => {
-    readQueue.push({ path: absolutePath, resolve });
+    readQueue.push({
+      path: absolutePath,
+      resolve: (url) => {
+        if (!url) {
+          resolve(null);
+          return;
+        }
+        const entry = objectUrlCache.get(absolutePath);
+        resolve(entry ? retainEntry(entry) : url);
+      },
+    });
     pumpReadQueue();
   });
 }
 
-/** Drop cached blob URLs (call when leaving a category / unloading pack). */
+/**
+ * Drop one retain from `loadPreviewObjectUrl`. The blob is revoked after a short
+ * delay once no retainers remain, so Strict Mode remounts can reuse the same URL.
+ */
+export function releasePreviewObjectUrl(absolutePath: string): void {
+  if (!absolutePath) return;
+  const entry = objectUrlCache.get(absolutePath);
+  if (!entry) return;
+  entry.refs = Math.max(0, entry.refs - 1);
+  if (entry.refs > 0 || entry.revokeTimer) return;
+  entry.revokeTimer = setTimeout(() => {
+    const current = objectUrlCache.get(absolutePath);
+    if (!current || current.refs > 0) return;
+    dropEntry(absolutePath, current);
+  }, REVOKE_DELAY_MS);
+}
+
+/** Drop cached blob URLs that are not currently retained (pack unload). */
 export function revokePreviewObjectUrls(paths?: string[]): void {
-  if (!paths) {
-    for (const url of objectUrlCache.values()) URL.revokeObjectURL(url);
-    objectUrlCache.clear();
-    return;
-  }
-  for (const p of paths) {
-    const url = objectUrlCache.get(p);
-    if (url) {
-      URL.revokeObjectURL(url);
-      objectUrlCache.delete(p);
-    }
+  const keys = paths ?? [...objectUrlCache.keys()];
+  for (const p of keys) {
+    const entry = objectUrlCache.get(p);
+    if (!entry || entry.refs > 0) continue;
+    dropEntry(p, entry);
   }
 }
 
@@ -203,7 +250,7 @@ export function resolveItemPreviewMedia(
   },
 ): ItemPreviewMedia {
   if (!assetsPath || typeof path?.join !== "function") {
-    return { posterUrl: null, posterPath: null, motion: null };
+    return { posterPath: null, motion: null };
   }
 
   const disableWebm = !!item.group.disable_webm_preview;
@@ -214,12 +261,9 @@ export function resolveItemPreviewMedia(
   const baseWithoutExt = path.join(assetsPath, ...segments);
 
   const posterPath = firstExisting(baseWithoutExt, POSTER_EXTS);
-  const posterUrl = posterPath
-    ? (objectUrlCache.get(posterPath) ?? null)
-    : null;
 
   if (isStaticFootage || packItemIsAudio(item)) {
-    return { posterUrl, posterPath, motion: null };
+    return { posterPath, motion: null };
   }
 
   const preferWebm = !disableWebm && options?.preferWebm !== false;
@@ -232,7 +276,7 @@ export function resolveItemPreviewMedia(
     ? { kind: motionKindFromExt(motionPath), path: motionPath }
     : null;
 
-  return { posterUrl, posterPath, motion };
+  return { posterPath, motion };
 }
 
 let sfxAudio: HTMLAudioElement | null = null;
@@ -261,6 +305,12 @@ export function stopSfxPreview(ownerId?: string): void {
   if (ownerId && sfxOwnerId !== ownerId) return;
   if (!sfxAudio) return;
   sfxAudio.pause();
+  sfxAudio.removeAttribute("src");
+  try {
+    sfxAudio.load();
+  } catch {
+    // ignore
+  }
   try {
     sfxAudio.currentTime = 0;
   } catch {
