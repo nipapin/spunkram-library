@@ -129,6 +129,10 @@ async function withHostJsonFile<T>(
       } else if (runSettled) {
         // A callback that carries a value means the host finished and answered.
         if (!runError && out != null && !isSidecarStarted(out)) return out as T;
+        // Host returned JSON null — soft failure, not a hang.
+        if (!runError && out === null) {
+          throw new Error("Could not update captions on the timeline.");
+        }
         // Otherwise give the host a moment to flush the sidecar.
         if (!graceDeadline) graceDeadline = Date.now() + 2000;
         if (Date.now() > graceDeadline) break;
@@ -139,7 +143,12 @@ async function withHostJsonFile<T>(
     if (late !== undefined && !isSidecarStarted(late)) return late as T;
     if (runError) throw runError;
     if (out != null && !isSidecarStarted(out)) return out as T;
-    throw new Error("After Effects did not answer. Reload the panel and try again.");
+    if (runSettled && out === null) {
+      throw new Error("Could not update captions on the timeline.");
+    }
+    throw new Error(
+      `${hostLabel()} did not answer. Reload the panel and try again.`,
+    );
   } finally {
     try {
       fs.unlinkSync(filePath);

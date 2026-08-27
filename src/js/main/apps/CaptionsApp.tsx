@@ -676,6 +676,10 @@ export const CaptionsApp = ({
     })
       .then((r) => {
         if (!r.ok) throw new Error(r.error);
+        const data = r.data as { updated?: boolean; error?: string } | null | undefined;
+        if (data && data.updated === false) {
+          throw new Error(data.error || "Could not update captions on the timeline.");
+        }
       })
       .catch((e: unknown) => {
       showError(e);
