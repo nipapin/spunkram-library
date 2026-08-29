@@ -18,8 +18,9 @@ import { handleUnauthorized } from "@/lib/api/session";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { readInstallablePackages } from "@/lib/utils/pack";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
-import { friendlyErrorMessage } from "@/utils/user-error";
+import { friendlyErrorMessage, isAbortLikeError } from "@/utils/user-error";
 import { reportSupportError } from "@/api/support";
+import { reportInstalledPacks } from "@/api/telemetry";
 
 export type DownloadJobStatus =
   | "queued"
@@ -187,7 +188,11 @@ export function DownloadManagerProvider({
         });
       }
 
-      if (cancelledRef.current.has(nextId) || (!result.ok && result.code === "ABORTED")) {
+      if (
+        cancelledRef.current.has(nextId) ||
+        controller.signal.aborted ||
+        (!result.ok && (result.code === "ABORTED" || isAbortLikeError(result)))
+      ) {
         updateJob(nextId, { status: "cancelled" });
       } else if (!result.ok) {
         if (result.code === "UNAUTHORIZED") handleUnauthorized();
@@ -216,6 +221,7 @@ export function DownloadManagerProvider({
           "success",
           4000,
         );
+        void reportInstalledPacks();
         // Re-read useWhenReady from latest job state (user may have toggled Switch).
         const latest = await new Promise<DownloadJob | undefined>((resolve) => {
           setJobs((prev) => {
@@ -229,7 +235,11 @@ export function DownloadManagerProvider({
         }
       }
     } catch (e) {
-      if (cancelledRef.current.has(nextId)) {
+      if (
+        cancelledRef.current.has(nextId) ||
+        controller.signal.aborted ||
+        isAbortLikeError(e)
+      ) {
         updateJob(nextId, { status: "cancelled" });
       } else {
         const message = friendlyErrorMessage(e);

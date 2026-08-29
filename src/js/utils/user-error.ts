@@ -127,7 +127,7 @@ function mapTechnicalMessage(text: string, codes: string[]): string | null {
     return "Not enough disk space. Free some space and try again.";
   }
   if (codes.includes("EACCES") || codes.includes("EPERM") || /\bEACCES\b|\bEPERM\b/.test(text)) {
-    return "Permission denied. Check the folder and try again.";
+    return "Couldn't save the file (it may be in use). Wait a moment and try again.";
   }
   if (codes.includes("ENOENT") || /\bENOENT\b/.test(text)) {
     return "File not found. Try downloading again.";
@@ -137,6 +137,24 @@ function mapTechnicalMessage(text: string, codes: string[]): string | null {
   }
   if (looksLikeInternalError(text)) return GENERIC_ERROR;
   return null;
+}
+
+const ABORT_CODES = new Set([
+  "ABORTED",
+  "ABORT_ERR",
+  "ERR_CANCELED",
+  "ERR_CANCELLED",
+  "CANCELLED",
+]);
+
+/** User hit Cancel — not a product failure, never a support alert. */
+export function isAbortLikeError(err: unknown): boolean {
+  if (err == null || err === "") return false;
+  const rec = asRecord(err);
+  if (rec?.name === "AbortError") return true;
+  const bits = collectErrorBits(err);
+  if (bits.codes.some((c) => ABORT_CODES.has(c.toUpperCase()))) return true;
+  return /\b(?:download |installation )?cancell?ed\b/i.test(bits.text);
 }
 
 /** Soft host failures the user can fix without support. */

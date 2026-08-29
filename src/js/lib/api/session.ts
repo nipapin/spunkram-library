@@ -2,7 +2,11 @@
  * Single session token source for all Motionflow CEP calls.
  * Opaque `mfcep_…` from device login — never invent secondary credentials.
  */
-import { readMotionflowAuth, writeMotionflowAuth } from "@/lib/api/preferences";
+import {
+  readMotionflowAuth,
+  removeAccountSession,
+  writeMotionflowAuth,
+} from "@/lib/api/preferences";
 import { clearUserIdentity } from "@/api/user";
 
 export function getSessionToken(): string | null {
@@ -43,10 +47,23 @@ export function onSessionExpired(listener: SessionExpiredListener): () => void {
 
 /** Wipe local session and notify UI (login screen). Safe to call repeatedly. */
 export function clearSession(reason = "UNAUTHORIZED"): void {
+  let accountId: string | undefined;
+  try {
+    accountId = readMotionflowAuth().id;
+  } catch {
+    /* ignore */
+  }
   try {
     writeMotionflowAuth({});
   } catch {
     /* ignore */
+  }
+  if (accountId) {
+    try {
+      removeAccountSession(accountId);
+    } catch {
+      /* ignore */
+    }
   }
   try {
     clearUserIdentity();

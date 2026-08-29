@@ -19,6 +19,7 @@ import {
   savePreferencesFile,
 } from "@/lib/api/preferences";
 import { downloadToFile } from "@/utils/download-file";
+import { isAbortLikeError } from "@/utils/user-error";
 import { installPackFromFile } from "@/lib/utils/pack-install";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 import { normalizePackHost } from "@/lib/utils/pack-host";
@@ -440,7 +441,7 @@ export async function downloadAndInstallPack(
         ? String((e as { code: unknown }).code)
         : undefined;
     const message = e instanceof Error ? e.message : String(e);
-    if (code === "ABORTED" || opts?.signal?.aborted) {
+    if (code === "ABORTED" || opts?.signal?.aborted || isAbortLikeError(e)) {
       return { ok: false, code: "ABORTED", message: "Download cancelled" };
     }
     if (code === "NOT_OWNED" || code === "SUBSCRIPTION_REQUIRED") {
@@ -587,7 +588,7 @@ export async function downloadAndApplyPackDiff(
         ? String((e as { code: unknown }).code)
         : undefined;
     const message = e instanceof Error ? e.message : String(e);
-    if (code === "ABORTED" || opts?.signal?.aborted) {
+    if (code === "ABORTED" || opts?.signal?.aborted || isAbortLikeError(e)) {
       return { ok: false, code: "ABORTED", message: "Download cancelled" };
     }
     if (

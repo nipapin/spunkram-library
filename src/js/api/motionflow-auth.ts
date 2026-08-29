@@ -19,6 +19,7 @@ function clientQuery(): string {
 export const AUTH_ENDPOINTS = {
   device: "/api/cep/auth/device",
   token: "/api/cep/auth/token",
+  replaceDevice: "/api/cep/auth/replace-device",
   me: "/api/cep/me",
   revokeDevice: "/api/cep/devices/revoke",
   subscribe: `${PUBLIC_AUTH_ORIGIN}${BRAND.sitePath}`,
@@ -103,9 +104,24 @@ export type DeviceAuthStart = {
   expires_in: number;
 };
 
+export type DeviceLimitListItem = {
+  id: string;
+  ip: string;
+  user_fingerprint: string;
+  name?: string;
+  last_seen_at?: string | null;
+  current?: boolean;
+};
+
 export type DeviceAuthTokenResult =
   | { status: "pending" }
   | { status: "expired" | "denied"; message?: string }
+  | {
+      status: "device_limit";
+      devices: DeviceLimitListItem[];
+      device_limit: number;
+      message?: string;
+    }
   | { status: "complete"; token: string; user: MotionflowUser };
 
 function authHeaders(token?: string): Record<string, string> {
@@ -189,11 +205,13 @@ export async function pollDeviceAuth(
     return { status: "expired", message: "Missing device_code" };
   }
 
-  const { data, error, status } = await parseJson<{
+  const { data, error } = await parseJson<{
     status?: string;
     token?: string;
     user?: MotionflowUser;
     message?: string;
+    devices?: DeviceLimitListItem[];
+    device_limit?: number;
   }>(apiUrl(AUTH_ENDPOINTS.token), {
     method: "POST",
     headers: authHeaders(),
@@ -211,6 +229,14 @@ export async function pollDeviceAuth(
     }
     return { status: "pending" };
   }
+  if (s === "device_limit") {
+    return {
+      status: "device_limit",
+      devices: Array.isArray(data.devices) ? data.devices : [],
+      device_limit: Number(data.device_limit) || 3,
+      message: data.message || error,
+    };
+  }
   if (s === "expired" || s === "denied") {
     return { status: s, message: data.message || error };
   }
@@ -218,6 +244,39 @@ export async function pollDeviceAuth(
     return { status: "complete", token: data.token, user: data.user };
   }
   return { status: "pending" };
+}
+
+/** Complete a device_limit login by revoking another device. */
+export async function replaceDeviceAuth(opts: {
+  code: string;
+  device_code: string;
+  revoke_device_id: string;
+}): Promise<DeviceAuthTokenResult> {
+  const { data, error } = await parseJson<{
+    status?: string;
+    token?: string;
+    user?: MotionflowUser;
+    message?: string;
+  }>(apiUrl(AUTH_ENDPOINTS.replaceDevice), {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      code: opts.code,
+      device_code: opts.device_code,
+      revoke_device_id: opts.revoke_device_id,
+    }),
+  });
+
+  if (data?.token && data.user) {
+    return { status: "complete", token: data.token, user: data.user };
+  }
+  if ((data?.status || "").toLowerCase() === "complete" && data.token && data.user) {
+    return { status: "complete", token: data.token, user: data.user };
+  }
+  return {
+    status: "expired",
+    message: data?.message || error || "Could not replace device",
+  };
 }
 
 /** Normalize /me — trust server; never filter by author_id on the client. */

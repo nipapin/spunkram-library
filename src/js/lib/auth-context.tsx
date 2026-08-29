@@ -29,9 +29,11 @@ import {
   fetchMe,
   openVerificationUrl,
   pollDeviceAuth,
+  replaceDeviceAuth,
   revokeMotionflowDevice,
   setSubscriptionUrls,
   startDeviceAuth,
+  type DeviceLimitListItem,
   type MotionflowDevice,
   type MotionflowPurchase,
   type MotionflowSubscription,
@@ -39,7 +41,7 @@ import {
 import { fetchCepMarket, type CepMarketPayload } from "@/api/cep-market";
 import { clearUserIdentity, setUserIdentity } from "@/api/user";
 import { reportSupportError } from "@/api/support";
-import { reportClientSession } from "@/api/telemetry";
+import { reportClientSession, reportInstalledPacks } from "@/api/telemetry";
 import { currentHostAppId } from "@/lib/utils/apply-item";
 import {
   resolveAccessTier,
@@ -94,8 +96,15 @@ type AuthContextValue = {
   switchAccount: (id: string) => Promise<AuthActionResult>;
   removeSavedAccount: (id: string) => Promise<AuthActionResult>;
   cancelLogin: () => void;
+  /** While device_limit: pick a device to revoke and finish login. */
+  confirmReplaceDevice: (deviceId: string) => void;
   loginBusy: boolean;
   loginCode: string | null;
+  /** Devices to pick from when at the account device limit. */
+  loginDeviceLimit: {
+    devices: DeviceLimitListItem[];
+    device_limit: number;
+  } | null;
   logout: () => Promise<void>;
   recheck: () => Promise<AuthActionResult>;
   revoke: (deviceId: string) => Promise<AuthActionResult>;
@@ -178,7 +187,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authReady, setAuthReady] = useState(false);
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginCode, setLoginCode] = useState<string | null>(null);
+  const [loginDeviceLimit, setLoginDeviceLimit] = useState<{
+    devices: DeviceLimitListItem[];
+    device_limit: number;
+  } | null>(null);
   const loginAbortRef = useRef(false);
+  const devicePickResolverRef = useRef<((deviceId: string | null) => void) | null>(
+    null,
+  );
 
   const refreshSavedAccounts = useCallback(() => {
     setSavedAccounts(listAccountSessions());
@@ -236,8 +252,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     return onSessionExpired(() => {
       clearSessionLocal();
+      refreshSavedAccounts();
     });
-  }, [clearSessionLocal]);
+  }, [clearSessionLocal, refreshSavedAccounts]);
 
   const refreshProfile = useCallback(
     async (token: string, opts?: { removeAccountIdOnUnauthorized?: string }) => {
@@ -301,6 +318,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }),
       );
       void reportClientSession();
+      void reportInstalledPacks();
       return { ok: true as const };
     },
     [applySession, clearSessionLocal, refreshSavedAccounts],
@@ -337,14 +355,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMarket(data);
       setMarketLoaded(true);
       setMarketLoading(false);
+      void reportInstalledPacks();
     },
     [market, marketLoaded],
+  );
+
+  const finishDeviceLogin = useCallback(
+    async (token: string, user: { id: string; email: string; name?: string }) => {
+      const nextAuth: MotionflowAuth = {
+        token,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      };
+      upsertAccountSession({
+        id: nextAuth.id!,
+        email: nextAuth.email!,
+        name: nextAuth.name,
+        token: nextAuth.token!,
+      });
+      setAuth(nextAuth);
+      syncAiIdentity(nextAuth);
+      refreshSavedAccounts();
+      const profile = await refreshProfile(token);
+      setLoginBusy(false);
+      setLoginCode(null);
+      setLoginDeviceLimit(null);
+      await refreshMarket(true);
+      return profile.ok
+        ? { ok: true as const, message: "Signed in to Motionflow" }
+        : { ok: true as const, message: profile.message || "Signed in" };
+    },
+    [refreshMarket, refreshProfile, refreshSavedAccounts],
   );
 
   const runDeviceCodeLogin = useCallback(async (): Promise<AuthActionResult> => {
     loginAbortRef.current = false;
     setLoginBusy(true);
     setLoginCode(null);
+    setLoginDeviceLimit(null);
+    if (devicePickResolverRef.current) {
+      devicePickResolverRef.current(null);
+      devicePickResolverRef.current = null;
+    }
 
     const started = await startDeviceAuth();
     if ("error" in started) {
@@ -374,33 +427,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (loginAbortRef.current) break;
 
       if (result.status === "complete") {
-        const nextAuth: MotionflowAuth = {
-          token: result.token,
-          id: result.user.id,
-          email: result.user.email,
-          name: result.user.name,
-        };
-        upsertAccountSession({
-          id: nextAuth.id!,
-          email: nextAuth.email!,
-          name: nextAuth.name,
-          token: nextAuth.token!,
+        return finishDeviceLogin(result.token, result.user);
+      }
+
+      if (result.status === "device_limit") {
+        setLoginDeviceLimit({
+          devices: result.devices,
+          device_limit: result.device_limit,
         });
-        setAuth(nextAuth);
-        syncAiIdentity(nextAuth);
-        refreshSavedAccounts();
-        const profile = await refreshProfile(result.token);
+        const revokeId = await new Promise<string | null>((resolve) => {
+          devicePickResolverRef.current = resolve;
+        });
+        devicePickResolverRef.current = null;
+        if (!revokeId || loginAbortRef.current) {
+          setLoginBusy(false);
+          setLoginCode(null);
+          setLoginDeviceLimit(null);
+          return { ok: false, message: "Login cancelled" };
+        }
+        const replaced = await replaceDeviceAuth({
+          code,
+          device_code,
+          revoke_device_id: revokeId,
+        });
+        if (replaced.status === "complete") {
+          return finishDeviceLogin(replaced.token, replaced.user);
+        }
         setLoginBusy(false);
         setLoginCode(null);
-        await refreshMarket(true);
-        return profile.ok
-          ? { ok: true, message: "Signed in to Motionflow" }
-          : { ok: true, message: profile.message || "Signed in" };
+        setLoginDeviceLimit(null);
+        return {
+          ok: false,
+          message: replaced.message || "Could not revoke device",
+        };
       }
 
       if (result.status === "expired" || result.status === "denied") {
         setLoginBusy(false);
         setLoginCode(null);
+        setLoginDeviceLimit(null);
         return { ok: false, message: result.message || `Login ${result.status}` };
       }
 
@@ -409,19 +474,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setLoginBusy(false);
     setLoginCode(null);
+    setLoginDeviceLimit(null);
     if (loginAbortRef.current) {
       return { ok: false, message: "Login cancelled" };
     }
     return { ok: false, message: "Login timed out — try again" };
-  }, [refreshMarket, refreshProfile, refreshSavedAccounts]);
+  }, [finishDeviceLogin]);
 
   const loginWithMotionflow = runDeviceCodeLogin;
   const addAccount = runDeviceCodeLogin;
 
   const cancelLogin = useCallback(() => {
     loginAbortRef.current = true;
+    if (devicePickResolverRef.current) {
+      devicePickResolverRef.current(null);
+      devicePickResolverRef.current = null;
+    }
     setLoginBusy(false);
     setLoginCode(null);
+    setLoginDeviceLimit(null);
+  }, []);
+
+  const confirmReplaceDevice = useCallback((deviceId: string) => {
+    if (devicePickResolverRef.current) {
+      devicePickResolverRef.current(deviceId);
+      devicePickResolverRef.current = null;
+    }
   }, []);
 
   const switchAccount = useCallback(
@@ -621,8 +699,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       switchAccount,
       removeSavedAccount,
       cancelLogin,
+      confirmReplaceDevice,
       loginBusy,
       loginCode,
+      loginDeviceLimit,
       logout,
       recheck,
       revoke,
@@ -648,8 +728,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       switchAccount,
       removeSavedAccount,
       cancelLogin,
+      confirmReplaceDevice,
       loginBusy,
       loginCode,
+      loginDeviceLimit,
       logout,
       recheck,
       revoke,

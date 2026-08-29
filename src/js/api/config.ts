@@ -38,6 +38,10 @@ export const SUPPORT_ENDPOINT = "/api/cep/support/report" as const;
 
 /** POST — host app version + OS after sign-in (Bearer required). */
 export const TELEMETRY_SESSION_ENDPOINT = "/api/cep/telemetry/session" as const;
+/** POST — full snapshot of installed market packs on this device. */
+export const TELEMETRY_INSTALLS_ENDPOINT = "/api/cep/telemetry/installs" as const;
+/** POST — packs currently open / focused (full snapshot). */
+export const TELEMETRY_ACTIVE_PACKS_ENDPOINT = "/api/cep/telemetry/active-packs" as const;
 
 /**
  * Каталог MOGRT/AEP-стилей — код из предыдущей версии продукта (Captions CEP),

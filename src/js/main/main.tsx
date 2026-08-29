@@ -46,6 +46,7 @@ import {
   isPackEntitled,
 } from "@/lib/utils/pack-entitlement";
 import { readPrefSettings } from "@/lib/api/preferences";
+import { reportActivePacks } from "@/api/telemetry";
 import {
   activePackStorageKey,
   currentPackHost,
@@ -585,6 +586,26 @@ function AppShell() {
     if (!packFilePath || !category) return;
     persistCategoryForPack(packFilePath, category);
   }, [packFilePath, category]);
+
+  // Telemetry: active market pack (or empty when none).
+  useEffect(() => {
+    if (!signedIn || !authReady) return;
+    if (!packFilePath) {
+      void reportActivePacks([]);
+      return;
+    }
+    const installed = readInstallablePackages();
+    const norm = packFilePath.replace(/\\/g, "/").toLowerCase();
+    const match = installed.find(
+      (p) => (p.path || "").replace(/\\/g, "/").toLowerCase() === norm,
+    );
+    const marketId = match?.marketId != null ? Number(match.marketId) : NaN;
+    if (Number.isInteger(marketId) && marketId > 0) {
+      void reportActivePacks([marketId]);
+    } else {
+      void reportActivePacks([]);
+    }
+  }, [packFilePath, signedIn, authReady]);
 
   const reloadPackList = useCallback(async () => {
     const custom = (readPrefSettings().absCustomAbsolutePath || "").trim();

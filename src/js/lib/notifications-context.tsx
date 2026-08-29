@@ -100,6 +100,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   const handleWsEvent = useCallback(
     (ev: CepWsEvent) => {
+      if (ev.type === "device.revoked") {
+        // Session wipe happens in cep-ws via handleUnauthorized.
+        showStatus("This device was signed out remotely", "error", 6000);
+        return;
+      }
       if (ev.type === "extension.update") {
         // Hint listeners (main UpdateBanner) re-check GET /api/cep/update for beta gate.
         for (const h of extensionHandlers.current) {
@@ -113,7 +118,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       }
       pushPackEvent(ev);
     },
-    [pushPackEvent],
+    [pushPackEvent, showStatus],
   );
 
   useEffect(() => {

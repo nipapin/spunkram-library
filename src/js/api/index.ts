@@ -5,10 +5,16 @@ export {
   PRESET_ENDPOINTS,
   SUPPORT_ENDPOINT,
   TELEMETRY_SESSION_ENDPOINT,
+  TELEMETRY_INSTALLS_ENDPOINT,
+  TELEMETRY_ACTIVE_PACKS_ENDPOINT,
   VOICEOVER_ENDPOINTS,
   apiUrl,
 } from "./config";
-export { reportClientSession } from "./telemetry";
+export {
+  reportClientSession,
+  reportInstalledPacks,
+  reportActivePacks,
+} from "./telemetry";
 export {
   installGlobalHandlers,
   reportSupportError,
@@ -30,6 +36,7 @@ export {
   fetchMe,
   startDeviceAuth,
   pollDeviceAuth,
+  replaceDeviceAuth,
   revokeMotionflowDevice,
   openMotionflowSubscribe,
   openMotionflowManageSubscription,
@@ -42,6 +49,7 @@ export {
   type MotionflowPurchase,
   type MotionflowEntitlements,
   type MotionflowMe,
+  type DeviceLimitListItem,
 } from "./motionflow-auth";
 export {
   fetchCepMarket,

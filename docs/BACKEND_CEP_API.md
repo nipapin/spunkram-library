@@ -12,7 +12,7 @@ CEP знает только `client: "spunkram-cep"` + Bearer и рисует UI
 - `src/js/lib/api/stock-api.ts` — footages: `/api/stock/unsplash`, `/pexels/videos`, `/download`
 - `src/js/lib/api/market-api.ts` — shared helpers only (no AtomX)
 - `src/js/api/credits.ts` — баланс генераций
-- `src/js/api/telemetry.ts` — host/OS session ping: `POST /api/cep/telemetry/session`
+- `src/js/api/telemetry.ts` — session + installs + active packs telemetry
 - `src/js/api/config.ts` — пути эндпоинтов
 
 Base URL (Motionflow): **`https://motionflow.pro`**  
@@ -127,6 +127,39 @@ CEP panel                         motionflow.pro                      Browser
 Успех: `{ "status": "complete", "token": "…", "user": { "id", "email", "name?" } }`.  
 Token обязан позволять серверу узнать `client` (claim или lookup).
 
+**Лимит устройств (по умолчанию 3, `CEP_DEVICE_LIMIT`):** если у аккаунта уже max активных устройств и MAC не совпал, poll возвращает:
+
+```json
+{
+  "status": "device_limit",
+  "device_limit": 3,
+  "devices": [
+    {
+      "id": "dev_…",
+      "ip": "…",
+      "user_fingerprint": "…",
+      "name": "…",
+      "last_seen_at": "…"
+    }
+  ],
+  "message": "…"
+}
+```
+
+Browser confirm при approve может вернуть `{ "ok": true, "status": "device_limit" }` — панель показывает picker и вызывает replace-device.
+
+### 1.3b `POST /api/cep/auth/replace-device`
+
+```json
+{
+  "code": "ABCD-1234",
+  "device_code": "mfdev_…",
+  "revoke_device_id": "dev_…"
+}
+```
+
+Отзывает выбранное устройство пользователя сессии, создаёт новое + Bearer, публикует `device.revoked` (WS kick), ответ как у complete token poll.
+
 ### 1.4 `GET /api/cep/me`
 
 **Headers:** `Authorization: Bearer <token>`
@@ -200,7 +233,7 @@ Token обязан позволять серверу узнать `client` (clai
 { "device_id": "dev_…" }
 ```
 
-Любой `2xx` = ok.
+Любой `2xx` = ok. Сервер публикует `device.revoked` → WS hub закрывает сокет (`4401 REVOKED`) сразу.
 
 ---
 
@@ -478,6 +511,26 @@ Server dedupe: тот же user+device+host+os+extension в пределах ~12
 
 Таблица: `cep_client_sessions` (миграция `db/migrations/2026_08_11_cep_client_sessions.sql`).  
 Клиент: `src/js/api/telemetry.ts` → вызывается из `auth-context` после успешного `refreshProfile`.
+
+### Pack installs snapshot
+
+`POST /api/cep/telemetry/installs` — Bearer required.
+
+```json
+{ "packs": [{ "pack_id": 12, "version": "1.2.0" }] }
+```
+
+Full replace per device. Panel: after `/me`, market refresh, and successful install/update (`reportInstalledPacks`).
+
+### Active packs snapshot
+
+`POST /api/cep/telemetry/active-packs` — Bearer required.
+
+```json
+{ "pack_ids": [12] }
+```
+
+Send `[]` when nothing is active. Panel: when active pack path changes (`reportActivePacks`).
 
 Пример агрегации:
 

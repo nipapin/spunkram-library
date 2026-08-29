@@ -32,7 +32,16 @@ export type CepExtensionUpdateEvent = {
   ts: number;
 };
 
-export type CepWsEvent = CepPackEvent | CepExtensionUpdateEvent;
+export type CepDeviceRevokedEvent = {
+  type: "device.revoked";
+  device_id: string;
+  ts?: number;
+};
+
+export type CepWsEvent =
+  | CepPackEvent
+  | CepExtensionUpdateEvent
+  | CepDeviceRevokedEvent;
 
 type EventHandler = (event: CepWsEvent) => void;
 
@@ -148,6 +157,13 @@ class CepWsClient {
         }
         if (type === "extension.update" && typeof msg.version === "string") {
           this.emit(msg as unknown as CepExtensionUpdateEvent);
+          return;
+        }
+        if (type === "device.revoked") {
+          this.emit(msg as unknown as CepDeviceRevokedEvent);
+          handleUnauthorized("DEVICE_REVOKED");
+          this.stop();
+          return;
         }
       };
 
@@ -156,7 +172,9 @@ class CepWsClient {
         this.pingTimer = null;
         this.ws = null;
         if (ev.code === 4401) {
-          handleUnauthorized("WS_UNAUTHORIZED");
+          handleUnauthorized(
+            ev.reason === "REVOKED" ? "DEVICE_REVOKED" : "WS_UNAUTHORIZED",
+          );
           return;
         }
         this.scheduleReconnect();

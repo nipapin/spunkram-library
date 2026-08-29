@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, Loader2, LogIn, Plus, UserRound } from "lucide-react";
+import { ExternalLink, Loader2, LogIn, Monitor, Plus, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { FogBackground } from "@/components/fog-background";
@@ -14,13 +14,28 @@ function accountInitial(account: MotionflowAccountSession): string {
   return source.charAt(0).toUpperCase() || "?";
 }
 
+function deviceLabel(name?: string, fingerprint?: string): string {
+  if (name?.trim()) return name.trim();
+  if (!fingerprint) return "Unknown device";
+  try {
+    const parsed = JSON.parse(fingerprint) as { user?: string; os?: string };
+    const parts = [parsed.user, parsed.os].filter(Boolean);
+    if (parts.length) return parts.join(" · ");
+  } catch {
+    /* ignore */
+  }
+  return "Unknown device";
+}
+
 export function LoginScreen() {
   const {
     loginWithMotionflow,
     switchAccount,
     cancelLogin,
+    confirmReplaceDevice,
     loginBusy,
     loginCode,
+    loginDeviceLimit,
     savedAccounts,
   } = useAuth();
   const [message, setMessage] = useState<{
@@ -28,8 +43,10 @@ export function LoginScreen() {
     text: string;
   } | null>(null);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const [replacingId, setReplacingId] = useState<string | null>(null);
 
   const showChooser = savedAccounts.length > 0 && !loginBusy;
+  const showDeviceLimit = Boolean(loginBusy && loginDeviceLimit);
 
   async function handleSignIn() {
     setMessage({ tone: "info", text: "Opening browser to sign in…" });
@@ -54,6 +71,12 @@ export function LoginScreen() {
     }
   }
 
+  function handleRevokeAndContinue(deviceId: string) {
+    setReplacingId(deviceId);
+    setMessage({ tone: "info", text: "Disconnecting device and finishing sign-in…" });
+    confirmReplaceDevice(deviceId);
+  }
+
   return (
     <div className="relative flex h-full min-h-0 flex-col items-center justify-center gap-4 overflow-hidden px-6 text-foreground">
       <FogBackground className="pointer-events-none absolute inset-0 z-0" />
@@ -65,17 +88,23 @@ export function LoginScreen() {
           </div>
           <div>
             <h1 className="font-headline text-lg font-semibold tracking-tight drop-shadow-[0_1px_8px_rgba(0,0,0,0.65)]">
-              {showChooser ? "Choose an account" : `Welcome to ${BRAND.authorName}`}
+              {showDeviceLimit
+                ? "Device limit reached"
+                : showChooser
+                  ? "Choose an account"
+                  : `Welcome to ${BRAND.authorName}`}
             </h1>
             <p className="mt-1 max-w-xs text-[11px] text-muted-foreground drop-shadow-[0_1px_6px_rgba(0,0,0,0.55)]">
-              {showChooser
-                ? "Continue with a saved Motionflow account, or add another."
-                : `Sign in with your Motionflow account to use the ${BRAND.authorName} extension — packs, subscriptions, and AI tools.`}
+              {showDeviceLimit
+                ? `This account is signed in on ${loginDeviceLimit!.device_limit} devices. Disconnect one to continue here.`
+                : showChooser
+                  ? "Continue with a saved Motionflow account, or add another."
+                  : `Sign in with your Motionflow account to use the ${BRAND.authorName} extension — packs, subscriptions, and AI tools.`}
             </p>
           </div>
         </div>
 
-        {message && (
+        {message && !showDeviceLimit && (
           <div
             className={cn(
               "w-full rounded-lg border px-3 py-2 text-[11px] backdrop-blur-md",
@@ -91,7 +120,52 @@ export function LoginScreen() {
           </div>
         )}
 
-        {loginBusy && loginCode && (
+        {showDeviceLimit ? (
+          <div className="w-full overflow-hidden rounded-xl border border-amber-500/30 bg-card/80 backdrop-blur-md">
+            <ul>
+              {loginDeviceLimit!.devices.map((device, index) => {
+                const busy = replacingId === device.id;
+                return (
+                  <li
+                    key={device.id}
+                    className={cn(index > 0 && "border-t border-white/5")}
+                  >
+                    <div className="flex items-center gap-2.5 px-3 py-2.5">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
+                        <Monitor className="size-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-medium text-foreground">
+                          {deviceLabel(device.name, device.user_fingerprint)}
+                        </span>
+                        <span className="block truncate text-[10px] text-muted-foreground">
+                          {device.ip || "—"}
+                          {device.last_seen_at
+                            ? ` · ${new Date(device.last_seen_at).toLocaleDateString()}`
+                            : ""}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        disabled={Boolean(replacingId)}
+                        onClick={() => handleRevokeAndContinue(device.id)}
+                        className="shrink-0 rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-[10px] font-medium text-amber-200 transition-colors hover:bg-amber-500/25 disabled:opacity-50"
+                      >
+                        {busy ? (
+                          <Loader2 className="size-3 animate-spin" />
+                        ) : (
+                          "Disconnect"
+                        )}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
+
+        {loginBusy && loginCode && !showDeviceLimit && (
           <div className="w-full rounded-xl border border-primary/30 bg-card/70 px-3 py-3 text-center backdrop-blur-md">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
               Confirm this code in the browser
@@ -150,7 +224,8 @@ export function LoginScreen() {
             <button
               type="button"
               onClick={cancelLogin}
-              className="flex items-center justify-center gap-1.5 rounded-full border border-white/10 bg-card/70 px-3 py-2 text-xs font-medium text-foreground backdrop-blur-md transition-colors hover:bg-card"
+              disabled={Boolean(replacingId)}
+              className="flex items-center justify-center gap-1.5 rounded-full border border-white/10 bg-card/70 px-3 py-2 text-xs font-medium text-foreground backdrop-blur-md transition-colors hover:bg-card disabled:opacity-50"
             >
               Cancel
             </button>
