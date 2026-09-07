@@ -26,11 +26,22 @@ npm run release:patch
 npm run release:minor
 npm run release:major
 npm run release:beta
+npm run release:all          # Spunkram + Gal, one version / tag
+npm run release:gal          # Gal only
+npm run release:spunkram     # Spunkram only (default for release / release:patch)
 ```
 
-That script already bumps version, builds ZXP, commits, pushes, tags, and uploads.
+Pass brand with patch/minor when needed:
 
-- If the user says only «зарелизь минор» → `npm run release:minor`
+```bash
+npm run release:patch -- --brand=all
+npm run release:patch -- --brand=gal
+```
+
+That script already bumps version (if asked), builds ZXP(s), commits, pushes, tags, and uploads per brand.
+
+- If the user says only «зарелизь минор» → `npm run release:minor` (Spunkram)
+- If they say «релиз для gal и spunkram» → `npm run release:all` (or `release:patch -- --brand=all`)
 - If they say «закоммить и запушь» → commit + push only
 - If they say both («запушь и зарелизь») → do commit+push of WIP only if needed, then `npm run release:…` (release may commit again if dirty)
 

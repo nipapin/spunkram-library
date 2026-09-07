@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchGenerationsStatus, type GenerationsStatus } from "../../api";
+import { fetchGenerationsStatus, type GenerationsStatus } from "../../../api";
 import "./CreditsCounter.scss";
 
 type CreditsCounterProps = {

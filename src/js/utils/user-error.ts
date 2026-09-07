@@ -194,6 +194,13 @@ export function isSoftHostError(err: unknown): boolean {
 export function friendlyErrorMessage(err: unknown): string {
   if (err == null || err === "") return GENERIC_ERROR;
 
+  if (typeof err === "string") {
+    if (err === "NO_SUCCESS_LOAD") return "Unable to reach Motionflow. Try again in a moment.";
+    if (/UNKNOWN_CLIENT/i.test(err) || /unknown client/i.test(err)) {
+      return "This extension isn’t registered for sign-in yet.";
+    }
+  }
+
   const auth = authErrorMessage(err);
   if (auth) return auth;
 
@@ -296,5 +303,9 @@ export function friendlyErrorMessage(err: unknown): string {
   }
 
   if (looksLikeInternalError(msg)) return GENERIC_ERROR;
+  if (msg === "NO_SUCCESS_LOAD") return "Unable to reach Motionflow. Try again in a moment.";
+  if (/UNKNOWN_CLIENT/i.test(msg) || /unknown client/i.test(msg)) {
+    return "This extension isn’t registered for sign-in yet.";
+  }
   return msg;
 }

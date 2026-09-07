@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth-context";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { cepWs, type CepPackEvent, type CepWsEvent } from "@/lib/cep-ws";
 import { onSessionExpired } from "@/lib/api/session";
+import { BRAND } from "@brands";
 
 export type AppNotification = {
   id: string;
@@ -31,7 +32,20 @@ type NotificationsContextValue = {
   onExtensionUpdateHint: (handler: (version: string) => void) => () => void;
 };
 
-const NotificationsContext = createContext<NotificationsContextValue | null>(null);
+/** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
+ * would disconnect Provider from consumers until a full page reload. */
+const NOTIFICATIONS_CONTEXT_KEY = "__spunkram_notifications_context__";
+type NotificationsGlobal = typeof globalThis & {
+  [NOTIFICATIONS_CONTEXT_KEY]?: ReturnType<
+    typeof createContext<NotificationsContextValue | null>
+  >;
+};
+
+const NotificationsContext =
+  (globalThis as NotificationsGlobal)[NOTIFICATIONS_CONTEXT_KEY] ??
+  createContext<NotificationsContextValue | null>(null);
+(globalThis as NotificationsGlobal)[NOTIFICATIONS_CONTEXT_KEY] =
+  NotificationsContext;
 
 function titleForEvent(ev: CepPackEvent): string {
   switch (ev.type) {
@@ -106,6 +120,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (ev.type === "extension.update") {
+        // Ignore other-brand publishes (shared Redis channel).
+        if (ev.product && ev.product !== BRAND.id) return;
         // Hint listeners (main UpdateBanner) re-check GET /api/cep/update for beta gate.
         for (const h of extensionHandlers.current) {
           try {

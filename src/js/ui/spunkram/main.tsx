@@ -31,7 +31,7 @@ import {
 import { ensureFfmpeg } from "@/utils/ffmpeg";
 import { preloadVoiceoverPreviews } from "@/api/voiceover";
 import { openMarketUrl, resolvePackEntitlementContextForScan } from "@/api/cep-market";
-import { version as LOCAL_VERSION } from "../../shared/shared";
+import { version as LOCAL_VERSION } from "../../../shared/shared";
 import {
   readInstallablePackages,
   loadInstalledPack,

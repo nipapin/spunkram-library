@@ -12,7 +12,17 @@ type MediaContextType = {
   setLoading: (loading: boolean) => void;
 };
 
-const MediaContext = createContext<MediaContextType | null>(null);
+/** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
+ * would disconnect Provider from consumers until a full page reload. */
+const MEDIA_CONTEXT_KEY = "__spunkram_media_context__";
+type MediaGlobal = typeof globalThis & {
+  [MEDIA_CONTEXT_KEY]?: ReturnType<typeof createContext<MediaContextType | null>>;
+};
+
+const MediaContext =
+  (globalThis as MediaGlobal)[MEDIA_CONTEXT_KEY] ??
+  createContext<MediaContextType | null>(null);
+(globalThis as MediaGlobal)[MEDIA_CONTEXT_KEY] = MediaContext;
 
 export const MediaProvider = ({ children }: { children: React.ReactNode }) => {
   const [media, setMedia] = useState<MediaItem[]>([]);

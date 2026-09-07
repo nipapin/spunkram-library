@@ -18,6 +18,7 @@ Status legend: **ported** (file in repo) · **wrapped** (SDK method live) · **t
 | `external_lib_import.jsx` | `*-import-external.ts` | `importExternalAsset` | **ts** |
 | `undo_groups.jsx` | `ppro-undo-group.ts` | `PPRO.undoGroup.*` | **ts** |
 | `stockassets.jsx` | `*-import-media.ts` | `importMedia` | **ts** |
+| gal-scripts PS/RN/RP/HC/WG | `ppro/gal/*`, `aeft/gal/*` | `MotionFlow.*.project.*`, `AE.wiggler.*` | **ts** |
 
 ## Public operations map
 

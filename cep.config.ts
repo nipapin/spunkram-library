@@ -39,7 +39,7 @@ const config: CEP_Config = {
 
   panels: [
     {
-      mainPath: "./main/index.html",
+      mainPath: brand.panelMainPath,
       name: "main",
       panelDisplayName: brand.panelDisplayName,
       autoVisible: true,
@@ -67,7 +67,7 @@ const config: CEP_Config = {
   },
   installModules: [],
   // audio-export.epr + Motionflow.dll / PTX / Premiere bridge at extension root bin/
-  copyAssets: ["js/lib/bin", "bin"],
+  copyAssets: ["js/lib/bin", "bin", "assets/ffx"],
   copyZipAssets: [],
 };
 export default config;

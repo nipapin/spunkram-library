@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 /**
- * Spunkram CEP release:
+ * CEP release (Spunkram and/or Gal Toolkit MAX):
  *  1) optional version bump (stable or beta)
- *  2) npm run zxp
- *  3) git commit (if dirty) + push + tag + push tag
- *  4) upload ZXP → R2 (next-app script) → latest.json or beta.json
+ *  2) npm run zxp / zxp:gal per brand
+ *  3) git commit (if dirty) + push + tag + push tag (once)
+ *  4) upload each ZXP → R2 (next-app script) → latest.json or beta.json
  *
  * Usage (from CEP repo root):
  *   npm run release
  *   npm run release -- --bump=patch
+ *   npm run release -- --brand=gal
+ *   npm run release -- --brand=all --bump=patch
  *   npm run release:beta              # 0.4.2 → 0.4.3-beta.1 (beta.json only)
  *   npm run release -- --dry-run
  *   npm run release -- --no-git
@@ -30,7 +32,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PKG_PATH = path.join(ROOT, "package.json");
 const CHANGELOG_PATH = path.join(ROOT, "CHANGELOG.md");
-const EXT_ID = "com.spunkramlibrary.cep";
+
+/** @typedef {"spunkram" | "gal"} BrandId */
+
+const BRANDS = {
+  spunkram: {
+    id: "spunkram",
+    extensionId: "com.spunkramlibrary.cep",
+    zxpScript: "zxp",
+    product: "spunkram",
+    zxpFileHint: "spunkram.zxp",
+  },
+  gal: {
+    id: "gal",
+    extensionId: "com.premieregal.cep",
+    zxpScript: "zxp:gal",
+    product: "gal",
+    zxpFileHint: "gal.zxp",
+  },
+};
 
 function parseArgs(argv) {
   const opts = {
@@ -41,6 +61,7 @@ function parseArgs(argv) {
     noGit: false,
     noUpload: false,
     skipBuild: false,
+    brand: "spunkram", // spunkram | gal | all
   };
   for (const arg of argv.slice(2)) {
     if (arg === "--dry-run") opts.dryRun = true;
@@ -49,10 +70,11 @@ function parseArgs(argv) {
     else if (arg === "--skip-build") opts.skipBuild = true;
     else if (arg === "--beta") opts.beta = true;
     else if (arg.startsWith("--bump=")) opts.bump = arg.slice("--bump=".length);
+    else if (arg.startsWith("--brand=")) opts.brand = arg.slice("--brand=".length);
     else if (arg.startsWith("--message=")) opts.message = arg.slice("--message=".length);
     else if (arg === "--help" || arg === "-h") {
       console.log(
-        `Usage: node scripts/release.mjs [--bump=patch|minor|major] [--beta] [--message=…] [--dry-run] [--no-git] [--no-upload] [--skip-build]`,
+        `Usage: node scripts/release.mjs [--brand=spunkram|gal|all] [--bump=patch|minor|major] [--beta] [--message=…] [--dry-run] [--no-git] [--no-upload] [--skip-build]`,
       );
       process.exit(0);
     } else {
@@ -65,7 +87,17 @@ function parseArgs(argv) {
   if (opts.beta && opts.bump) {
     throw new Error("Use either --beta or --bump=…, not both");
   }
+  const brand = String(opts.brand || "spunkram").toLowerCase();
+  if (!["spunkram", "gal", "all"].includes(brand)) {
+    throw new Error(`Invalid --brand=${opts.brand} (use spunkram|gal|all)`);
+  }
+  opts.brand = brand;
   return opts;
+}
+
+function resolveBrandList(brand) {
+  if (brand === "all") return [BRANDS.spunkram, BRANDS.gal];
+  return [BRANDS[brand]];
 }
 
 /** Quote args with spaces so cmd.exe keeps them as one token when shell:true. */
@@ -173,8 +205,8 @@ function changelogForVersion(version) {
   return un ? un[1].trim() : "";
 }
 
-function findZxp() {
-  const exact = path.join(ROOT, "dist", "zxp", `${EXT_ID}.zxp`);
+function findZxp(extensionId) {
+  const exact = path.join(ROOT, "dist", "zxp", `${extensionId}.zxp`);
   if (existsSync(exact)) return exact;
   const dir = path.join(ROOT, "dist", "zxp");
   if (!existsSync(dir)) return null;
@@ -191,6 +223,7 @@ function resolveNextAppRoot() {
 
 function main() {
   const opts = parseArgs(process.argv);
+  const brands = resolveBrandList(opts.brand);
   let version = readPkg().version;
 
   if (opts.beta) {
@@ -206,28 +239,42 @@ function main() {
   }
 
   const uploadChannel = opts.beta || /-beta/i.test(version) ? "beta" : "stable";
-  console.log(`[release] version=${version} channel=${uploadChannel}`);
+  console.log(
+    `[release] version=${version} channel=${uploadChannel} brands=${brands.map((b) => b.id).join(",")}`,
+  );
 
-  if (!opts.skipBuild) {
-    if (opts.dryRun) {
-      console.log("[release] dry-run: skip npm run zxp");
-    } else {
-      run("npm", ["run", "zxp"]);
+  /** @type {Map<string, string>} */
+  const zxpByBrand = new Map();
+
+  for (const brand of brands) {
+    if (!opts.skipBuild) {
+      if (opts.dryRun) {
+        console.log(`[release] dry-run: skip npm run ${brand.zxpScript}`);
+      } else {
+        console.log(`[release] building ${brand.id}…`);
+        run("npm", ["run", brand.zxpScript]);
+      }
+    }
+
+    const zxpPath = opts.dryRun && opts.skipBuild ? null : findZxp(brand.extensionId);
+    if (!opts.dryRun && !opts.skipBuild && !zxpPath) {
+      throw new Error(`ZXP not found for ${brand.extensionId} under dist/zxp/ after build`);
+    }
+    if (zxpPath) {
+      console.log(`[release] ${brand.id} zxp=${zxpPath}`);
+      zxpByBrand.set(brand.id, zxpPath);
     }
   }
-
-  const zxpPath = opts.dryRun && opts.skipBuild ? null : findZxp();
-  if (!opts.dryRun && !opts.skipBuild && !zxpPath) {
-    throw new Error("ZXP not found under dist/zxp/ after build");
-  }
-  if (zxpPath) console.log(`[release] zxp=${zxpPath}`);
 
   if (!opts.noGit) {
     const status = runCapture("git", ["status", "--porcelain"]);
     if (status) {
+      const brandLabel = brands.map((b) => b.id).join("+");
       const msg =
         opts.message ||
-        (uploadChannel === "beta" ? `release: v${version} (beta)` : `release: v${version}`);
+        (uploadChannel === "beta"
+          ? `release: v${version} (${brandLabel}, beta)`
+          : `release: v${version} (${brandLabel})`);
       console.log(`[release] committing local changes…`);
       if (opts.dryRun) {
         console.log(`[release] dry-run: would git add/commit: ${msg}`);
@@ -275,29 +322,40 @@ function main() {
       throw new Error(`next-app .env not found: ${envFile}`);
     }
     const notes = changelogForVersion(version);
-    const uploadArgs = [
-      `--env-file=${envFile}`,
-      uploadScript,
-      `--zxp=${zxpPath || path.join(ROOT, "dist", "zxp", `${EXT_ID}.zxp`)}`,
-      `--version=${version}`,
-      `--channel=${uploadChannel}`,
-    ];
-    if (notes) uploadArgs.push(`--changelog=${notes}`);
 
-    if (opts.dryRun) {
-      console.log(`[release] dry-run: would node ${uploadArgs.join(" ")}`);
-    } else {
-      if (!zxpPath || !existsSync(zxpPath)) {
-        throw new Error(`Cannot upload: ZXP missing at ${zxpPath}`);
+    for (const brand of brands) {
+      const zxpPath =
+        zxpByBrand.get(brand.id) ||
+        path.join(ROOT, "dist", "zxp", `${brand.extensionId}.zxp`);
+      const uploadArgs = [
+        `--env-file=${envFile}`,
+        uploadScript,
+        `--product=${brand.product}`,
+        `--zxp=${zxpPath}`,
+        `--version=${version}`,
+        `--channel=${uploadChannel}`,
+      ];
+      if (notes) uploadArgs.push(`--changelog=${notes}`);
+
+      if (opts.dryRun) {
+        console.log(`[release] dry-run: would node ${uploadArgs.join(" ")}`);
+      } else {
+        if (!existsSync(zxpPath)) {
+          throw new Error(`Cannot upload ${brand.id}: ZXP missing at ${zxpPath}`);
+        }
+        console.log(
+          `[release] uploading ${brand.id} to R2 (channel=${uploadChannel})…`,
+        );
+        run("node", uploadArgs, { cwd: nextApp });
       }
-      console.log(`[release] uploading to R2 via next-app (channel=${uploadChannel})…`);
-      run("node", uploadArgs, { cwd: nextApp });
     }
   } else {
     console.log("[release] --no-upload: skip R2 (webhook can publish from GitHub Release)");
   }
 
-  console.log(`[release] done → v${version} (${uploadChannel})`);
+  console.log(
+    `[release] done → v${version} (${uploadChannel}) brands=${brands.map((b) => b.id).join(",")}`,
+  );
   console.log(`  check: https://motionflow.pro/api/cep/update`);
   if (uploadChannel === "beta") {
     console.log(

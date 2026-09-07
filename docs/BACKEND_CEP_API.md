@@ -1,14 +1,15 @@
 # Backend: CEP Spunkram Library ↔ Motionflow API
 
 Документ для backend-команды. **Вся entitlement-логика (автор, sold_items, подписка) живёт на сервере.**  
-CEP знает только `client: "spunkram-cep"` + Bearer и рисует UI по готовым флагам.
+CEP знает только `client` (`spunkram-cep` / `gal-cep` / …) + Bearer и рисует UI по готовым флагам.
 
 **Локальные пути:** см. [`PATHS.md`](./PATHS.md) (Spunkram Beta + next-app).
 
 Клиентские модули:
 
 - `src/js/api/motionflow-auth.ts` — auth / me / devices
-- `src/js/api/cep-market.ts` — каталог + download/install/diff: `GET /api/cep/market`, Bearer download, `POST /api/cep/market/diff`
+- `src/js/api/cep-market.ts` — каталог + download/install/diff/structure: `GET /api/cep/market`, Bearer download, `POST /api/cep/market/diff`, `GET /api/cep/market/structure`
+- `src/js/api/gal-effects.ts` — Gal Effects: catalog, assets-manifest, file (presign), media proxy URLs
 - `src/js/lib/api/stock-api.ts` — footages: `/api/stock/unsplash`, `/pexels/videos`, `/download`
 - `src/js/lib/api/market-api.ts` — shared helpers only (no AtomX)
 - `src/js/api/credits.ts` — баланс генераций
@@ -42,6 +43,7 @@ Canonical contract: next-app `CEP_API.md`. AtomX MAU **removed** (Отречен
 | `client` | `author_id` (DB) | `extension_name` | Login copy |
 |---|---|---|---|
 | `spunkram-cep` | `1691` | `Spunkram` | Sign in to the Spunkram extension |
+| `gal-cep` | `4141` | `Gal Toolkit MAX` | Sign in to Gal Toolkit MAX |
 
 - Маппинг **только на сервере**. CEP никогда не шлёт `author_id`.
 - При `POST /api/cep/auth/device` сохранить `client` в device session / JWT claims.
@@ -116,7 +118,9 @@ CEP panel                         motionflow.pro                      Browser
 2. Если сессии нет → попап входа на сайте (`SignInModal`).
 3. Если сессия есть (или после логина) → попап Allow / Deny.
 4. Confirm → связать code с user; token poll несёт `client`.
-5. Legacy `/cep/login?…` редиректит на `/spunkram?…`.
+5. Legacy `/cep/login?…` редиректит на author landing (`/spunkram` или `/premiere-gal`).
+
+Gal Toolkit MAX (`client: gal-cep`): `verification_url` = `https://premieregal.motionflow.pro/?code=…&client=gal-cep`. Allow/Deny на лендинге Premiere Gal.
 
 ### 1.3 `POST /api/cep/auth/token`
 
@@ -323,6 +327,44 @@ When an installed pack has `manifest.json` and the market version differs, CEP p
 CEP: `downloadAndApplyPackDiff` / `downloadAndInstallOrUpdatePack`.
 
 See next-app `CEP_API.md` §3b.
+
+### 3.2 Pack structure / categories — `GET /api/cep/market/structure?pack_id=`
+
+Browse the pack category tree **before** full install. Same R2 `{stem}/` layout as §3.1.
+
+- **Auth:** Bearer required
+- **Visibility:** catalog scope (signed-in + pack visible for `client`) — **not** download-gate
+- **Source:** `{stem}/manifest.json` → first `*.spunkram` / `*.motionflow` → plaintext `settings` + `content` (legacy `structure` / `contents` normalized to `content`)
+- **200:** `{ pack_id, pack_name, version, etag, settings, content }` + `ETag` / `Cache-Control: private, max-age=60`
+- **304:** when `If-None-Match` matches
+- **409 `NO_STRUCTURE`:** no remote pack JSON
+- **404:** `NOT_FOUND` / `NO_DOWNLOAD_KEY` / `NO_BUCKET`
+
+CEP: `fetchCepMarketStructure` → `buildPackTree(content)` for sidebar / search; apply + previews still need local install.
+
+See next-app `CEP_API.md` §3c.
+
+### 3.3 Gal Toolkit effects — `GET /api/cep/gal/effects?host=PR|AE`
+
+Dedicated private bucket **`gal-toolkit-max`** (`R2_GAL_TOOLKIT_BUCKET`):
+
+| Host | JSON | Manifest | Assets |
+|------|------|----------|--------|
+| `PR` | `premiere-pro/Premiere Pro.json` | `premiere-pro/manifest.json` | `premiere-pro/Assets/` |
+| `AE` | `after-effects/After Effects.json` | `after-effects/manifest.json` | `after-effects/Assets/` |
+
+- **Auth (catalog):** Bearer required → `{ settings, content, assets_base_url, … }`
+- **Media proxy (public):** `GET /api/cep/gal/effects/media/{…}` streams Assets with Range (no Bearer — `<img>`/`<video>`). Public CDN bucket **not** required.
+- **Assets manifest (Bearer):** `GET /api/cep/gal/effects/assets-manifest?host=` → `{ host, etag, manifest }` from `{hostPrefix}/manifest.json`. `If-None-Match` → 304. CEP syncs offline media on panel start: any manifest path containing `/_Assets/` is rewritten to `Projects/_Assets/…` (legacy zip names like `Gal Toolkit Max Premiere Pro/_Assets/…` map to the private Projects tree), then downloaded into local `{installRoot}/Assets/_Assets/`. Does not download `.prproj`/previews here.
+- **File download (Bearer):** `GET /api/cep/gal/effects/file?host=&path=` → short-lived R2 **presigned** URL + `etag`/`size` for a path under `{hostPrefix}/` (projects: `Projects/…`, offline media: `Projects/_Assets/…`). Preview media stays under `Assets/` via the public proxy. Not the public media proxy — projects must not be anonymously fetchable.
+- CEP: `fetchGalEffects` → sidebar + remote previews; `syncGalAssetsFromManifest` + `ensureGalItemOnDisk` → Apply without Market zip (zip in Settings remains optional).
+- **Per-item `plan`:** each preview entry may include `"plan": ["demo"|"toolkit"|"max", …]`. CEP account plan:
+  - **Free** — no Max sub and no Gal Toolkit sold_item for current host → unlocks `plan` with `demo` or `free`
+  - **Toolkit** — owns Gal Toolkit for host (`purchases` id `1102`/`813` or name “Gal Toolkit” without “Max”) → `plan.includes("toolkit")`
+  - **Max** — `subscription.active` → all items
+  - Missing/empty item `plan` → Max-only. Settings shows `Plan Free|Toolkit|Max`.
+
+See next-app `CEP_API.md` §3d.
 
 ---
 
@@ -612,7 +654,7 @@ Vite-dev проксирует `/api/cep/*`, `/api/stock/*`, `/api/generations/*`
 
 ## 8. Чеклист backend
 
-- [ ] Registry: `spunkram-cep` → author 1691
+- [ ] Registry: `spunkram-cep` → author 1691; `gal-cep` → author 4141 (Premiere Gal)
 - [ ] Device login сохраняет `client` в session/JWT
 - [ ] `/spunkram?code=` → login modal (если нет сессии) → Allow/Deny
 - [ ] `/me` без `author_id`; Creator + AI не даёт `subscription.active`

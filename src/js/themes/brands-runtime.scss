@@ -5,8 +5,85 @@
 
 :root[data-brand="gal"] {
   @include cv.emit-tokens(gal.$tokens);
+
+  --background: 34, 34, 34;
+  --foreground: 255, 255, 255;
+  --card: 23, 24, 28;
+  --card-foreground: 255, 255, 255;
+  --popover: 23, 24, 28;
+  --popover-foreground: 255, 255, 255;
+  --primary: 195, 31, 147;
+  --primary-foreground: 255, 255, 255;
+  --secondary: 45, 45, 45;
+  --secondary-foreground: 255, 255, 255;
+  --muted: 45, 45, 45;
+  --muted-foreground: 153, 153, 153;
+  --destructive: 237, 85, 59;
+  --input: 255, 255, 255;
+  --ring: 195, 31, 147;
+  --sidebar: 34, 34, 34;
+  --sidebar-foreground: 255, 255, 255;
+  --sidebar-primary: 195, 31, 147;
+  --sidebar-primary-foreground: 255, 255, 255;
+  --sidebar-accent: 23, 24, 28;
+  --sidebar-accent-foreground: 255, 255, 255;
+  --sidebar-border: 255, 255, 255;
+  --sidebar-ring: 195, 31, 147;
+  --radius: 0.5rem;
+
+  --font-sans: #{gal.$font-sans};
+  --font-headline: #{gal.$font-headline};
+
+  &,
+  body,
+  #app {
+    min-width: 0;
+    overflow-x: hidden;
+  }
 }
 
 :root[data-brand="spunkram"] {
   @include cv.emit-tokens(spunk.$tokens);
+
+  --font-sans: #{spunk.$font-sans};
+  --font-headline: #{spunk.$font-headline};
+}
+
+:root[data-brand="gal"] h1,
+:root[data-brand="gal"] h2,
+:root[data-brand="gal"] h3 {
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+}
+
+:root[data-brand="gal"] .pill-brand {
+  background-color: #c31f93;
+  background-image: var(--accent-gradient);
+  box-shadow: 0 4px 18px rgba(195, 31, 147, 0.35);
+}
+
+:root[data-brand="gal"] .pill-brand:hover:not(:disabled) {
+  background-image: var(--accent-gradient-hover);
+  filter: brightness(1.05);
+}
+
+:root[data-brand="gal"] .glass-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+:root[data-brand="gal"] .glass-bar {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #222;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-brand="gal"] .btn--primary {
+  background-color: #c31f93;
+  box-shadow: 0 4px 18px rgba(195, 31, 147, 0.35);
 }

@@ -53,15 +53,31 @@ export {
 } from "./motionflow-auth";
 export {
   fetchCepMarket,
+  fetchCepMarketStructure,
   downloadAndInstallPack,
   installCachedPack,
   hasCachedPackZip,
   openMarketUrl,
   CEP_MARKET_ENDPOINT,
+  CEP_MARKET_STRUCTURE_ENDPOINT,
   type CepMarketPackage,
   type CepMarketPayload,
+  type CepMarketStructurePayload,
   type CepMarketAction,
 } from "./cep-market";
+export {
+  fetchGalEffects,
+  fetchGalAssetsManifest,
+  fetchGalEffectsFileLink,
+  galEffectsAssetUrl,
+  CEP_GAL_EFFECTS_ENDPOINT,
+  CEP_GAL_EFFECTS_MANIFEST_ENDPOINT,
+  CEP_GAL_EFFECTS_FILE_ENDPOINT,
+  type GalEffectsHost,
+  type GalEffectsPayload,
+  type GalAssetsManifestPayload,
+  type GalEffectsFileLink,
+} from "./gal-effects";
 export {
   fetchVoiceoverCatalog,
   fetchVoiceoverVoices,

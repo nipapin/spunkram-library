@@ -31,7 +31,7 @@ function npmCommand(args) {
 }
 
 /** Linked packages whose built output the panel actually imports. */
-const BUNDLED_DEPS = ["motionflow-sdk"];
+const BUNDLED_DEPS = ["motionflow-sdk", "motionflow-ai"];
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));

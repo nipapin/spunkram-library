@@ -16,6 +16,8 @@ export function authErrorMessage(code: ApiErrorCode | undefined): string {
       return "Something wrong with parameters";
     case "NO_SUCCESS_LOAD":
       return "Unable to load server response";
+    case "UNKNOWN_CLIENT":
+      return "This extension isn’t registered for sign-in yet.";
     case "NO_CREDENTIALS":
       return "No credentials found";
     case "SERVER_ERROR":

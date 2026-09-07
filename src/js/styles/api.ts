@@ -1,3 +1,4 @@
+import { CaptionApiError, authErrorMessage } from "motionflow-ai";
 import { CAPTIONS_ENDPOINTS, apiUrl, getUserIdentity, type UserIdentity } from "../api";
 import { getBrand, type BrandId } from "@brands";
 import { getActiveBrand } from "../lib/utils/brandTheme";
@@ -22,26 +23,7 @@ import {
 } from "./localSource";
 import { packIdFromStyleId, packProjectFileName } from "./paths";
 
-export class CaptionApiError extends Error {
-  status: number;
-  code?: string;
-
-  constructor(message: string, status: number, code?: string) {
-    super(message);
-    this.name = "CaptionApiError";
-    this.status = status;
-    this.code = code;
-  }
-}
-
-/** Сообщение для UI только после активного действия (Transcribe). */
-export const authErrorMessage = (err: unknown): string | null => {
-  if (!(err instanceof CaptionApiError)) return null;
-  if (err.status === 401 || err.code === "UNAUTHORIZED") return "Please sign in to continue";
-  if (err.code === "SUBSCRIPTION_REQUIRED") return "An active subscription is required";
-  if (err.code === "GENERATION_LIMIT_REACHED") return "No generations left. Upgrade or buy extra credits.";
-  return null;
-};
+export { CaptionApiError, authErrorMessage };
 
 const CATALOG_TIMEOUT_MS = 12000;
 

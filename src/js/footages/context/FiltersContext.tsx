@@ -12,7 +12,17 @@ type FiltersContextType = {
   setSearch: (search: string) => void;
 };
 
-const FiltersContext = createContext<FiltersContextType | null>(null);
+/** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
+ * would disconnect Provider from consumers until a full page reload. */
+const FILTERS_CONTEXT_KEY = "__spunkram_filters_context__";
+type FiltersGlobal = typeof globalThis & {
+  [FILTERS_CONTEXT_KEY]?: ReturnType<typeof createContext<FiltersContextType | null>>;
+};
+
+const FiltersContext =
+  (globalThis as FiltersGlobal)[FILTERS_CONTEXT_KEY] ??
+  createContext<FiltersContextType | null>(null);
+(globalThis as FiltersGlobal)[FILTERS_CONTEXT_KEY] = FiltersContext;
 
 export const FiltersProvider = ({ children }: { children: React.ReactNode }) => {
   const [type, setType] = useState<MediaType>("image");

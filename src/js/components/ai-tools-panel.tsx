@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { AiToolsList } from "@/components/ai-tools-list";
-import { CaptionsApp } from "@/main/apps/CaptionsApp";
-import { ChaptersApp } from "@/main/apps/ChaptersApp";
-import { VoiceoverApp } from "@/main/apps/VoiceoverApp";
+import { CaptionsApp } from "@/ui/spunkram/apps/CaptionsApp";
+import { ChaptersApp } from "@/ui/spunkram/apps/ChaptersApp";
+import { VoiceoverApp } from "@/ui/spunkram/apps/VoiceoverApp";
 import * as panelStore from "@/lib/userdata-store";
 import "@/ai-tools.scss";
 

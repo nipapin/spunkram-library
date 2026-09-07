@@ -6,7 +6,7 @@ import {
 import { getUserIdentity } from "./user";
 import { collectSupportMeta } from "@/lib/support/collect-meta";
 import { cepHttpRequest } from "@/lib/api/cep-http";
-import { readPrefSettings } from "@/lib/api/preferences";
+import { loadPreferencesFile } from "@/lib/api/preferences";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 
 const TELEMETRY_URL = `https://motionflow.pro${TELEMETRY_SESSION_ENDPOINT}`;
@@ -72,7 +72,7 @@ export async function reportInstalledPacks(): Promise<void> {
   const token = user?.token;
   if (!token) return;
 
-  const prefs = readPrefSettings();
+  const prefs = loadPreferencesFile();
   const packages = Array.isArray(prefs.packages)
     ? (prefs.packages as InstalledPackMeta[])
     : [];

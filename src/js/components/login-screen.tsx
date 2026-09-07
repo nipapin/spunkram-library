@@ -4,7 +4,9 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { FogBackground } from "@/components/fog-background";
 import logo from "@/assets/logo.png";
+import galLogo from "@/ui/gal/assets/logo-mark.png";
 import { BRAND } from "@brands";
+import { friendlyErrorMessage } from "@/utils/user-error";
 import type { MotionflowAccountSession } from "@/lib/api/preferences";
 
 const ACCENT_PILL = "pill-brand";
@@ -47,12 +49,17 @@ export function LoginScreen() {
 
   const showChooser = savedAccounts.length > 0 && !loginBusy;
   const showDeviceLimit = Boolean(loginBusy && loginDeviceLimit);
+  const isGal = BRAND.id === "gal";
+  const brandLogo = isGal ? galLogo : logo;
 
   async function handleSignIn() {
     setMessage({ tone: "info", text: "Opening browser to sign in…" });
     const result = await loginWithMotionflow();
     if (!result.ok) {
-      setMessage({ tone: "error", text: result.message || "Sign in failed" });
+      setMessage({
+        tone: "error",
+        text: friendlyErrorMessage(result.message || "Sign in failed"),
+      });
       return;
     }
     setMessage({ tone: "success", text: result.message || "Signed in" });
@@ -78,13 +85,34 @@ export function LoginScreen() {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col items-center justify-center gap-4 overflow-hidden px-6 text-foreground">
-      <FogBackground className="pointer-events-none absolute inset-0 z-0" />
+    <div
+      className={cn(
+        "relative flex h-full min-h-0 flex-col items-center justify-center gap-4 overflow-hidden px-6 text-foreground",
+        isGal && "gal-login",
+      )}
+    >
+      {isGal ? null : (
+        <FogBackground className="pointer-events-none absolute inset-0 z-0" />
+      )}
 
       <div className="relative z-10 flex w-full max-w-xs flex-col items-center gap-4">
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex size-16 items-center justify-center rounded-full bg-gradient-to-b from-primary to-primary/70 shadow-[0_0_20px_2px] shadow-primary/50 ring-1 ring-inset ring-white/15">
-            <img src={logo} alt={BRAND.authorName} width={48} height={48} className="size-11 object-contain" />
+          <div
+            className={cn(
+              "flex size-16 items-center justify-center",
+              isGal
+                ? "gal-login__mark"
+                : "rounded-full bg-gradient-to-b from-primary to-primary/70 shadow-[0_0_20px_2px] shadow-primary/50 ring-1 ring-inset ring-white/15",
+            )}
+          >
+            <img
+              src={brandLogo}
+              alt={BRAND.authorName}
+              width={48}
+              height={48}
+              className={cn("object-contain", isGal ? "size-12" : "size-11")}
+              draggable={false}
+            />
           </div>
           <div>
             <h1 className="font-headline text-lg font-semibold tracking-tight drop-shadow-[0_1px_8px_rgba(0,0,0,0.65)]">

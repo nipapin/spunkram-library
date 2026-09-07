@@ -103,7 +103,13 @@ const GLOBAL_NOISE_PATTERNS = [
   /loading chunk \d+/i,
   /chunkloaderror/i,
   /possible side-effect in debug-evaluate/i,
+  /\[vite\]/i,
+  /failed to fetch dynamically imported module/i,
 ];
+
+/** Fast Refresh disconnects a hook from its Provider — only happens on the Vite dev server. */
+const HMR_CONTEXT_PATTERN = /must be used within/i;
+const HMR_SOURCE_PATTERN = /localhost:\d+|\/@fs\/|\/@vite\/|\?t=\d+/;
 
 export type SupportExtra = Record<string, string | number | boolean | null>;
 
@@ -219,8 +225,16 @@ function isNonCritical(message: string, code?: string, extra?: SupportExtra): bo
   return NON_CRITICAL_PATTERNS.some((re) => re.test(blob));
 }
 
-function isGlobalNoise(message: string): boolean {
-  return GLOBAL_NOISE_PATTERNS.some((re) => re.test(message));
+function isGlobalNoise(message: string, extra?: SupportExtra): boolean {
+  if (GLOBAL_NOISE_PATTERNS.some((re) => re.test(message))) return true;
+  if (!HMR_CONTEXT_PATTERN.test(message)) return false;
+  if (import.meta.env.DEV === true) return true;
+  const blob = [
+    message,
+    typeof extra?.filename === "string" ? extra.filename : "",
+    typeof extra?.stack === "string" ? extra.stack : "",
+  ].join("\n");
+  return HMR_SOURCE_PATTERN.test(blob);
 }
 
 function normalizeOptions(opts?: SupportReportOptions): {
@@ -331,6 +345,14 @@ export function reportError(
 
     const { severity, extra } = normalizeOptions(opts);
     if (severity !== "error") return Promise.resolve();
+    if (
+      isGlobalNoise(parts.message, {
+        ...extra,
+        stack: extra?.stack ?? parts.stack ?? null,
+      })
+    ) {
+      return Promise.resolve();
+    }
     if (isNonCritical(parts.message, parts.code, extra)) return Promise.resolve();
     if (wasRecentlySent(severity, actionName, parts.message)) return Promise.resolve();
 
@@ -388,20 +410,32 @@ export function installGlobalHandlers(): void {
   window.addEventListener("error", (event) => {
     const err = event.error ?? event.message;
     const parts = extractErrorParts(err);
-    if (isGlobalNoise(parts.message) || isNonCritical(parts.message, parts.code)) {
+    const extra: SupportExtra = {
+      filename: event.filename || null,
+      lineno: event.lineno ?? null,
+      colno: event.colno ?? null,
+      stack: parts.stack ?? null,
+    };
+    if (
+      isGlobalNoise(parts.message, extra) ||
+      isNonCritical(parts.message, parts.code)
+    ) {
       return;
     }
     void reportError("uncaught", err, {
       severity: "error",
-      filename: event.filename || null,
-      lineno: event.lineno ?? null,
-      colno: event.colno ?? null,
+      filename: extra.filename,
+      lineno: extra.lineno,
+      colno: extra.colno,
     });
   });
 
   window.addEventListener("unhandledrejection", (event) => {
     const parts = extractErrorParts(event.reason);
-    if (isGlobalNoise(parts.message) || isNonCritical(parts.message, parts.code)) {
+    if (
+      isGlobalNoise(parts.message, { stack: parts.stack ?? null }) ||
+      isNonCritical(parts.message, parts.code)
+    ) {
       return;
     }
     void reportError("unhandledrejection", event.reason, { severity: "error" });

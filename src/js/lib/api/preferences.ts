@@ -18,6 +18,15 @@ export type PrefSettings = {
   packSortFavorited: number;
   packSortByNames: number;
   packSortApp: string;
+  /** Gal Toolkit: 0 = Main API, 1 = Proxy #1 (UI only — stack stays on motionflow.pro). */
+  defaultApiServer: number;
+  /** Gal Toolkit: 0 = Inter, 1 = system fonts (reload required). */
+  useSystemFonts: number | boolean;
+  /**
+   * Admin-only local plan override for CEP testing (`free` | `toolkit` | `max`).
+   * Empty = use server `/me`. Ignored unless the signed-in email is a release admin.
+   */
+  adminDevPlan: "" | "free" | "toolkit" | "max";
   autofillValues: { email: string };
 };
 
@@ -73,6 +82,9 @@ export const DEFAULT_PREF_SETTINGS: PrefSettings = {
   packSortFavorited: 0,
   packSortByNames: 0,
   packSortApp: "none",
+  defaultApiServer: 0,
+  useSystemFonts: 0,
+  adminDevPlan: "",
   autofillValues: { email: "" },
 };
 

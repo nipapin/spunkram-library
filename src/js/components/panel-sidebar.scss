@@ -2,3 +2,28 @@
   overflow: hidden;
   transition: height 220ms ease;
 }
+
+/* Gal / panel scrollbars on the category tree */
+[data-brand="gal"] aside nav {
+  scrollbar-width: thin;
+  scrollbar-color: #c31f93 #17181c;
+}
+
+[data-brand="gal"] aside nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+[data-brand="gal"] aside nav::-webkit-scrollbar-track {
+  background: #17181c;
+}
+
+[data-brand="gal"] aside nav::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, #c31f93, #6b14d0);
+  border-radius: 99px;
+}
+
+[data-brand="gal"] aside nav::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}

@@ -21,7 +21,7 @@ import {
 import { downloadToFile } from "@/utils/download-file";
 import { isAbortLikeError } from "@/utils/user-error";
 import { installPackFromFile } from "@/lib/utils/pack-install";
-import type { InstalledPackMeta } from "@/lib/utils/pack-types";
+import type { InstalledPackMeta, PackSettings, PackStructureMap } from "@/lib/utils/pack-types";
 import { normalizePackHost } from "@/lib/utils/pack-host";
 import { installPackFonts } from "@/lib/utils/pack-fonts";
 import { extractZipToFolder, ExtractAbortedError } from "@/lib/utils/pack-zip";
@@ -45,6 +45,7 @@ export type { PackEntitlementContext };
 
 export const CEP_MARKET_ENDPOINT = "/api/cep/market";
 export const CEP_MARKET_DIFF_ENDPOINT = "/api/cep/market/diff";
+export const CEP_MARKET_STRUCTURE_ENDPOINT = "/api/cep/market/structure";
 
 const SITE_ORIGIN = API_BASE;
 
@@ -76,6 +77,24 @@ export type CepMarketPayload = {
   subscribe_url?: string;
   Packages?: CepMarketPackage[];
 };
+
+/** Remote pack tree from R2 (`GET /api/cep/market/structure`). */
+export type CepMarketStructurePayload = {
+  pack_id: string;
+  pack_name: string;
+  version: string;
+  etag?: string;
+  settings: PackSettings;
+  /** Nested category tree (same shape as local pack `content` / `structure`). */
+  content: PackStructureMap;
+};
+
+type PackStructureCacheEntry = {
+  etag: string;
+  data: CepMarketStructurePayload;
+};
+
+const structureCache = new Map<string, PackStructureCacheEntry>();
 
 function authHeaders(): Record<string, string> {
   return sessionAuthHeaders();
@@ -273,6 +292,84 @@ export async function fetchCepMarket(
         Packages: packages,
       },
     };
+  } catch {
+    return { error: "NO_SUCCESS_LOAD" };
+  }
+}
+
+/**
+ * Load pack settings + category tree from R2 via next-app.
+ * Uses If-None-Match / in-memory cache so sidebar can refresh cheaply.
+ */
+export async function fetchCepMarketStructure(
+  packId: number | string,
+): Promise<{
+  data?: CepMarketStructurePayload;
+  error?: string;
+  notModified?: boolean;
+}> {
+  const token = getSessionToken();
+  if (!token) {
+    return { error: "UNAUTHORIZED" };
+  }
+
+  const id = String(packId).trim();
+  if (!id) return { error: "MISSING_PARAMS" };
+
+  const cached = structureCache.get(id);
+  const headers = authHeaders();
+  if (cached?.etag) headers["If-None-Match"] = cached.etag;
+
+  const url = apiUrl(
+    `${CEP_MARKET_STRUCTURE_ENDPOINT}?pack_id=${encodeURIComponent(id)}`,
+  );
+  const result = await cepHttpRequest(url, {
+    method: "GET",
+    headers,
+  });
+
+  if (result.status === 304 && cached) {
+    return { data: cached.data, notModified: true };
+  }
+
+  if (!result.ok) {
+    if (result.status === 401) {
+      handleUnauthorized();
+      return { error: "UNAUTHORIZED" };
+    }
+    try {
+      const errBody = JSON.parse(result.text) as {
+        error?: string;
+        message?: string;
+      };
+      return { error: errBody.error || errBody.message || "NO_SUCCESS_LOAD" };
+    } catch {
+      return { error: result.error || "NO_SUCCESS_LOAD" };
+    }
+  }
+
+  try {
+    const raw = JSON.parse(result.text) as CepMarketStructurePayload & {
+      contents?: PackStructureMap;
+      structure?: PackStructureMap;
+    };
+    const content =
+      raw.content ?? raw.contents ?? raw.structure;
+    if (!raw.settings || !content || typeof content !== "object") {
+      return { error: "NO_STRUCTURE" };
+    }
+    const data: CepMarketStructurePayload = {
+      pack_id: String(raw.pack_id ?? id),
+      pack_name: String(raw.pack_name || ""),
+      version: String(raw.version || ""),
+      etag: raw.etag,
+      settings: raw.settings,
+      content,
+    };
+    if (data.etag) {
+      structureCache.set(id, { etag: data.etag, data });
+    }
+    return { data };
   } catch {
     return { error: "NO_SUCCESS_LOAD" };
   }

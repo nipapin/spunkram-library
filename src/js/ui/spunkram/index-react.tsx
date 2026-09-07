@@ -1,17 +1,20 @@
-import "../polyfill-cep-process";
+import "../../polyfill-cep-process";
+import "../../ai/cep-ai";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { enableSpectrum, initBolt } from "../lib/utils/bolt";
+import { enableSpectrum, initBolt } from "../../lib/utils/bolt";
 import { installGlobalHandlers } from "@/api/support";
 import "@fontsource-variable/geist/wght.css";
 import "@fontsource-variable/unbounded/wght.css";
-import "../globals.css";
+import "../../globals.css";
+import "../../themes/brands-runtime.scss";
+import { initBrandTheme } from "../../lib/utils/brandTheme";
 import { App } from "./main";
-import { ConfigurationWrapper } from "../../context/ConfigurationWrapper";
-import { getFontCatalog } from "../lib/utils/system-fonts";
-import { preloadVoiceoverPreviews } from "../api/voiceover";
-// host-pick-20260822 cache bust
+import { ConfigurationWrapper } from "../../../context/ConfigurationWrapper";
+import { getFontCatalog } from "../../lib/utils/system-fonts";
+import { preloadVoiceoverPreviews } from "../../api/voiceover";
 
+initBrandTheme();
 enableSpectrum();
 installGlobalHandlers();
 

@@ -36,6 +36,21 @@ function resolveGroupIcon(group: PackLeafGroup): PackTreeIcon {
   return "group";
 }
 
+/** Normalize preview `plan` to lowercase unique strings. */
+export function normalizeItemPlans(raw: unknown): string[] {
+  const list = Array.isArray(raw) ? raw : raw != null && raw !== "" ? [raw] : [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of list) {
+    if (typeof entry !== "string") continue;
+    const key = entry.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+  }
+  return out;
+}
+
 function buildItems(
   group: PackLeafGroup,
   pathSegments: string[],
@@ -53,6 +68,7 @@ function buildItems(
       pathSegments: [...pathSegments],
       previewKey,
       group,
+      plan: normalizeItemPlans(entry.plan),
     });
   }
 
@@ -162,14 +178,14 @@ export function flattenPackGroups(
 
 export type PackContentSection = {
   id: string;
-  /** Relative path under the selected folder, e.g. "Bokeh / Fast". Empty for leaf selection. */
+  /** Path label for the section header, e.g. "FX / Bokeh LL" or relative "MOGRT". */
   title: string;
   items: PackTreeItem[];
 };
 
 /**
  * Build content sections for the grid.
- * - Leaf group → one untitled section with its items.
+ * - Leaf group → one section titled with the group path (always shown, incl. sticky headers).
  * - Folder → one section per descendant leaf group, titled by path relative to the folder.
  */
 export function collectContentSections(node: PackTreeNode): PackContentSection[] {
@@ -177,7 +193,7 @@ export function collectContentSections(node: PackTreeNode): PackContentSection[]
     return [
       {
         id: node.id,
-        title: "",
+        title: node.path.join(" / ") || node.label,
         items: node.items,
       },
     ];
@@ -186,7 +202,7 @@ export function collectContentSections(node: PackTreeNode): PackContentSection[]
   const rootLen = node.path.length;
   return flattenPackGroups(node.children).map((group) => ({
     id: group.id,
-    title: group.path.slice(rootLen).join(" / "),
+    title: group.path.slice(rootLen).join(" / ") || group.label,
     items: group.items,
   }));
 }
@@ -242,6 +258,55 @@ export function filterFavoriteSections(
       items: section.items.filter((item) => favoriteIds.has(item.id)),
     }))
     .filter((section) => section.items.length > 0);
+}
+
+/** Keep only items the current account can use. */
+export function filterUnlockedSections(
+  sections: PackContentSection[],
+  isUnlocked: (item: PackTreeItem) => boolean,
+): PackContentSection[] {
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter(isUnlocked),
+    }))
+    .filter((section) => section.items.length > 0);
+}
+
+/**
+ * Filter the sidebar tree to items matching `keepItem`.
+ * Drops empty groups/folders and recalculates counts.
+ */
+export function filterPackTree(
+  nodes: PackTreeNode[],
+  keepItem: (item: PackTreeItem) => boolean,
+): PackTreeNode[] {
+  const out: PackTreeNode[] = [];
+  for (const node of nodes) {
+    if (node.kind === "group") {
+      const items = node.items.filter(keepItem);
+      if (items.length === 0) continue;
+      out.push({
+        ...node,
+        items,
+        count: items.length,
+        newCount: node.isNew ? 1 : 0,
+        premiumCount: node.premiumCount > 0 ? items.length : 0,
+      });
+      continue;
+    }
+
+    const children = filterPackTree(node.children, keepItem);
+    if (children.length === 0) continue;
+    out.push({
+      ...node,
+      children,
+      count: children.reduce((sum, child) => sum + child.count, 0),
+      newCount: children.reduce((sum, child) => sum + child.newCount, 0),
+      premiumCount: children.reduce((sum, child) => sum + child.premiumCount, 0),
+    });
+  }
+  return out;
 }
 
 /** First root node (folder or group) — preferred default selection. */

@@ -28,11 +28,15 @@ export type BrandConfig = {
   extensionId: string;
   displayName: string;
   panelDisplayName: string;
+  /** Vite CEP panel HTML, relative to `src/js`. Only this UI is built. */
+  panelMainPath: string;
   authorName: string;
   /** Device-auth / CEP API client — server maps this to author; never send author_id. */
   apiClient: string;
   /** Public path on motionflow.pro (login, subscribe, contact). */
   sitePath: string;
+  /** Absolute origin for public pages when they live on a storefront host. */
+  siteOrigin?: string;
   packExtension: string;
   legacyPackExtension: string;
   prefsCompany: string;
@@ -56,9 +60,11 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
     extensionId: "com.premieregal.cep",
     displayName: "Gal Toolkit MAX",
     panelDisplayName: "Gal Toolkit MAX",
+    panelMainPath: "./ui/gal/index.html",
     authorName: "Premiere Gal",
     apiClient: "gal-cep",
     sitePath: "/premiere-gal",
+    siteOrigin: "https://premieregal.motionflow.pro",
     packExtension: "gal",
     legacyPackExtension: "gal",
     prefsCompany: "Premiere Gal",
@@ -84,6 +90,7 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
     extensionId: "com.spunkramlibrary.cep",
     displayName: "Spunkram Library",
     panelDisplayName: "Spunkram Library",
+    panelMainPath: "./ui/spunkram/index.html",
     authorName: "Spunkram",
     apiClient: "spunkram-cep",
     sitePath: "/spunkram",

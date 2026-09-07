@@ -10,7 +10,17 @@ type ProgressContextType = {
   clearError: () => void;
 };
 
-const ProgressContext = createContext<ProgressContextType | null>(null);
+/** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
+ * would disconnect Provider from consumers until a full page reload. */
+const PROGRESS_CONTEXT_KEY = "__spunkram_progress_context__";
+type ProgressGlobal = typeof globalThis & {
+  [PROGRESS_CONTEXT_KEY]?: ReturnType<typeof createContext<ProgressContextType | null>>;
+};
+
+const ProgressContext =
+  (globalThis as ProgressGlobal)[PROGRESS_CONTEXT_KEY] ??
+  createContext<ProgressContextType | null>(null);
+(globalThis as ProgressGlobal)[PROGRESS_CONTEXT_KEY] = ProgressContext;
 
 export const ProgressProvider = ({ children }: { children: React.ReactNode }) => {
   const [progress, setProgress] = useState(0);

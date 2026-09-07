@@ -32,10 +32,10 @@ import { WaveformPlayer } from "@/components/waveform-player";
 import * as panelStore from "@/lib/userdata-store";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { friendlyErrorMessage } from "@/utils/user-error";
-import { textGenerationsCost, withGenerationCostLabel } from "../../utils/generationCost";
-import { rangeFillStyle } from "../../utils/rangeFillStyle";
-import { ScrubNumber } from "../../components/ScrubNumber";
-import { StyledSelect } from "../../components/StyledSelect";
+import { textGenerationsCost, withGenerationCostLabel } from "../../../utils/generationCost";
+import { rangeFillStyle } from "../../../utils/rangeFillStyle";
+import { ScrubNumber } from "../../../components/ScrubNumber";
+import { StyledSelect } from "../../../components/StyledSelect";
 import "./VoiceoverApp.scss";
 
 const HISTORY_STORAGE_KEY = storageKey("voiceoverHistory");

@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CaptionsTab } from "../../components/CaptionsTab";
+import { CaptionsTab } from "../../../components/CaptionsTab";
 import {
   ProgressDialog,
   CAPTIONS_PROGRESS_STEPS,
   LOAD_CAPTIONS_PROGRESS_STEPS,
   type DescribeProgress,
   type DescribeType,
-} from "../../components/ProgressDialog";
-import { fs } from "../../lib/cep/node";
-import { cepHostAppId } from "../../lib/utils/bolt";
+} from "../../../components/ProgressDialog";
+import { fs } from "../../../lib/cep/node";
+import { cepHostAppId } from "../../../lib/utils/bolt";
 import { Motionflow } from "@/sdk";
 import { hostSdk, sdkData } from "@/sdk/host-api";
-import { convertToMp3, detectSpeechStart } from "../../utils/ffmpeg";
-import { getBundledAudioPresetPath } from "../../utils/audioPreset";
-import { describeForExport } from "../../utils/describeForExport";
-import { getUserIdentity } from "../../api";
-import { reportSupportError } from "../../api/support";
-import { authErrorMessage, getLocalStyleAssetPaths, matchPresetByStyleName } from "../../styles";
-import { toHostCaptionPayload, packTranscriptionToChunks, withSyncedRawWords, groupingModeFromSegmentType } from "../../utils/captionHostPayload";
+import { convertToMp3, detectSpeechStart } from "../../../utils/ffmpeg";
+import { getBundledAudioPresetPath } from "../../../utils/audioPreset";
+import { describeForExport } from "../../../utils/describeForExport";
+import { getUserIdentity } from "../../../api";
+import { reportSupportError } from "../../../api/support";
+import { authErrorMessage, getLocalStyleAssetPaths, matchPresetByStyleName } from "../../../styles";
+import { toHostCaptionPayload, packTranscriptionToChunks, withSyncedRawWords, groupingModeFromSegmentType } from "../../../utils/captionHostPayload";
 import {
   captionsToChunks,
   clampTranscriptionToSpeechStart,
@@ -32,14 +32,14 @@ import {
   type CaptionsChunk,
   type GroupingMode,
   type TranscribeResult,
-} from "../../utils/transcribe";
-import { useWorkRangeCost } from "../../hooks/useWorkRangeCost";
-import { withGenerationCostLabel } from "../../utils/generationCost";
+} from "../../../utils/transcribe";
+import { useWorkRangeCost } from "../../../hooks/useWorkRangeCost";
+import { withGenerationCostLabel } from "../../../utils/generationCost";
 import "./CaptionsApp.scss";
-import { useConfiguration } from "../../../context/ConfigurationWrapper";
-import * as panelStore from "../../lib/userdata-store";
-import { usePanelUI } from "../../lib/panel-ui-context";
-import { friendlyErrorMessage, isSoftHostError } from "../../utils/user-error";
+import { useConfiguration } from "../../../../context/ConfigurationWrapper";
+import * as panelStore from "../../../lib/userdata-store";
+import { usePanelUI } from "../../../lib/panel-ui-context";
+import { friendlyErrorMessage, isSoftHostError } from "../../../utils/user-error";
 
 const STORAGE_KEY = "aitools-cep-transcription";
 const META_KEY = "aitools-cep-caption-meta";

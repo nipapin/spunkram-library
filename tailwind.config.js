@@ -55,8 +55,13 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['"Geist Variable"', "Geist", "ui-sans-serif", "system-ui", "sans-serif"],
-        headline: ['"Unbounded Variable"', "Unbounded", "sans-serif"],
+        sans: [
+          "var(--font-sans)",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+        ],
+        headline: ["var(--font-headline)", "sans-serif"],
       },
       borderRadius: {
         lg: "var(--radius)",

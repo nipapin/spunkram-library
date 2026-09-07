@@ -279,11 +279,92 @@ export function resolveItemPreviewMedia(
   return { posterPath, motion };
 }
 
+function remoteAssetUrl(
+  assetsBaseUrl: string,
+  segments: string[],
+  ext: string,
+  hostQuery?: "AE" | "PR",
+): string {
+  const base = assetsBaseUrl.replace(/\/+$/, "");
+  const encoded = segments.map((s) => encodeURIComponent(s)).join("/");
+  const withExt = ext.startsWith(".") ? ext : `.${ext}`;
+  let url = `${base}/${encoded}${withExt}`;
+  if (hostQuery === "AE") {
+    url += (url.includes("?") ? "&" : "?") + "host=AE";
+  }
+  return url;
+}
+
+/**
+ * Resolve poster + motion as HTTPS URLs under a media proxy / CDN base
+ * (e.g. `/api/cep/gal/effects/media` → `…/Assets/{segments}.png`).
+ * No existsSync — preferred extensions from pack settings.
+ */
+export function resolveItemRemotePreviewMedia(
+  item: PackTreeItem,
+  assetsBaseUrl: string,
+  options?: {
+    preferWebm?: boolean;
+    useMp4?: boolean;
+    host?: "AE" | "PR";
+  },
+): ItemPreviewMedia {
+  if (!assetsBaseUrl) return { posterPath: null, motion: null };
+
+  const disableWebm = !!item.group.disable_webm_preview;
+  const isStaticFootage =
+    item.group.is_footage === "JPG" || item.group.is_footage === "PNG";
+  const segments = resolveItemAssetSegments(item);
+  const host = options?.host === "AE" ? "AE" : "PR";
+
+  const posterExt =
+    item.group.is_footage === "JPG"
+      ? ".jpg"
+      : item.group.is_footage === "PNG"
+        ? ".png"
+        : ".png";
+  const posterPath = remoteAssetUrl(assetsBaseUrl, segments, posterExt, host);
+
+  if (isStaticFootage || packItemIsAudio(item)) {
+    return { posterPath, motion: null };
+  }
+
+  const preferWebm = !disableWebm && options?.preferWebm !== false;
+  const useMp4 = !!options?.useMp4;
+  let motionExt = ".webm";
+  let kind: PreviewMotionKind = "webm";
+  if (disableWebm) {
+    motionExt = ".gif";
+    kind = "gif";
+  } else if (preferWebm && useMp4) {
+    motionExt = ".mp4";
+    kind = "mp4";
+  } else if (preferWebm) {
+    motionExt = ".webm";
+    kind = "webm";
+  } else {
+    motionExt = ".gif";
+    kind = "gif";
+  }
+
+  return {
+    posterPath,
+    motion: {
+      kind,
+      path: remoteAssetUrl(assetsBaseUrl, segments, motionExt, host),
+    },
+  };
+}
+
+export function isRemoteMediaUrl(value: string | null | undefined): boolean {
+  return !!value && /^https?:\/\//i.test(value);
+}
+
 let sfxAudio: HTMLAudioElement | null = null;
 let sfxOwnerId: string | null = null;
 
 /** Play one SFX preview at a time (hover). Replaces any currently playing card. */
-export function playSfxPreview(ownerId: string, objectUrl: string): void {
+export function playSfxPreview(ownerId: string, objectUrl: string, volume = 1): void {
   if (!ownerId || !objectUrl || typeof Audio === "undefined") return;
   if (!sfxAudio) {
     sfxAudio = new Audio();
@@ -292,12 +373,19 @@ export function playSfxPreview(ownerId: string, objectUrl: string): void {
   }
   sfxOwnerId = ownerId;
   if (sfxAudio.src !== objectUrl) sfxAudio.src = objectUrl;
+  sfxAudio.volume = Math.min(1, Math.max(0, volume));
   try {
     sfxAudio.currentTime = 0;
   } catch {
     // ignore seek errors before metadata
   }
   void sfxAudio.play().catch(() => {});
+}
+
+/** Update volume on the active SFX preview without restarting. */
+export function setSfxPreviewVolume(volume: number): void {
+  if (!sfxAudio) return;
+  sfxAudio.volume = Math.min(1, Math.max(0, volume));
 }
 
 /** Stop hover SFX. Pass `ownerId` to only stop if that card still owns playback. */

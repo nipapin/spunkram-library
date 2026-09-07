@@ -14,6 +14,8 @@ export type PackPreviewItem = {
   name: string;
   options?: boolean | Record<string, unknown>;
   custom_args?: Record<string, unknown>;
+  /** Access tiers that unlock this item, e.g. `["max","toolkit"]` or `["demo"]` (Free). */
+  plan?: string | string[];
 };
 
 export type PackLeafGroup = {
@@ -107,6 +109,8 @@ export type PackTreeItem = {
   pathSegments: string[];
   previewKey: string;
   group: PackLeafGroup;
+  /** Normalized lowercase tiers from preview `plan` (empty → Max-only). */
+  plan: string[];
 };
 
 export type PackTreeFolderNode = {

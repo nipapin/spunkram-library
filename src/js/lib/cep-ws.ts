@@ -28,6 +28,7 @@ export type CepExtensionUpdateEvent = {
   zxp_url?: string;
   changelog?: string;
   channel?: "stable" | "beta";
+  product?: "spunkram" | "gal";
   published_at?: string;
   ts: number;
 };

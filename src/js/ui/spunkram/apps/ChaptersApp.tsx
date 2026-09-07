@@ -1,23 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { ChaptersTab, type ChaptersHistoryPreview } from "../../components/ChaptersTab";
+import { ChaptersTab, type ChaptersHistoryPreview } from "../../../components/ChaptersTab";
 import {
   ProgressDialog,
   CHAPTERS_PROGRESS_STEPS,
   type DescribeProgress,
-} from "../../components/ProgressDialog";
-import { fs } from "../../lib/cep/node";
-import { reloadJSX } from "../../lib/utils/bolt";
+} from "../../../components/ProgressDialog";
+import { fs } from "../../../lib/cep/node";
+import { reloadJSX } from "../../../lib/utils/bolt";
 import { storageKey } from "@brands";
 import { Motionflow } from "@/sdk";
 import { hostSdk, sdkData } from "@/sdk/host-api";
-import { convertToMp3 } from "../../utils/ffmpeg";
-import { getBundledAudioPresetPath } from "../../utils/audioPreset";
-import { describeForExport } from "../../utils/describeForExport";
-import { getUserIdentity } from "../../api";
-import { reportSupportError } from "../../api/support";
-import { authErrorMessage } from "../../styles";
-import { resolveChaptersLanguage } from "../../data/languages";
-import { normalize, transcribe, transcriptionLanguageCode, type CaptionsChunk, type TranscribeResult } from "../../utils/transcribe";
+import { convertToMp3 } from "../../../utils/ffmpeg";
+import { getBundledAudioPresetPath } from "../../../utils/audioPreset";
+import { describeForExport } from "../../../utils/describeForExport";
+import { getUserIdentity } from "../../../api";
+import { reportSupportError } from "../../../api/support";
+import { authErrorMessage } from "../../../styles";
+import { resolveChaptersLanguage } from "../../../data/languages";
+import { normalize, transcribe, transcriptionLanguageCode, type CaptionsChunk, type TranscribeResult } from "../../../utils/transcribe";
 import {
   ChapterApiError,
   createChapter,
@@ -32,15 +32,15 @@ import {
   tagsToText,
   parseTagsText,
   type Chapter,
-} from "../../utils/chapters";
-import { friendlyErrorMessage, isSoftHostError } from "../../utils/user-error";
-import { useWorkRangeCost } from "../../hooks/useWorkRangeCost";
-import { withGenerationCostLabel } from "../../utils/generationCost";
-import { copyToClipboard } from "../../utils/clipboard";
-import * as panelStore from "../../lib/userdata-store";
-import { usePanelUI } from "../../lib/panel-ui-context";
+} from "../../../utils/chapters";
+import { friendlyErrorMessage, isSoftHostError } from "../../../utils/user-error";
+import { useWorkRangeCost } from "../../../hooks/useWorkRangeCost";
+import { withGenerationCostLabel } from "../../../utils/generationCost";
+import { copyToClipboard } from "../../../utils/clipboard";
+import * as panelStore from "../../../lib/userdata-store";
+import { usePanelUI } from "../../../lib/panel-ui-context";
 import "./ChaptersApp.scss";
-import { useConfiguration } from "../../../context/ConfigurationWrapper";
+import { useConfiguration } from "../../../../context/ConfigurationWrapper";
 
 const TRANSCRIPTION_KEY = "aitools-cep-chapters-transcription";
 const RESULT_KEY = "aitools-cep-chapters-result";

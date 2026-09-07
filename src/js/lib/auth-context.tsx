@@ -43,6 +43,9 @@ import { clearUserIdentity, setUserIdentity } from "@/api/user";
 import { reportSupportError } from "@/api/support";
 import { reportClientSession, reportInstalledPacks } from "@/api/telemetry";
 import { currentHostAppId } from "@/lib/utils/apply-item";
+import { applyAdminDevPlan } from "@/lib/utils/gal-plan";
+import { currentPackHost } from "@/lib/utils/pack-host";
+import { isReleaseAdminEmail } from "@/api/update";
 import {
   resolveAccessTier,
   resolveFreePackSlots,
@@ -110,7 +113,17 @@ type AuthContextValue = {
   revoke: (deviceId: string) => Promise<AuthActionResult>;
 };
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+/** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
+ * would disconnect Provider from consumers until a full page reload. */
+const AUTH_CONTEXT_KEY = "__spunkram_auth_context__";
+type AuthGlobal = typeof globalThis & {
+  [AUTH_CONTEXT_KEY]?: ReturnType<typeof createContext<AuthContextValue | null>>;
+};
+
+const AuthContext =
+  (globalThis as AuthGlobal)[AUTH_CONTEXT_KEY] ??
+  createContext<AuthContextValue | null>(null);
+(globalThis as AuthGlobal)[AUTH_CONTEXT_KEY] = AuthContext;
 
 function hostPrimaryType(): "AE" | "PR" {
   const host = currentHostAppId();
@@ -257,7 +270,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearSessionLocal, refreshSavedAccounts]);
 
   const refreshProfile = useCallback(
-    async (token: string, opts?: { removeAccountIdOnUnauthorized?: string }) => {
+    async (
+      token: string,
+      opts?: { removeAccountIdOnUnauthorized?: string },
+    ): Promise<AuthActionResult> => {
       const host = currentHostAppId();
       const hostType =
         host === "AEFT" ? ("AE" as const) : host === "PPRO" ? ("PR" as const) : null;
@@ -406,11 +422,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         started.error !== "NO_CONNECTION" &&
         started.error !== "TIMEOUT" &&
         started.error !== "NO_SUCCESS_LOAD" &&
+        !/UNKNOWN_CLIENT|unknown client/i.test(started.error) &&
         !/^HTTP\s*4\d\d/i.test(started.error)
       ) {
         reportSupportError("auth.device_start", started.error);
       }
-      return { ok: false, message: started.error };
+      return { ok: false, message: friendlyErrorMessage(started.error) };
     }
 
     const { code, device_code, verification_url, interval, expires_in } = started.data;
@@ -458,7 +475,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoginDeviceLimit(null);
         return {
           ok: false,
-          message: replaced.message || "Could not revoke device",
+          message: ("message" in replaced && replaced.message) || "Could not revoke device",
         };
       }
 
@@ -658,22 +675,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshProfile, refreshSavedAccounts]);
 
+  const effectiveSubscription = useMemo(() => {
+    if (!isReleaseAdminEmail(auth.email)) return subscription;
+    return applyAdminDevPlan(subscription, prefs.adminDevPlan, currentPackHost());
+  }, [auth.email, prefs.adminDevPlan, subscription]);
+
   const accessTier = useMemo(
     () =>
       resolveAccessTier({
-        tier: subscription.tier,
-        subscribed: subscription.subscribed,
-        purchaseCount: subscription.purchases.length,
+        tier: effectiveSubscription.tier,
+        subscribed: effectiveSubscription.subscribed,
+        purchaseCount: effectiveSubscription.purchases.length,
       }),
-    [subscription.tier, subscription.subscribed, subscription.purchases.length],
+    [
+      effectiveSubscription.tier,
+      effectiveSubscription.subscribed,
+      effectiveSubscription.purchases.length,
+    ],
   );
   const signedIn = Boolean(auth.token && (auth.id || auth.email));
   const isFreeUser = accessTier === "free";
   const generationLimit = signedIn
-    ? resolveGenerationLimit(subscription.aiGenerationsLimit, accessTier)
+    ? resolveGenerationLimit(effectiveSubscription.aiGenerationsLimit, accessTier)
     : null;
   const freePackSlots = signedIn
-    ? resolveFreePackSlots(subscription.freePackSlots)
+    ? resolveFreePackSlots(effectiveSubscription.freePackSlots)
     : null;
 
   const value = useMemo<AuthContextValue>(
@@ -684,7 +710,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       auth,
       signedIn,
       authReady,
-      subscription,
+      subscription: effectiveSubscription,
       accessTier,
       isFreeUser,
       generationLimit,
@@ -713,7 +739,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updatePrefs,
       auth,
       authReady,
-      subscription,
+      effectiveSubscription,
       accessTier,
       isFreeUser,
       generationLimit,

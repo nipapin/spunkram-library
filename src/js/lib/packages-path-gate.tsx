@@ -30,7 +30,20 @@ type PackagesPathGateValue = {
   ensurePackagesPath: () => Promise<boolean>;
 };
 
-const PackagesPathGateContext = createContext<PackagesPathGateValue | null>(null);
+/** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
+ * would disconnect Provider from consumers until a full page reload. */
+const PACKAGES_PATH_GATE_CONTEXT_KEY = "__spunkram_packages_path_gate_context__";
+type PackagesPathGateGlobal = typeof globalThis & {
+  [PACKAGES_PATH_GATE_CONTEXT_KEY]?: ReturnType<
+    typeof createContext<PackagesPathGateValue | null>
+  >;
+};
+
+const PackagesPathGateContext =
+  (globalThis as PackagesPathGateGlobal)[PACKAGES_PATH_GATE_CONTEXT_KEY] ??
+  createContext<PackagesPathGateValue | null>(null);
+(globalThis as PackagesPathGateGlobal)[PACKAGES_PATH_GATE_CONTEXT_KEY] =
+  PackagesPathGateContext;
 
 export function PackagesPathGateProvider({ children }: { children: ReactNode }) {
   const { prefs, updatePrefs, signedIn, subscription } = useAuth();

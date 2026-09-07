@@ -62,6 +62,8 @@ MotionFlow.AE.addPhotoAnimator(...)
 MotionFlow.AE.applyPreset(...)
 MotionFlow.AE.textPresets.apply / get / remove
 MotionFlow.AE.tools.*
+MotionFlow.AE.project.sort / rename / replace   // Gal Toolkit scripts
+MotionFlow.AE.wiggler.apply / remove / bake / call
 MotionFlow.AE.describe(audioPresetPath?)
 MotionFlow.AE.addMarkers({ markers })
 MotionFlow.AE.createCaptions / resegment / update / find / load / saveSession
@@ -77,6 +79,7 @@ MotionFlow.PPRO.addMogrt({ filePath, itemName?, trackIndex? })
 MotionFlow.PPRO.importSequence / importProject / importFootage / importAudio
 MotionFlow.PPRO.undoGroup.start / end / abort
 MotionFlow.PPRO.tools.*
+MotionFlow.PPRO.project.sort / rename / replace / reduce / collect  // Gal Toolkit scripts
 MotionFlow.PPRO.describe / markSilences / addMarkers / captions… / styles…
 MotionFlow.PPRO.importMedia / importVoiceoverAudio
 MotionFlow.PPRO.applyPackItem(payload)
@@ -84,7 +87,7 @@ MotionFlow.PPRO.applyPackItem(payload)
 
 ## Rules
 
-1. **New UI features only through SDK** — no new `evalTS` in `src/js/main`, components, or apps.
+1. **New UI features only through SDK** — no new `evalTS` in `src/js/ui`, components, or apps.
 2. SDK does **not** own AtomX crypto decode long-term; plaintext Market packs are the hot path. Soft-legacy decode remains for already-installed encrypted packs (see Операция «Отречение»).
 3. `FULL_PROJECT` uses host `copyPaste*` exports + shipped `Motionflow.dll` (`applyFullProjectViaCopyPaste`).
 4. Prefer `MotionFlow.AE` / `MotionFlow.PPRO` over host-agnostic guesses; use `MotionFlow.host` to branch UI.

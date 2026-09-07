@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronRight, Folder, Layers, Film, Music, Sparkles } from "lucide-react";
+import { ChevronRight, Folder, Layers, Film, Music, Sparkles, Star, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { storageKey } from "@brands";
@@ -200,11 +200,22 @@ export function PanelSidebar({
   active,
   onSelect,
   orientation = "vertical",
+  tools,
+  favoritesId,
+  favoritesCount,
+  loading = false,
 }: {
   tree: PackTreeNode[];
   active: string;
   onSelect: (id: string) => void;
   orientation?: "vertical" | "horizontal";
+  /** Optional search / filters rendered above the category tree (Gal). */
+  tools?: ReactNode;
+  /** When set, pin a Favorites row at the top of the vertical tree. */
+  favoritesId?: string;
+  favoritesCount?: number;
+  /** Show a loading state while the category tree is fetching. */
+  loading?: boolean;
 }) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const [width, setWidth] = useState(loadSidebarWidth);
@@ -320,31 +331,85 @@ export function PanelSidebar({
     );
   }
 
+  const favoritesActive = Boolean(favoritesId && active === favoritesId);
+
   return (
     <aside
       className="relative flex shrink-0 border-r border-[rgb(42,36,64)]"
       style={{ width }}
     >
-      <nav className="min-w-0 flex-1 overflow-y-auto flex flex-col gap-0.5 px-1 py-2">
-        {tree.length === 0 ? (
-          <p className="px-2 py-3 text-[11px] text-muted-foreground">
-            No pack loaded
-          </p>
-        ) : (
-          tree.map((node) => (
-            <TreeNodeRow
-              key={node.id}
-              node={node}
-              active={active}
-              onSelect={onSelect}
-              depth={0}
-              openIds={openIds}
-              onToggleOpen={toggleOpen}
-              showNewBadges={showNewBadges}
-            />
-          ))
-        )}
-      </nav>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {tools ? (
+          <div className="shrink-0 border-b border-[rgb(42,36,64)] px-1.5 py-2">
+            {tools}
+          </div>
+        ) : null}
+        <nav className="min-w-0 flex-1 overflow-y-auto flex flex-col gap-0.5 px-1 py-2">
+          {favoritesId ? (
+            <button
+              type="button"
+              onClick={() => onSelect(favoritesId)}
+              aria-pressed={favoritesActive}
+              className={cn(
+                "group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
+                favoritesActive
+                  ? "bg-[#7c4dff]/15 font-semibold text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Star
+                className={cn(
+                  "size-3.5 shrink-0",
+                  favoritesActive ? "text-primary" : "text-muted-foreground",
+                )}
+                fill={favoritesActive ? "currentColor" : "none"}
+              />
+              <span className="min-w-0 flex-1 truncate">Favorites</span>
+              {typeof favoritesCount === "number" ? (
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none",
+                    favoritesActive
+                      ? "bg-background/60 text-foreground"
+                      : "bg-secondary/70 text-muted-foreground",
+                  )}
+                >
+                  {favoritesCount}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
+          {tree.length === 0 ? (
+            loading ? (
+              <div
+                className="flex flex-col items-center justify-center gap-2 px-2 py-8 text-muted-foreground"
+                aria-busy="true"
+                aria-label="Loading categories"
+              >
+                <Loader2 className="size-4 animate-spin text-primary" />
+                <p className="text-[11px]">Loading…</p>
+              </div>
+            ) : (
+              <p className="px-2 py-3 text-[11px] text-muted-foreground">
+                No pack loaded
+              </p>
+            )
+          ) : (
+            tree.map((node) => (
+              <TreeNodeRow
+                key={node.id}
+                node={node}
+                active={active}
+                onSelect={onSelect}
+                depth={0}
+                openIds={openIds}
+                onToggleOpen={toggleOpen}
+                showNewBadges={showNewBadges}
+              />
+            ))
+          )}
+        </nav>
+      </div>
       <div
         role="separator"
         aria-orientation="vertical"

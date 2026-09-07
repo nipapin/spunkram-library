@@ -12,6 +12,31 @@ import { openLinkInBrowser } from "@/lib/utils/bolt";
 
 const PUBLIC_AUTH_ORIGIN = "https://motionflow.pro";
 
+function brandPublicOrigin(): string {
+  return (BRAND.siteOrigin ?? PUBLIC_AUTH_ORIGIN).replace(/\/$/, "");
+}
+
+/** Public landing for this brand (storefront origin + path, no trailing slash). */
+function brandPublicBase(): string {
+  if (BRAND.siteOrigin) return brandPublicOrigin();
+  const path = BRAND.sitePath.replace(/\/$/, "");
+  return `${PUBLIC_AUTH_ORIGIN}${path}`;
+}
+
+function isAllowedVerificationOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    const host = url.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1") {
+      return url.protocol === "http:" || url.protocol === "https:";
+    }
+    if (url.protocol !== "https:") return false;
+    return host === "motionflow.pro" || host.endsWith(".motionflow.pro");
+  } catch {
+    return false;
+  }
+}
+
 function clientQuery(): string {
   return new URLSearchParams({ client: BRAND.apiClient }).toString();
 }
@@ -22,23 +47,25 @@ export const AUTH_ENDPOINTS = {
   replaceDevice: "/api/cep/auth/replace-device",
   me: "/api/cep/me",
   revokeDevice: "/api/cep/devices/revoke",
-  subscribe: `${PUBLIC_AUTH_ORIGIN}${BRAND.sitePath}`,
-  store: `${PUBLIC_AUTH_ORIGIN}${BRAND.sitePath}/store`,
+  subscribe: brandPublicBase(),
+  store: `${brandPublicBase()}/store`,
   manageSubscription: `${PUBLIC_AUTH_ORIGIN}/profile/subscriptions?${clientQuery()}`,
-  contact: `${PUBLIC_AUTH_ORIGIN}${BRAND.sitePath}#contact`,
+  contact: `${brandPublicBase()}#contact`,
 } as const;
 
 /** Browser confirm page — author site (login modal → Allow/Deny). */
 export function verificationUrlForCode(code: string, fromApi?: string): string {
   const params = new URLSearchParams({ code, client: BRAND.apiClient });
-  const fallback = `${PUBLIC_AUTH_ORIGIN}${BRAND.sitePath}?${params.toString()}`;
+  const fallbackUrl = new URL(`${brandPublicBase()}/`);
+  fallbackUrl.search = params.toString();
+  const fallback = fallbackUrl.toString();
   if (!fromApi) return fallback;
   try {
     const url = new URL(fromApi);
-    if (url.origin !== PUBLIC_AUTH_ORIGIN) return fallback;
+    if (!isAllowedVerificationOrigin(url.origin)) return fallback;
     // Prefer the brand landing even if an older API still returns /cep/login.
     if (url.pathname.includes("/cep/login")) {
-      url.pathname = BRAND.sitePath;
+      url.pathname = BRAND.siteOrigin ? "/" : BRAND.sitePath;
     }
     if (!url.searchParams.has("client")) url.searchParams.set("client", BRAND.apiClient);
     if (!url.searchParams.has("code")) url.searchParams.set("code", code);
@@ -133,6 +160,17 @@ function authHeaders(token?: string): Record<string, string> {
   return headers;
 }
 
+function errorFromHttpBody(text: string): string | undefined {
+  try {
+    const body = JSON.parse(text) as { error?: unknown; message?: unknown };
+    if (typeof body.message === "string" && body.message.trim()) return body.message.trim();
+    if (typeof body.error === "string" && body.error.trim()) return body.error.trim();
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+}
+
 async function parseJson<T>(
   url: string,
   init: {
@@ -145,7 +183,7 @@ async function parseJson<T>(
   const result = await cepHttpRequest(url, init);
   if (!result.ok) {
     return {
-      error: result.error || `HTTP ${result.status}`,
+      error: errorFromHttpBody(result.text) || result.error || `HTTP ${result.status}`,
       status: result.status,
     };
   }
@@ -268,9 +306,6 @@ export async function replaceDeviceAuth(opts: {
   });
 
   if (data?.token && data.user) {
-    return { status: "complete", token: data.token, user: data.user };
-  }
-  if ((data?.status || "").toLowerCase() === "complete" && data.token && data.user) {
     return { status: "complete", token: data.token, user: data.user };
   }
   return {

@@ -24,18 +24,29 @@ const LEGACY_SHOW_NEW_BADGES_KEY = "spunkram.showNewBadges";
 type PersistedUiState = {
   playPreview: boolean;
   audioEnabled: boolean;
+  /** Preview volume 0–100 (muted when audioEnabled is false). */
+  previewVolume: number;
   thumbSize: number;
   focusMode: boolean;
   showNewBadges: boolean;
+  /** When true, grid shows only items unlocked for the current plan. */
+  showAvailableOnly: boolean;
 };
 
 const UI_DEFAULTS: PersistedUiState = {
   playPreview: false,
   audioEnabled: true,
+  previewVolume: 50,
   thumbSize: THUMB_SIZE_DEFAULT,
   focusMode: false,
   showNewBadges: true,
+  showAvailableOnly: false,
 };
+
+function clampPreviewVolume(v: number): number {
+  if (!Number.isFinite(v)) return UI_DEFAULTS.previewVolume;
+  return Math.min(100, Math.max(0, Math.round(v)));
+}
 
 function clampThumbSize(size: number): number {
   return Math.min(THUMB_SIZE_MAX, Math.max(THUMB_SIZE_MIN, Math.round(size)));
@@ -55,6 +66,10 @@ function loadUiState(): PersistedUiState {
           typeof parsed.audioEnabled === "boolean"
             ? parsed.audioEnabled
             : UI_DEFAULTS.audioEnabled,
+        previewVolume:
+          typeof parsed.previewVolume === "number"
+            ? clampPreviewVolume(parsed.previewVolume)
+            : UI_DEFAULTS.previewVolume,
         thumbSize:
           typeof parsed.thumbSize === "number"
             ? clampThumbSize(parsed.thumbSize)
@@ -67,6 +82,10 @@ function loadUiState(): PersistedUiState {
           typeof parsed.showNewBadges === "boolean"
             ? parsed.showNewBadges
             : UI_DEFAULTS.showNewBadges,
+        showAvailableOnly:
+          typeof parsed.showAvailableOnly === "boolean"
+            ? parsed.showAvailableOnly
+            : UI_DEFAULTS.showAvailableOnly,
       };
     }
 
@@ -128,20 +147,25 @@ export type StatusMessage = {
 type PanelUIContextValue = {
   playPreview: boolean;
   audioEnabled: boolean;
+  previewVolume: number;
   thumbSize: number;
   gridColumns: number;
   hoveredItemName: string | null;
   showFavoritesOnly: boolean;
   /** When false, hides NEW chips in sidebar + grid (pack still marks items as new). */
   showNewBadges: boolean;
+  /** When true, grid shows only items unlocked for the current plan. */
+  showAvailableOnly: boolean;
   favoriteIds: ReadonlySet<string>;
   togglePlayPreview: () => void;
   toggleAudio: () => void;
+  setPreviewVolume: (volume: number) => void;
   setThumbSize: (size: number) => void;
   setHoveredItemName: (name: string | null) => void;
   toggleShowFavoritesOnly: () => void;
   setShowFavoritesOnly: (value: boolean) => void;
   setShowNewBadges: (value: boolean) => void;
+  toggleShowAvailableOnly: () => void;
   isFavorite: (itemId: string) => boolean;
   toggleFavorite: (itemId: string) => void;
   /** Distraction-free mode — hides the sidebar so the grid fills the panel. */
@@ -180,12 +204,14 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
   const initial = useRef(loadUiState()).current;
   const [playPreview, setPlayPreview] = useState(initial.playPreview);
   const [audioEnabled, setAudioEnabled] = useState(initial.audioEnabled);
+  const [previewVolume, setPreviewVolumeState] = useState(initial.previewVolume);
   const [thumbSize, setThumbSizeState] = useState(initial.thumbSize);
   const [hoveredItemName, setHoveredItemNameState] = useState<string | null>(
     null,
   );
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showNewBadges, setShowNewBadgesState] = useState(initial.showNewBadges);
+  const [showAvailableOnly, setShowAvailableOnly] = useState(initial.showAvailableOnly);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(loadFavoriteIds);
   const [focusMode, setFocusMode] = useState(initial.focusMode);
   const [applyingItemId, setApplyingItemId] = useState<string | null>(null);
@@ -196,18 +222,38 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
     persistUiState({
       playPreview,
       audioEnabled,
+      previewVolume,
       thumbSize,
       focusMode,
       showNewBadges,
+      showAvailableOnly,
     });
-  }, [playPreview, audioEnabled, thumbSize, focusMode, showNewBadges]);
+  }, [
+    playPreview,
+    audioEnabled,
+    previewVolume,
+    thumbSize,
+    focusMode,
+    showNewBadges,
+    showAvailableOnly,
+  ]);
 
   const togglePlayPreview = useCallback(() => {
     setPlayPreview((v) => !v);
   }, []);
 
   const toggleAudio = useCallback(() => {
-    setAudioEnabled((v) => !v);
+    setAudioEnabled((v) => {
+      if (v) return false;
+      setPreviewVolumeState((vol) => (vol <= 0 ? 100 : vol));
+      return true;
+    });
+  }, []);
+
+  const setPreviewVolume = useCallback((volume: number) => {
+    const next = clampPreviewVolume(volume);
+    setPreviewVolumeState(next);
+    setAudioEnabled(next > 0);
   }, []);
 
   const setThumbSize = useCallback((size: number) => {
@@ -224,6 +270,10 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
 
   const setShowNewBadges = useCallback((value: boolean) => {
     setShowNewBadgesState(value);
+  }, []);
+
+  const toggleShowAvailableOnly = useCallback(() => {
+    setShowAvailableOnly((v) => !v);
   }, []);
 
   const isFavorite = useCallback(
@@ -272,19 +322,23 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
     () => ({
       playPreview,
       audioEnabled,
+      previewVolume,
       thumbSize,
       gridColumns,
       hoveredItemName,
       showFavoritesOnly,
       showNewBadges,
+      showAvailableOnly,
       favoriteIds,
       togglePlayPreview,
       toggleAudio,
+      setPreviewVolume,
       setThumbSize,
       setHoveredItemName,
       toggleShowFavoritesOnly,
       setShowFavoritesOnly,
       setShowNewBadges,
+      toggleShowAvailableOnly,
       isFavorite,
       toggleFavorite,
       focusMode,
@@ -298,18 +352,23 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
     [
       playPreview,
       audioEnabled,
+      previewVolume,
       thumbSize,
       gridColumns,
       hoveredItemName,
       showFavoritesOnly,
       showNewBadges,
+      showAvailableOnly,
       favoriteIds,
       togglePlayPreview,
       toggleAudio,
+      setPreviewVolume,
       setThumbSize,
       setHoveredItemName,
       toggleShowFavoritesOnly,
+      setShowFavoritesOnly,
       setShowNewBadges,
+      toggleShowAvailableOnly,
       isFavorite,
       toggleFavorite,
       focusMode,

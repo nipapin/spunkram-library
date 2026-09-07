@@ -60,9 +60,20 @@ type DownloadManagerContextValue = {
   retry: (jobId: string) => void;
 };
 
-const DownloadManagerContext = createContext<DownloadManagerContextValue | null>(
-  null,
-);
+/** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
+ * would disconnect Provider from consumers until a full page reload. */
+const DOWNLOAD_MANAGER_CONTEXT_KEY = "__spunkram_download_manager_context__";
+type DownloadManagerGlobal = typeof globalThis & {
+  [DOWNLOAD_MANAGER_CONTEXT_KEY]?: ReturnType<
+    typeof createContext<DownloadManagerContextValue | null>
+  >;
+};
+
+const DownloadManagerContext =
+  (globalThis as DownloadManagerGlobal)[DOWNLOAD_MANAGER_CONTEXT_KEY] ??
+  createContext<DownloadManagerContextValue | null>(null);
+(globalThis as DownloadManagerGlobal)[DOWNLOAD_MANAGER_CONTEXT_KEY] =
+  DownloadManagerContext;
 
 export function DownloadManagerProvider({
   children,
