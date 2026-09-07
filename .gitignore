@@ -6,6 +6,7 @@ dist-ssr
 dist
 yarn-error.log
 .media
+.release-artifacts
 
 # Accidental local dumps (release used to git add -A these)
 /script.js

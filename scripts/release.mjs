@@ -24,7 +24,14 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -214,6 +221,15 @@ function findZxp(extensionId) {
   return hit ? path.join(dir, hit) : null;
 }
 
+/** Keep each brand ZXP outside dist/ — clean-dist wipes the whole tree. */
+function stashZxp(brand, zxpPath) {
+  const destDir = path.join(ROOT, ".release-artifacts", brand.id);
+  mkdirSync(destDir, { recursive: true });
+  const dest = path.join(destDir, `${brand.extensionId}.zxp`);
+  copyFileSync(zxpPath, dest);
+  return dest;
+}
+
 function resolveNextAppRoot() {
   if (process.env.NEXT_APP_ROOT?.trim()) {
     return path.resolve(process.env.NEXT_APP_ROOT.trim());
@@ -261,8 +277,9 @@ function main() {
       throw new Error(`ZXP not found for ${brand.extensionId} under dist/zxp/ after build`);
     }
     if (zxpPath) {
-      console.log(`[release] ${brand.id} zxp=${zxpPath}`);
-      zxpByBrand.set(brand.id, zxpPath);
+      const stashed = stashZxp(brand, zxpPath);
+      console.log(`[release] ${brand.id} zxp=${stashed}`);
+      zxpByBrand.set(brand.id, stashed);
     }
   }
 
