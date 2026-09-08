@@ -170,10 +170,13 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
     removeSavedAccount,
     loginBusy,
     loginCode,
+    loginDeviceLimit,
     cancelLogin,
+    confirmReplaceDevice,
   } = useAuth();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [replacingId, setReplacingId] = useState<string | null>(null);
   const [credits, setCredits] = useState<{
     monthlyLeft: number;
     extraLeft: number;
@@ -238,8 +241,15 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
     setMessage(null);
     const result = await addAccount();
     setBusy(false);
+    setReplacingId(null);
     if (!result.ok) setMessage(result.message || "Could not add account");
     else setMessage(result.message || "Account added");
+  }
+
+  function handleRevokeAndContinue(deviceId: string) {
+    setReplacingId(deviceId);
+    setMessage("Disconnecting device and finishing sign-in…");
+    confirmReplaceDevice(deviceId);
   }
 
   async function handleRemove(id: string) {
@@ -327,7 +337,57 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
 
             {message && <p className="account-spunkram__msg">{message}</p>}
 
-            {loginBusy && loginCode && (
+            {loginBusy && loginDeviceLimit ? (
+              <section className="account-spunkram__card account-spunkram__card--compact">
+                <Sheen />
+                <div className="account-spunkram__inner">
+                  <Kicker>Device limit reached</Kicker>
+                  <p className="account-spunkram__empty">
+                    This account is signed in on {loginDeviceLimit.device_limit} devices.
+                    Disconnect one to continue here.
+                  </p>
+                  {loginDeviceLimit.devices.map((device) => {
+                    const fp = parseDeviceFingerprint(device.user_fingerprint || "");
+                    const disconnectBusy = replacingId === device.id;
+                    return (
+                      <div key={device.id} className="account-spunkram__device">
+                        <div className="account-spunkram__grow">
+                          <p className="account-spunkram__device-name">
+                            {device.name || fp.user || "Device"}
+                          </p>
+                          <p className="account-spunkram__device-meta">
+                            {(device.ip || "—") +
+                              (device.last_seen_at
+                                ? ` · ${new Date(device.last_seen_at).toLocaleDateString()}`
+                                : "")}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="account-btn account-btn--ghost account-btn--tiny account-btn--danger"
+                          disabled={Boolean(replacingId)}
+                          onClick={() => handleRevokeAndContinue(device.id)}
+                        >
+                          {disconnectBusy ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            "Disconnect"
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className="account-btn account-btn--ghost account-btn--tiny"
+                    disabled={Boolean(replacingId)}
+                    onClick={cancelLogin}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </section>
+            ) : loginBusy && loginCode ? (
               <section className="account-spunkram__card account-spunkram__card--compact">
                 <Sheen />
                 <div className="account-spunkram__inner account-spunkram__inner--center">
@@ -338,7 +398,7 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
                   </button>
                 </div>
               </section>
-            )}
+            ) : null}
 
             <div className="account-spunkram__pair">
               <section className="account-spunkram__card account-spunkram__card--tile">

@@ -178,6 +178,35 @@ function authFromSession(session: MotionflowAccountSession): MotionflowAuth {
   };
 }
 
+/**
+ * CEP throttles `setTimeout` while the user is in the browser confirm tab.
+ * Resolve early when the panel is focused again so `device_limit` can appear.
+ * Ignore focus flaps for the first second so Premiere UI churn cannot busy-poll.
+ */
+function waitForNextAuthPoll(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const started = Date.now();
+    const minEarlyMs = Math.min(1000, Math.max(0, ms));
+    const finish = (early: boolean) => {
+      if (settled) return;
+      if (early && Date.now() - started < minEarlyMs) return;
+      settled = true;
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", onEarly);
+      document.removeEventListener("visibilitychange", onVis);
+      resolve();
+    };
+    const onEarly = () => finish(true);
+    const onVis = () => {
+      if (document.visibilityState === "visible") finish(true);
+    };
+    const timer = window.setTimeout(() => finish(false), Math.max(0, ms));
+    window.addEventListener("focus", onEarly);
+    document.addEventListener("visibilitychange", onVis);
+  });
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefsState] = useState<PrefSettings>(() => readPrefSettings());
   const [auth, setAuth] = useState<MotionflowAuth>(() => {
@@ -435,9 +464,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     openVerificationUrl(verification_url);
 
     const deadline = Date.now() + expires_in * 1000;
-    const firstDelayMs = interval * 1000;
+    const pollDelayMs = interval * 1000;
 
-    await new Promise((r) => setTimeout(r, firstDelayMs));
+    await waitForNextAuthPoll(pollDelayMs);
 
     while (!loginAbortRef.current && Date.now() < deadline) {
       const result = await pollDeviceAuth(code, { device_code });
@@ -486,7 +515,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { ok: false, message: result.message || `Login ${result.status}` };
       }
 
-      await new Promise((r) => setTimeout(r, interval * 1000));
+      await waitForNextAuthPoll(pollDelayMs);
     }
 
     setLoginBusy(false);

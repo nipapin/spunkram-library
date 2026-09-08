@@ -171,6 +171,15 @@ function errorFromHttpBody(text: string): string | undefined {
   return undefined;
 }
 
+function parseHttpJson<T>(text: string): T | undefined {
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return undefined;
+  }
+}
+
 async function parseJson<T>(
   url: string,
   init: {
@@ -181,17 +190,18 @@ async function parseJson<T>(
   },
 ): Promise<{ data?: T; error?: string; status: number }> {
   const result = await cepHttpRequest(url, init);
+  const data = parseHttpJson<T>(result.text);
   if (!result.ok) {
     return {
+      data,
       error: errorFromHttpBody(result.text) || result.error || `HTTP ${result.status}`,
       status: result.status,
     };
   }
-  try {
-    return { data: JSON.parse(result.text) as T, status: result.status };
-  } catch {
+  if (data === undefined) {
     return { error: "NO_SUCCESS_LOAD", status: result.status };
   }
+  return { data, status: result.status };
 }
 
 export async function startDeviceAuth(): Promise<
@@ -212,7 +222,7 @@ export async function startDeviceAuth(): Promise<
     },
   );
 
-  if (data?.code && data?.verification_url) {
+  if (status >= 200 && status < 300 && data?.code && data?.verification_url) {
     const deviceCode =
       typeof (data as { device_code?: unknown }).device_code === "string"
         ? (data as { device_code: string }).device_code
@@ -245,6 +255,7 @@ export async function pollDeviceAuth(
 
   const { data, error } = await parseJson<{
     status?: string;
+    error?: string;
     token?: string;
     user?: MotionflowUser;
     message?: string;
@@ -256,24 +267,29 @@ export async function pollDeviceAuth(
     body: JSON.stringify({ code, device_code: deviceCode }),
   });
 
+  const s = (data?.status || "").toLowerCase();
+  const errCode = String(data?.error || error || "").toUpperCase();
+
+  // Keep this before the `!data → pending` fallback. A 4xx DEVICE_LIMIT body
+  // used to be dropped, so the panel stayed on "Waiting for confirmation".
+  if (s === "device_limit" || errCode === "DEVICE_LIMIT") {
+    return {
+      status: "device_limit",
+      devices: Array.isArray(data?.devices) ? data.devices : [],
+      device_limit: Number(data?.device_limit) || 3,
+      message: data?.message || error,
+    };
+  }
+
   if (!data) {
     return { status: "pending" };
   }
 
-  const s = (data.status || "").toLowerCase();
   if (s === "pending" || (!data.token && !s)) {
     if (data.token && data.user) {
       return { status: "complete", token: data.token, user: data.user };
     }
     return { status: "pending" };
-  }
-  if (s === "device_limit") {
-    return {
-      status: "device_limit",
-      devices: Array.isArray(data.devices) ? data.devices : [],
-      device_limit: Number(data.device_limit) || 3,
-      message: data.message || error,
-    };
   }
   if (s === "expired" || s === "denied") {
     return { status: s, message: data.message || error };
@@ -290,7 +306,7 @@ export async function replaceDeviceAuth(opts: {
   device_code: string;
   revoke_device_id: string;
 }): Promise<DeviceAuthTokenResult> {
-  const { data, error } = await parseJson<{
+  const { data, error, status } = await parseJson<{
     status?: string;
     token?: string;
     user?: MotionflowUser;
@@ -305,7 +321,7 @@ export async function replaceDeviceAuth(opts: {
     }),
   });
 
-  if (data?.token && data.user) {
+  if (status >= 200 && status < 300 && data?.token && data.user) {
     return { status: "complete", token: data.token, user: data.user };
   }
   return {
@@ -350,7 +366,7 @@ export async function fetchMe(
     },
   );
 
-  if (data?.user) {
+  if (data?.user && status >= 200 && status < 300) {
     return { data: normalizeMePayload(data) };
   }
 
