@@ -28,7 +28,11 @@ export type BrandConfig = {
   extensionId: string;
   displayName: string;
   panelDisplayName: string;
-  /** Vite CEP panel HTML, relative to `src/js`. Only this UI is built. */
+  /**
+   * Vite CEP panel HTML, relative to `src/js`. Only this UI is built.
+   * Must be one folder deep (`./gal/index.html`, not `./ui/gal/index.html`):
+   * vite-cep-plugin rewrites script/css to `../assets/…`.
+   */
   panelMainPath: string;
   authorName: string;
   /** Device-auth / CEP API client — server maps this to author; never send author_id. */
@@ -60,7 +64,7 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
     extensionId: "com.premieregal.cep",
     displayName: "Gal Toolkit MAX",
     panelDisplayName: "Gal Toolkit MAX",
-    panelMainPath: "./ui/gal/index.html",
+    panelMainPath: "./gal/index.html",
     authorName: "Premiere Gal",
     apiClient: "gal-cep",
     sitePath: "/premiere-gal",
@@ -90,7 +94,7 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
     extensionId: "com.spunkramlibrary.cep",
     displayName: "Spunkram Library",
     panelDisplayName: "Spunkram Library",
-    panelMainPath: "./ui/spunkram/index.html",
+    panelMainPath: "./spunkram/index.html",
     authorName: "Spunkram",
     apiClient: "spunkram-cep",
     sitePath: "/spunkram",

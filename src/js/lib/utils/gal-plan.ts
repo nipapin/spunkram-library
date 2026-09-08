@@ -55,7 +55,7 @@ export function galAccountPlanLabel(plan: GalAccountPlan): string {
     case "max":
       return "Max";
     case "toolkit":
-      return "Toolkit";
+      return "Regular";
     default:
       return "Free";
   }

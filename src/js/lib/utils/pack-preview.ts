@@ -18,7 +18,7 @@ export type ItemPreviewMedia = {
 const POSTER_EXTS = [".png", ".jpg", ".jpeg"] as const;
 
 /** Cap concurrent FS→blob reads so CEP main thread stays responsive. */
-const MAX_CONCURRENT_READS = 3;
+const MAX_CONCURRENT_READS = 6;
 
 type ObjectUrlEntry = {
   url: string;
@@ -33,11 +33,20 @@ const REVOKE_DELAY_MS = 250;
 
 type ReadJob = {
   path: string;
+  /** Lower = sooner (top of grid). Default 0. */
+  priority: number;
   resolve: (url: string | null) => void;
 };
 
 let activeReads = 0;
 const readQueue: ReadJob[] = [];
+
+function enqueueReadJob(job: ReadJob): void {
+  // Insert by ascending priority so top-of-grid posters load first.
+  let i = readQueue.length;
+  while (i > 0 && readQueue[i - 1].priority > job.priority) i -= 1;
+  readQueue.splice(i, 0, job);
+}
 
 function cepFsAvailable(): boolean {
   return (
@@ -147,15 +156,21 @@ function pumpReadQueue(): void {
 /**
  * Resolve a file to a blob URL with a concurrency-limited queue.
  * Each successful call retains the URL — pair with `releasePreviewObjectUrl`.
+ * Optional `priority` (lower = sooner) prefers top-of-grid posters.
  */
-export function loadPreviewObjectUrl(absolutePath: string): Promise<string | null> {
+export function loadPreviewObjectUrl(
+  absolutePath: string,
+  opts?: { priority?: number },
+): Promise<string | null> {
   if (!absolutePath) return Promise.resolve(null);
   const cached = objectUrlCache.get(absolutePath);
   if (cached) return Promise.resolve(retainEntry(cached));
 
+  const priority = opts?.priority ?? 0;
   return new Promise((resolve) => {
-    readQueue.push({
+    enqueueReadJob({
       path: absolutePath,
+      priority,
       resolve: (url) => {
         if (!url) {
           resolve(null);
@@ -167,6 +182,20 @@ export function loadPreviewObjectUrl(absolutePath: string): Promise<string | nul
     });
     pumpReadQueue();
   });
+}
+
+/**
+ * Hot path for above-the-fold / disk-cache hits — no queue, no setTimeout yield.
+ * Pair with `releasePreviewObjectUrl` the same way as the async loader.
+ */
+export function retainPreviewObjectUrlSync(absolutePath: string): string | null {
+  if (!absolutePath) return null;
+  const cached = objectUrlCache.get(absolutePath);
+  if (cached) return retainEntry(cached);
+  const url = pathToObjectUrl(absolutePath);
+  if (!url) return null;
+  const entry = objectUrlCache.get(absolutePath);
+  return entry ? retainEntry(entry) : url;
 }
 
 /**

@@ -13,8 +13,9 @@ import { storageKey } from "@brands";
 import { friendlyErrorMessage } from "@/utils/user-error";
 
 export const THUMB_SIZE_MIN = 1;
-export const THUMB_SIZE_MAX = 5;
-export const THUMB_SIZE_DEFAULT = 3;
+export const THUMB_SIZE_MAX = 3;
+/** Default = densest grid (3 columns). */
+export const THUMB_SIZE_DEFAULT = 1;
 
 const FAVORITES_STORAGE_KEY = storageKey("favorites");
 const UI_STATE_KEY = storageKey("uiState");
@@ -49,7 +50,14 @@ function clampPreviewVolume(v: number): number {
 }
 
 function clampThumbSize(size: number): number {
-  return Math.min(THUMB_SIZE_MAX, Math.max(THUMB_SIZE_MIN, Math.round(size)));
+  if (!Number.isFinite(size)) return THUMB_SIZE_DEFAULT;
+  const n = Math.round(size);
+  // Legacy 1–5 slider: keep approximate column count when capping to 1–3.
+  if (n > THUMB_SIZE_MAX) {
+    const cols = Math.min(3, Math.max(1, 6 - n));
+    return Math.min(THUMB_SIZE_MAX, Math.max(THUMB_SIZE_MIN, 4 - cols));
+  }
+  return Math.min(THUMB_SIZE_MAX, Math.max(THUMB_SIZE_MIN, n));
 }
 
 function loadUiState(): PersistedUiState {
@@ -196,6 +204,7 @@ const PanelUIContext =
   createContext<PanelUIContextValue | null>(null);
 (globalThis as PanelUIGlobal)[PANEL_UI_CONTEXT_KEY] = PanelUIContext;
 
+/** thumbSize 1 → 3 cols, 2 → 2, 3 → 1. */
 function sizeToColumns(size: number): number {
   return THUMB_SIZE_MAX + THUMB_SIZE_MIN - size;
 }

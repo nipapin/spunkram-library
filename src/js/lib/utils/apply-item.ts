@@ -174,6 +174,9 @@ export async function applyPackItemToHost(
   // Pre-flight for AUDIO/FOOTAGE: require active sequence/comp before importing.
   // Without this, the host imports to project but doesn't place on timeline,
   // silently returning "Applied" with no error.
+  // getWorkRange() is reused as a cheap "is there a timeline?" probe — but it
+  // also fails with NO_INOUT when Premiere has no In/Out set. Placement uses
+  // the playhead, so ignore NO_INOUT and only block on missing sequence/comp.
   if (ctype === "AUDIO" || ctype === "FOOTAGE") {
     try {
       const rangeResult = await Motionflow.getWorkRange();
@@ -185,10 +188,17 @@ export async function applyPackItemToHost(
       }
       const data = rangeResult.data as { ok?: boolean; reason?: string } | null;
       if (data && typeof data === "object" && "ok" in data && data.ok === false) {
-        return {
-          ok: false,
-          message: friendlyReason(data.reason || (appId === "PPRO" ? "NO_ACTIVE_SEQUENCE" : "COMP")),
-        };
+        const reason = String(data.reason || "");
+        if (reason === "NO_INOUT") {
+          // Sequence/comp exists; In/Out not required for FOOTAGE/AUDIO place.
+        } else {
+          return {
+            ok: false,
+            message: friendlyReason(
+              reason || (appId === "PPRO" ? "NO_ACTIVE_SEQUENCE" : "COMP"),
+            ),
+          };
+        }
       }
     } catch {
       // Work range check failed — proceed anyway and let applyPackItem decide.

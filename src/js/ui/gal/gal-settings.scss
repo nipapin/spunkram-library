@@ -117,6 +117,107 @@
   }
 }
 
+.gal-settings__block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.gal-settings__ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid rgba(195, 31, 147, 0.55);
+  border-radius: 999px;
+  color: #fff;
+  background: transparent;
+  font-size: 10px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(195, 31, 147, 0.15);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.gal-settings__ghost-btn--block {
+  width: 100%;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.gal-settings__login-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid rgba(195, 31, 147, 0.35);
+  border-radius: 14px;
+  background: #1a1b1e;
+}
+
+.gal-settings__login-code {
+  margin: 0;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #fff;
+}
+
+.gal-settings__note--row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.gal-settings__account-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.gal-settings__account-avatar {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(195, 31, 147, 0.25);
+  color: #ff5bcf;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gal-settings__account-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.gal-settings__devices li button.is-danger {
+  border-color: rgba(255, 90, 90, 0.45);
+  color: rgba(255, 180, 180, 0.95);
+}
+
 .gal-settings__label {
   margin: 0 0 6px;
   font-size: 12px;

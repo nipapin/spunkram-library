@@ -113,26 +113,28 @@ export function GalEffectsWorkspace({
               Effects catalog is empty. Check your connection or try again later.
             </div>
           ) : (
-            <FootageGrid
-              sections={sections}
-              assetsPath={assetsPath}
-              assetsBaseUrl={assetsBaseUrl}
-              assetsHost={assetsHost}
-              packFilePath={packFilePath}
-              settings={packSettings}
-              isLocked={isLocked}
-              isReady={isReady}
-              prepareApply={prepareApply}
-              accessUi="chips"
-              accountPlan={galAccountPlan}
-              subscribeUrl={BRAND.siteOrigin}
-              stickySectionTitles
-              emptyMessage={
-                showAvailableOnly
-                  ? "No items available on your plan in this view."
-                  : "No matches"
-              }
-            />
+            <div className="gal-effects__grid-enter">
+              <FootageGrid
+                sections={sections}
+                assetsPath={assetsPath}
+                assetsBaseUrl={assetsBaseUrl}
+                assetsHost={assetsHost}
+                packFilePath={packFilePath}
+                settings={packSettings}
+                isLocked={isLocked}
+                isReady={isReady}
+                prepareApply={prepareApply}
+                accessUi="chips"
+                accountPlan={galAccountPlan}
+                subscribeUrl={BRAND.siteOrigin}
+                stickySectionTitles
+                emptyMessage={
+                  showAvailableOnly
+                    ? "No items available on your plan in this view."
+                    : "No matches"
+                }
+              />
+            </div>
           )}
         </div>
       </div>

@@ -102,6 +102,46 @@ function stripCepDebugForZxpPlugin(): Plugin {
   };
 }
 
+/**
+ * vite-cep-plugin always rewrites HTML assets to `../assets/…` (one folder
+ * under the extension root). Nested entries like `ui/gal/index.html` need
+ * extra `../`. Must run in writeBundle `pre` so signZXP sees the fixed files.
+ */
+function fixNestedCepHtmlAssetsPlugin(): Plugin {
+  const listHtml = (dir: string): string[] => {
+    if (!fs.existsSync(dir)) return [];
+    const out: string[] = [];
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...listHtml(full));
+      else if (entry.name.endsWith(".html")) out.push(full);
+    }
+    return out;
+  };
+
+  return {
+    name: "fix-nested-cep-html-assets",
+    enforce: "pre",
+    writeBundle() {
+      for (const htmlPath of listHtml(outDir)) {
+        const rel = path.relative(outDir, htmlPath);
+        const dir = path.dirname(rel);
+        const depth =
+          !dir || dir === "."
+            ? 0
+            : dir.split(path.sep).filter(Boolean).length;
+        if (depth <= 1) continue;
+        const prefix = `${"../".repeat(depth)}assets`;
+        const html = fs.readFileSync(htmlPath, "utf8");
+        const next = html
+          .replace(/(src|href)="\.\.\/assets/g, `$1="${prefix}`)
+          .replace(/(src|href)="\/assets/g, `$1="${prefix}`);
+        if (next !== html) fs.writeFileSync(htmlPath, next);
+      }
+    },
+  };
+}
+
 const debugReact = process.env.DEBUG_REACT === "true";
 const isProduction = process.env.NODE_ENV === "production";
 const isMetaPackage = process.env.ZIP_PACKAGE === "true";
@@ -140,7 +180,13 @@ const brand = getBrand(appBrandId);
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), cep(config), stripCepDebugForZxpPlugin(), copyMotionflowBinPlugin()],
+  plugins: [
+    react(),
+    cep(config),
+    stripCepDebugForZxpPlugin(),
+    fixNestedCepHtmlAssetsPlugin(),
+    copyMotionflowBinPlugin(),
+  ],
   define: {
     __APP_BRAND__: JSON.stringify(appBrandId),
     // Inline so panel JS never touches bare `process` (CEP CEF / ExtendScript).

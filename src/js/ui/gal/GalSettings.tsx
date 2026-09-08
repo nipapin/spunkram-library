@@ -6,6 +6,7 @@ import {
   FolderOpen,
   Loader2,
   LogOut,
+  Plus,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useDownloadManager } from "@/lib/download-manager-context";
@@ -13,6 +14,7 @@ import { usePackagesPathGate } from "@/lib/packages-path-gate";
 import {
   asBool,
   clearPreferencesFile,
+  MAX_MOTIONFLOW_ACCOUNTS,
   type PrefSettings,
 } from "@/lib/api/preferences";
 import { getUserSystemData } from "@/lib/api/usp";
@@ -149,6 +151,15 @@ export function GalSettings({
     revoke,
     refreshMarket,
     market,
+    savedAccounts,
+    addAccount,
+    switchAccount,
+    removeSavedAccount,
+    cancelLogin,
+    confirmReplaceDevice,
+    loginBusy,
+    loginCode,
+    loginDeviceLimit,
   } = useAuth();
   const { enqueue, jobs } = useDownloadManager();
   const { ensurePackagesPath } = usePackagesPathGate();
@@ -156,9 +167,17 @@ export function GalSettings({
   const [busy, setBusy] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [replacingId, setReplacingId] = useState<string | null>(null);
   const sys = useMemo(() => getUserSystemData(), []);
   const host = currentPackHost();
   const hostIcon = host === "AE" ? aeIcon : prIcon;
+
+  const otherAccounts = useMemo(
+    () => savedAccounts.filter((a) => a.id !== auth.id),
+    [savedAccounts, auth.id],
+  );
+  const canAddAccount = savedAccounts.length < MAX_MOTIONFLOW_ACCOUNTS;
+  const showDeviceLimit = Boolean(loginBusy && loginDeviceLimit);
 
   const isAdmin = isReleaseAdminEmail(auth.email);
   const galPlan = useMemo(
@@ -306,6 +325,46 @@ export function GalSettings({
     setBusy(true);
     await logout();
     setBusy(false);
+  }
+
+  async function handleAddAccount() {
+    if (!canAddAccount) {
+      setMessage(`You can save up to ${MAX_MOTIONFLOW_ACCOUNTS} accounts.`);
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    const result = await addAccount();
+    setBusy(false);
+    setReplacingId(null);
+    if (!result.ok) setMessage(result.message || "Could not add account");
+    else setMessage(result.message || "Account added");
+  }
+
+  async function handleSwitchAccount(id: string) {
+    setBusy(true);
+    setMessage(null);
+    const result = await switchAccount(id);
+    setBusy(false);
+    setMessage(
+      result.ok
+        ? result.message || "Switched account"
+        : result.message || "Switch failed",
+    );
+  }
+
+  async function handleRemoveAccount(id: string) {
+    setBusy(true);
+    setMessage(null);
+    const result = await removeSavedAccount(id);
+    setBusy(false);
+    setMessage(result.ok ? "Account removed" : result.message || "Remove failed");
+  }
+
+  function handleRevokeAndContinue(deviceId: string) {
+    setReplacingId(deviceId);
+    setMessage("Disconnecting device and finishing sign-in…");
+    confirmReplaceDevice(deviceId);
   }
 
   async function handleRevoke(ids: string[]) {
@@ -468,6 +527,128 @@ export function GalSettings({
         </section>
 
         {message ? <p className="gal-account__msg">{message}</p> : null}
+
+        <section className="gal-settings__block">
+          <div className="gal-settings__block-head">
+            <h2>Accounts</h2>
+            <button
+              type="button"
+              className="gal-settings__ghost-btn"
+              disabled={busy || loginBusy || !canAddAccount}
+              title={
+                canAddAccount
+                  ? "Add another Motionflow account"
+                  : `Maximum ${MAX_MOTIONFLOW_ACCOUNTS} accounts`
+              }
+              onClick={() => void handleAddAccount()}
+            >
+              {loginBusy && !showDeviceLimit ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Plus className="size-3" />
+              )}
+              Add
+            </button>
+          </div>
+
+          {showDeviceLimit ? (
+            <div className="gal-settings__login-panel">
+              <p className="gal-settings__note">
+                This account is signed in on {loginDeviceLimit!.device_limit}{" "}
+                devices. Disconnect one to continue here.
+              </p>
+              <ul className="gal-settings__devices">
+                {loginDeviceLimit!.devices.map((device) => {
+                  const fp = parseDeviceFingerprint(device.user_fingerprint || "");
+                  const disconnectBusy = replacingId === device.id;
+                  return (
+                    <li key={device.id}>
+                      <div>
+                        <strong>{device.name || fp.user || "Device"}</strong>
+                        <span>{device.ip || "—"}</span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={Boolean(replacingId)}
+                        onClick={() => handleRevokeAndContinue(device.id)}
+                      >
+                        {disconnectBusy ? (
+                          <Loader2 className="size-3 animate-spin" />
+                        ) : (
+                          "Disconnect"
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                type="button"
+                className="gal-settings__ghost-btn gal-settings__ghost-btn--block"
+                onClick={cancelLogin}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
+
+          {loginBusy && loginCode && !showDeviceLimit ? (
+            <div className="gal-settings__login-panel">
+              <p className="gal-settings__note">Confirm this code in the browser</p>
+              <p className="gal-settings__login-code">{loginCode}</p>
+              <p className="gal-settings__note gal-settings__note--row">
+                <Loader2 className="size-3 animate-spin" />
+                Waiting for confirmation…
+              </p>
+              <button
+                type="button"
+                className="gal-settings__ghost-btn gal-settings__ghost-btn--block"
+                onClick={cancelLogin}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
+
+          {!loginBusy ? (
+            otherAccounts.length === 0 ? (
+              <p className="gal-settings__note">No other accounts saved</p>
+            ) : (
+              <ul className="gal-settings__devices">
+                {otherAccounts.map((account) => (
+                  <li key={account.id}>
+                    <div className="gal-settings__account-row">
+                      <span className="gal-settings__account-avatar" aria-hidden>
+                        {accountInitial(account.email, account.name)}
+                      </span>
+                      <div>
+                        <strong>{account.name || account.email}</strong>
+                        <span>{account.email}</span>
+                      </div>
+                    </div>
+                    <div className="gal-settings__account-actions">
+                      <button
+                        type="button"
+                        disabled={busy || loginBusy}
+                        onClick={() => void handleSwitchAccount(account.id)}
+                      >
+                        Switch
+                      </button>
+                      <button
+                        type="button"
+                        className="is-danger"
+                        disabled={busy || loginBusy}
+                        onClick={() => void handleRemoveAccount(account.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
+        </section>
 
         <section className="gal-settings__block">
           <h2>Active Devices</h2>

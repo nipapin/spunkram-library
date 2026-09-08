@@ -275,6 +275,19 @@
   scrollbar-color: #c31f93 var(--gal-spot);
 }
 
+@keyframes gal-grid-enter {
+  from {
+    transform: translateY(8px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.gal-effects__grid-enter {
+  animation: gal-grid-enter 180ms ease-out;
+}
+
 .gal-effects__focus-tools {
   position: sticky;
   top: 0;

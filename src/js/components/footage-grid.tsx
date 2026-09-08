@@ -9,16 +9,21 @@ import {
   releasePreviewObjectUrl,
   resolveItemPreviewMedia,
   resolveItemRemotePreviewMedia,
+  retainPreviewObjectUrlSync,
   setSfxPreviewVolume,
   stopSfxPreview,
 } from "@/lib/utils/pack-preview";
+import {
+  peekCachedPreviewPath,
+  warmPreviewCache,
+} from "@/lib/utils/preview-disk-cache";
 import type { PackHostId } from "@/lib/utils/pack-host";
 import { resolvePreviewAspectRatio, type PackContentSection } from "@/lib/utils/pack-tree";
 import type { PackSettings, PackTreeItem } from "@/lib/utils/pack-types";
 import type { GalAccountPlan } from "@/lib/utils/gal-plan";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { cn } from "@/lib/utils";
-import { AudioLines, Download, Loader2, Lock, Sparkles, Star } from "lucide-react";
+import { AudioLines, Check, Download, Loader2, Lock, Sparkles, Star } from "lucide-react";
 import {
   memo,
   useEffect,
@@ -32,12 +37,19 @@ import {
 
 const GRID_GAP_PX = 4;
 const SECTION_GAP_PX = 16;
-/** Show skeleton until the grid mounts when the list is large enough to hitch. */
+/** Large lists: defer mounting real cards so CEP can paint section skeleton first. */
 const SKELETON_THRESHOLD = 64;
+const LARGE_LIST_MOUNT_MS = 40;
 /** Classic Spunkram cards vs Gal chips + Import hover. */
 export type FootageAccessUi = "overlay" | "chips";
 const CARD_RADIUS_OVERLAY = "clamp(2px, 4%, 10px)";
 const CARD_RADIUS_CHIPS = "clamp(10px, 8%, 16px)";
+/** Extra margin so posters enqueue slightly before they scroll into view. */
+const PREVIEW_LOAD_ROOT_MARGIN = "150px 0px";
+/** Max skeleton cells per section (≈2 viewports). */
+const SKELETON_CELLS_PER_SECTION_ROWS = 8;
+/** First N rows load without waiting for IntersectionObserver. */
+const EAGER_PREVIEW_ROWS = 5;
 
 // --- Exclusive hover (AutoPlay off) — only one card plays at a time ----------
 
@@ -67,42 +79,107 @@ function clearExclusiveHover(): void {
 }
 
 /**
- * Retain a local-file blob URL for as long as `path` is set.
- * Releases on change/unmount so Strict Mode remounts can reuse the same blob.
+ * Resolve preview URL with minimal first-paint delay:
+ * - HTTPS miss → show remote immediately, warm AppData cache in background
+ * - HTTPS / local disk hit → sync blob (no queue) for above-the-fold
+ * - `load` gates start only; scroll-away must not revoke/reload
  */
-function usePreviewObjectUrl(path: string | null): string | null {
+function usePreviewObjectUrl(
+  path: string | null,
+  opts?: { load?: boolean; priority?: number; eager?: boolean },
+): string | null {
   const [url, setUrl] = useState<string | null>(null);
+  const load = opts?.load ?? true;
+  const eager = opts?.eager ?? false;
+  const priorityRef = useRef(opts?.priority ?? 0);
+  /** Props path we already resolved (remote URL or local file). */
+  const loadedKeyRef = useRef<string | null>(null);
+  /** Local path retained in the blob cache (for release). */
+  const blobPathRef = useRef<string | null>(null);
+  priorityRef.current = opts?.priority ?? 0;
 
   useEffect(() => {
     if (!path) {
+      if (blobPathRef.current) {
+        releasePreviewObjectUrl(blobPathRef.current);
+        blobPathRef.current = null;
+      }
+      loadedKeyRef.current = null;
       setUrl(null);
       return;
     }
 
-    // Remote HTTPS (Gal effects media proxy) — use as-is; no CEP FS blob.
-    if (/^https?:\/\//i.test(path)) {
-      setUrl(path);
-      return;
+    if (loadedKeyRef.current === path) return;
+
+    if (loadedKeyRef.current && loadedKeyRef.current !== path) {
+      if (blobPathRef.current) {
+        releasePreviewObjectUrl(blobPathRef.current);
+        blobPathRef.current = null;
+      }
+      loadedKeyRef.current = null;
+      setUrl(null);
     }
+
+    if (!load) return;
 
     let alive = true;
-    let retained = false;
-    void loadPreviewObjectUrl(path).then((next) => {
-      if (!next) return;
-      if (!alive) {
-        releasePreviewObjectUrl(path);
-        return;
-      }
-      retained = true;
-      setUrl(next);
-    });
 
+    const adoptLocalBlob = (localPath: string, preferSync: boolean) => {
+      if (preferSync) {
+        const syncUrl = retainPreviewObjectUrlSync(localPath);
+        if (syncUrl) {
+          loadedKeyRef.current = path;
+          blobPathRef.current = localPath;
+          setUrl(syncUrl);
+          return;
+        }
+      }
+      void loadPreviewObjectUrl(localPath, { priority: priorityRef.current }).then((next) => {
+        if (!next) return;
+        if (!alive) {
+          releasePreviewObjectUrl(localPath);
+          return;
+        }
+        loadedKeyRef.current = path;
+        blobPathRef.current = localPath;
+        setUrl(next);
+      });
+    };
+
+    // Remote HTTPS — paint ASAP; disk cache is a warm path, never a gate.
+    if (/^https?:\/\//i.test(path)) {
+      const cached = peekCachedPreviewPath(path);
+      if (cached) {
+        adoptLocalBlob(cached, eager);
+        return () => {
+          alive = false;
+        };
+      }
+
+      loadedKeyRef.current = path;
+      blobPathRef.current = null;
+      setUrl(path);
+      warmPreviewCache(path);
+      return () => {
+        alive = false;
+      };
+    }
+
+    adoptLocalBlob(path, eager);
     return () => {
       alive = false;
-      setUrl(null);
-      if (retained) releasePreviewObjectUrl(path);
     };
-  }, [path]);
+  }, [path, load, eager]);
+
+  useEffect(() => {
+    return () => {
+      if (blobPathRef.current) {
+        releasePreviewObjectUrl(blobPathRef.current);
+        blobPathRef.current = null;
+      }
+      loadedKeyRef.current = null;
+    };
+  }, []);
 
   return url;
 }
@@ -154,6 +231,7 @@ const PreviewCard = memo(function PreviewCard({
   preferWebm,
   useMp4,
   prepareApply,
+  gridIndex = 0,
 }: {
   item: PackTreeItem;
   assetsPath: string;
@@ -174,11 +252,14 @@ const PreviewCard = memo(function PreviewCard({
     | { ok: true; packFilePath: string; settings: PackSettings | null }
     | { ok: false; message: string }
   >;
+  /** Flat index in the visible grid — used for top-down preview priority. */
+  gridIndex?: number;
 }) {
   const {
     playPreview,
     audioEnabled,
     previewVolume,
+    gridColumns,
     setHoveredItemName,
     isFavorite,
     toggleFavorite,
@@ -189,8 +270,13 @@ const PreviewCard = memo(function PreviewCard({
   } = usePanelUI();
   const [hovered, setHovered] = useState(false);
   const [inView, setInView] = useState(false);
+  const eagerLoad =
+    gridIndex < Math.max(1, gridColumns) * EAGER_PREVIEW_ROWS;
+  const [nearView, setNearView] = useState(eagerLoad);
   const [posterFailed, setPosterFailed] = useState(false);
+  const [posterPainted, setPosterPainted] = useState(false);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const [cachedLocally, setCachedLocally] = useState(ready);
   const cardRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -233,17 +319,32 @@ const PreviewCard = memo(function PreviewCard({
   useEffect(() => {
     setHovered(false);
     setInView(false);
+    setNearView(eagerLoad);
     setPosterFailed(false);
+    setPosterPainted(false);
     setSubscribeOpen(false);
     if (exclusiveHoverId === item.id) clearExclusiveHover();
     stopSfxPreview(item.id);
-  }, [item.id]);
-
-  const posterUrl = usePreviewObjectUrl(media.posterPath);
+  }, [item.id, eagerLoad]);
 
   useEffect(() => {
+    setCachedLocally(ready);
+  }, [ready, item.id]);
+
+  const posterUrl = usePreviewObjectUrl(media.posterPath, {
+    load: nearView || eagerLoad,
+    priority: gridIndex,
+    eager: eagerLoad,
+  });
+
+  useEffect(() => {
+    setPosterPainted(false);
     if (posterUrl) setPosterFailed(false);
   }, [posterUrl]);
+
+  /** Pulse until the poster has actually painted (not just URL resolved). */
+  const waitingPoster =
+    Boolean(media.posterPath) && !posterFailed && (!posterUrl || !posterPainted);
 
   // Sync exclusive hover: another card took over, or panel-wide clear.
   useEffect(() => {
@@ -259,6 +360,22 @@ const PreviewCard = memo(function PreviewCard({
   useEffect(() => {
     ensurePanelLeaveListeners(playPreview);
   }, [playPreview]);
+
+  // Near-viewport gate for poster loading (top-down priority queue).
+  // Latch once true — leaving the margin must not unload / re-fetch the poster.
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const root = closestScrollParent(el);
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setNearView(true);
+      },
+      { root, rootMargin: PREVIEW_LOAD_ROOT_MARGIN, threshold: 0.01 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [item.id]);
 
   // AutoPlay: play every card currently in the scroll viewport (not just a cap of 4).
   useEffect(() => {
@@ -282,8 +399,15 @@ const PreviewCard = memo(function PreviewCard({
   const wantMotion = playPreview ? inView : hovered;
   const wantAudio = isAudio && hovered && audioEnabled && !locked;
 
-  const motionUrl = usePreviewObjectUrl(wantMotion && motion ? motion.path : null);
-  const audioUrl = usePreviewObjectUrl(wantAudio ? audioPath : null);
+  // Motion/audio still unload when not playing; posters stay via nearView latch.
+  const motionUrl = usePreviewObjectUrl(wantMotion && motion ? motion.path : null, {
+    load: !!wantMotion,
+    priority: gridIndex,
+  });
+  const audioUrl = usePreviewObjectUrl(wantAudio ? audioPath : null, {
+    load: !!wantAudio,
+    priority: gridIndex,
+  });
   const showMotion = !!motion && !!motionUrl && wantMotion;
 
   useEffect(() => {
@@ -391,7 +515,8 @@ const PreviewCard = memo(function PreviewCard({
         }
         applyPackPath = prepared.packFilePath;
         applySettings = prepared.settings;
-      } else if (!ready) {
+        setCachedLocally(true);
+      } else if (!ready && !cachedLocally) {
         showStatus(
           "Download will be available soon. Install the pack from Settings for now.",
           "info",
@@ -474,7 +599,14 @@ const PreviewCard = memo(function PreviewCard({
           aspectRatio,
         }}
       >
-        {(!imgSrc || posterFailed) && !(showMotion && isVideoMotion) && (
+        {waitingPoster && (
+          <div
+            className="absolute inset-0 z-[2] animate-pulse bg-secondary/80"
+            aria-hidden
+          />
+        )}
+
+        {(!imgSrc || posterFailed) && !waitingPoster && !(showMotion && isVideoMotion) && (
           <div className="absolute inset-0 bg-gradient-to-br from-secondary to-background" />
         )}
 
@@ -497,8 +629,15 @@ const PreviewCard = memo(function PreviewCard({
             key={`${item.id}:poster:${posterUrl ?? "none"}`}
             src={gifSrc || posterUrl || imgSrc}
             alt=""
-            onError={() => setPosterFailed(true)}
-            className="absolute inset-0 size-full object-cover"
+            onLoad={() => setPosterPainted(true)}
+            onError={() => {
+              setPosterFailed(true);
+              setPosterPainted(false);
+            }}
+            className={cn(
+              "absolute inset-0 size-full object-cover transition-opacity duration-150",
+              waitingPoster ? "opacity-0" : "opacity-100",
+            )}
             draggable={false}
           />
         )}
@@ -519,31 +658,29 @@ const PreviewCard = memo(function PreviewCard({
 
         {chipsMode ? (
           <>
-            <div className="absolute left-1 top-1 z-10 flex items-start gap-1">
-              <button
-                type="button"
-                aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
-                aria-pressed={favorited}
-                onClick={handleFavoriteClick}
-                className={cn(
-                  "flex size-6 items-center justify-center rounded-md transition-opacity",
-                  favorited
-                    ? "bg-black/45 text-primary opacity-100"
-                    : "bg-black/40 text-white opacity-0 group-hover:opacity-100",
-                )}
-              >
-                <Star
-                  className="size-3.5"
-                  fill={favorited ? "currentColor" : "none"}
-                  strokeWidth={2.25}
-                />
-              </button>
-              {isNew && (
-                <span className="pointer-events-none rounded-sm bg-primary/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary-foreground">
-                  New
-                </span>
+            {isNew && (
+              <span className="pointer-events-none absolute left-1 top-1 z-[9] rounded-sm bg-primary/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary-foreground">
+                New
+              </span>
+            )}
+            <button
+              type="button"
+              aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
+              aria-pressed={favorited}
+              onClick={handleFavoriteClick}
+              className={cn(
+                "absolute left-1 top-1 z-10 flex size-6 items-center justify-center rounded-md transition-opacity",
+                favorited
+                  ? "bg-black/45 text-primary opacity-100"
+                  : "bg-black/40 text-white opacity-0 group-hover:opacity-100",
               )}
-            </div>
+            >
+              <Star
+                className="size-3.5"
+                fill={favorited ? "currentColor" : "none"}
+                strokeWidth={2.25}
+              />
+            </button>
             <div className="absolute right-1 top-1 z-10">
               {locked ? (
                 <button
@@ -568,6 +705,15 @@ const PreviewCard = memo(function PreviewCard({
                 </span>
               ) : null}
             </div>
+            {cachedLocally && !isApplying && (
+              <div
+                className="pointer-events-none absolute bottom-1 left-1 z-10 flex size-5 items-center justify-center rounded-full bg-black/55 text-emerald-400 shadow-sm"
+                aria-label="Downloaded"
+                title="Downloaded"
+              >
+                <Check className="size-3" strokeWidth={2.75} />
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -612,16 +758,26 @@ const PreviewCard = memo(function PreviewCard({
         {chipsMode && !isApplying && (
           <div
             className={cn(
-              "absolute inset-x-0 bottom-0 z-20 p-1.5 transition-opacity",
+              "absolute bottom-0 right-0 z-20 p-1 transition-opacity",
               hovered ? "opacity-100" : "pointer-events-none opacity-0",
             )}
           >
             <button
               type="button"
               onPointerDown={handleImportPointerDown}
-              className="flex w-full items-center justify-center gap-1 rounded-md bg-primary/55 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary"
+              className={cn(
+                "inline-flex items-center justify-center rounded-md bg-primary/55 font-semibold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary",
+                gridColumns <= 1
+                  ? "gap-1 px-2.5 py-1.5 text-[10px]"
+                  : gridColumns === 2
+                    ? "gap-1 px-2 py-1 text-[9px]"
+                    : "gap-0.5 px-1.5 py-0.5 text-[8px]",
+              )}
             >
-              <Download className="size-3" strokeWidth={2.5} />
+              <Download
+                className={gridColumns >= 3 ? "size-2.5" : "size-3"}
+                strokeWidth={2.5}
+              />
               Import
             </button>
           </div>
@@ -665,43 +821,99 @@ const PreviewCard = memo(function PreviewCard({
 
 // --- Skeleton ---------------------------------------------------------------
 
-function GridSkeleton({
-  columns,
-  aspectCss,
-  itemCount,
-  accessUi = "overlay",
+function SectionTitleSkeleton({
+  title,
+  count,
+  sticky,
 }: {
+  title: string;
+  count: number;
+  sticky: boolean;
+}) {
+  return (
+    <h3
+      className={
+        sticky
+          ? "gal-footage-section__title"
+          : "mb-1.5 px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground"
+      }
+    >
+      {title}
+      <span
+        className={
+          sticky
+            ? "gal-footage-section__title-count"
+            : "ml-1.5 font-medium text-muted-foreground/70"
+        }
+      >
+        {count}
+      </span>
+    </h3>
+  );
+}
+
+function GridSkeleton({
+  sections,
+  columns,
+  accessUi = "overlay",
+  stickySectionTitles = false,
+}: {
+  sections: PackContentSection[];
   columns: number;
-  aspectCss: string;
-  itemCount: number;
   accessUi?: FootageAccessUi;
+  stickySectionTitles?: boolean;
 }) {
   const cols = Math.max(1, columns);
-  // Fill roughly a viewport of placeholders, never more than the real count.
-  const cells = Math.min(itemCount, cols * 8);
   const radius = accessUi === "chips" ? CARD_RADIUS_CHIPS : CARD_RADIUS_OVERLAY;
+  const maxCells = cols * SKELETON_CELLS_PER_SECTION_ROWS;
 
   return (
     <div
-      className="grid items-start"
-      style={{
-        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-        gap: GRID_GAP_PX,
-      }}
+      className="relative w-full"
+      style={{ display: "flex", flexDirection: "column", gap: SECTION_GAP_PX }}
       aria-busy="true"
       aria-label="Loading previews"
     >
-      {Array.from({ length: cells }, (_, i) => (
-        <div
-          key={i}
-          className="animate-pulse bg-secondary/70"
-          style={{
-            aspectRatio: aspectCss,
-            borderRadius: radius,
-            animationDelay: `${(i % cols) * 40}ms`,
-          }}
-        />
-      ))}
+      {sections.map((section) => {
+        if (section.items.length === 0) return null;
+        const aspectCss =
+          resolvePreviewAspectRatio(section.items[0]?.group) || "16 / 9";
+        const cells = Math.min(section.items.length, maxCells);
+
+        return (
+          <section
+            key={section.id}
+            className={stickySectionTitles ? "gal-footage-section" : "w-full"}
+          >
+            {section.title ? (
+              <SectionTitleSkeleton
+                title={section.title}
+                count={section.items.length}
+                sticky={stickySectionTitles}
+              />
+            ) : null}
+            <div
+              className="grid items-start"
+              style={{
+                gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                gap: GRID_GAP_PX,
+              }}
+            >
+              {Array.from({ length: cells }, (_, i) => (
+                <div
+                  key={i}
+                  className="animate-pulse bg-secondary/70"
+                  style={{
+                    aspectRatio: aspectCss,
+                    borderRadius: radius,
+                    animationDelay: `${(i % cols) * 40}ms`,
+                  }}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -765,33 +977,50 @@ export function FootageGrid({
     [sections, gridColumns, assetsPath, assetsBaseUrl],
   );
 
-  const needsSkeleton = itemCount >= SKELETON_THRESHOLD;
-  const [gridReady, setGridReady] = useState(!needsSkeleton);
+  // Only defer mount for huge lists (CEP hitch). Small categories mount immediately
+  // and use per-card poster skeletons so headers don't jump and UI doesn't flash.
+  const isLargeList = itemCount >= SKELETON_THRESHOLD;
+  const [gridReady, setGridReady] = useState(!isLargeList);
 
-  // For large lists: paint skeleton first, then mount cards on the next tick
-  // so CEP Chromium doesn't freeze on a blank panel.
+  // Kick off above-the-fold HTTPS posters immediately (don't wait for card effects / IO).
   useEffect(() => {
-    if (!needsSkeleton) {
+    if (!assetsBaseUrl) return;
+    const host = assetsHost === "AE" ? "AE" : "PR";
+    const budget = Math.max(1, gridColumns) * EAGER_PREVIEW_ROWS;
+    let seen = 0;
+    for (const section of sections) {
+      for (const item of section.items) {
+        if (seen >= budget) return;
+        const media = resolveItemRemotePreviewMedia(item, assetsBaseUrl, {
+          preferWebm,
+          useMp4,
+          host,
+        });
+        if (media.posterPath) warmPreviewCache(media.posterPath);
+        seen += 1;
+      }
+    }
+  }, [contentKey, assetsBaseUrl, assetsHost, preferWebm, useMp4, gridColumns, sections]);
+
+  useEffect(() => {
+    if (!isLargeList) {
       setGridReady(true);
       return;
     }
-
     setGridReady(false);
     let cancelled = false;
     let timeoutId = 0;
     const rafId = requestAnimationFrame(() => {
-      // One frame for skeleton paint, then a short defer before heavy mount.
       timeoutId = window.setTimeout(() => {
         if (!cancelled) setGridReady(true);
-      }, 32);
+      }, LARGE_LIST_MOUNT_MS);
     });
-
     return () => {
       cancelled = true;
       cancelAnimationFrame(rafId);
       if (timeoutId) window.clearTimeout(timeoutId);
     };
-  }, [contentKey, needsSkeleton]);
+  }, [contentKey, isLargeList]);
 
   if (sections.length === 0 || itemCount === 0) {
     return (
@@ -801,24 +1030,25 @@ export function FootageGrid({
     );
   }
 
-  const skeletonAspect =
-    resolvePreviewAspectRatio(sections[0]?.items[0]?.group) || "16 / 9";
-
-  if (needsSkeleton && !gridReady) {
+  if (isLargeList && !gridReady) {
     return (
       <GridSkeleton
+        sections={sections}
         columns={gridColumns}
-        aspectCss={skeletonAspect}
-        itemCount={itemCount}
         accessUi={accessUi}
+        stickySectionTitles={stickySectionTitles}
       />
     );
   }
+
+  let flatOffset = 0;
 
   return (
     <div className="relative w-full" style={{ display: "flex", flexDirection: "column", gap: SECTION_GAP_PX }}>
       {sections.map((section) => {
         if (section.items.length === 0) return null;
+        const sectionStart = flatOffset;
+        flatOffset += section.items.length;
 
         return (
           <section
@@ -826,24 +1056,11 @@ export function FootageGrid({
             className={stickySectionTitles ? "gal-footage-section" : "w-full"}
           >
             {section.title ? (
-              <h3
-                className={
-                  stickySectionTitles
-                    ? "gal-footage-section__title"
-                    : "mb-1.5 px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground"
-                }
-              >
-                {section.title}
-                <span
-                  className={
-                    stickySectionTitles
-                      ? "gal-footage-section__title-count"
-                      : "ml-1.5 font-medium text-muted-foreground/70"
-                  }
-                >
-                  {section.items.length}
-                </span>
-              </h3>
+              <SectionTitleSkeleton
+                title={section.title}
+                count={section.items.length}
+                sticky={stickySectionTitles}
+              />
             ) : null}
             <div
               className="grid items-start"
@@ -852,7 +1069,7 @@ export function FootageGrid({
                 gap: GRID_GAP_PX,
               }}
             >
-              {section.items.map((clip) => (
+              {section.items.map((clip, itemIndex) => (
                 <PreviewCard
                   key={clip.id}
                   item={clip}
@@ -869,6 +1086,7 @@ export function FootageGrid({
                   preferWebm={preferWebm}
                   useMp4={useMp4}
                   prepareApply={prepareApply}
+                  gridIndex={sectionStart + itemIndex}
                 />
               ))}
             </div>
