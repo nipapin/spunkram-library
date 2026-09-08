@@ -1,6 +1,7 @@
 import { apiUrl, UPDATE_ENDPOINT, UPDATE_VERSIONS_ENDPOINT } from "./config";
 import { getUserIdentity } from "./user";
 import { cepHttpRequest } from "@/lib/api/cep-http";
+import { BRAND } from "@brands";
 
 export type UpdateManifest = {
   version: string | null;
@@ -84,11 +85,15 @@ function authHeaders(): Record<string, string> {
 
 export async function fetchUpdateInfo(): Promise<UpdateManifest | null> {
   try {
-    const result = await cepHttpRequest(apiUrl(UPDATE_ENDPOINT), {
-      method: "GET",
-      headers: authHeaders(),
-      timeoutMs: 15000,
-    });
+    const qs = new URLSearchParams({ client: BRAND.apiClient });
+    const result = await cepHttpRequest(
+      `${apiUrl(UPDATE_ENDPOINT)}?${qs.toString()}`,
+      {
+        method: "GET",
+        headers: authHeaders(),
+        timeoutMs: 15000,
+      },
+    );
     if (!result.ok) return null;
     const data = JSON.parse(result.text) as UpdateManifest;
     return data;

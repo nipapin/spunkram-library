@@ -66,16 +66,17 @@ Code: `fetchCaptionsCdnBaseManifest` / `captionsCdnBaseManifestUrl` in `src/js/s
 Из корня CEP:
 
 ```bash
-npm run release:patch          # bump patch → zxp → git push + tag → R2 latest.json
-npm run release:minor          # bump minor
-npm run release:major          # bump major
-npm run release:beta           # 0.4.2 → 0.4.3-beta.1 → R2 beta.json (tester-only)
-npm run release                # текущая version из package.json
-npm run release:dry            # показать шаги без выполнения
-npm run release -- --no-upload # только git (если webhook уже заливает ZXP)
+npm run release:patch -- --brand=all   # Spunkram + Gal → R2 …/spunkram/ + …/gal/
+npm run release:patch                  # Spunkram only (default)
+npm run release:gal                    # Gal only
+npm run release:minor / :major / :beta # same; pass --brand=… when needed
+npm run release                        # текущая version из package.json
+npm run release:dry                    # показать шаги без выполнения
+npm run release -- --no-upload         # только git (если webhook уже заливает ZXP)
 ```
 
-Нужен `next-app/.env` с R2 (или `NEXT_APP_ROOT` если путь другой). После upload: `GET https://motionflow.pro/api/cep/update`.
+Нужен `next-app/.env` с R2 (или `NEXT_APP_ROOT` если путь другой). После upload: signed-in `GET /api/cep/update` (manifest by Bearer `client`: `spunkram-cep` / `gal-cep`).
+CDN pointers: `public/downloads/{spunkram|gal}/latest.json` (+ `beta.json` for testers).
 Beta видна только `basepackagehelp@gmail.com` (после логина в CEP). Промоут beta → stable: `npm run release:patch` (с `x.y.z-beta.N` снимет `-beta` → `x.y.z`).
 
 ## Полезные ориентиры в исходном проекте (историческое)

@@ -17,8 +17,11 @@ export type ItemPreviewMedia = {
 
 const POSTER_EXTS = [".png", ".jpg", ".jpeg"] as const;
 
-/** Cap concurrent FS→blob reads so CEP main thread stays responsive. */
-const MAX_CONCURRENT_READS = 6;
+/**
+ * Cap concurrent FS→blob reads so CEP main thread stays responsive.
+ * Keep at 3 until measured (first-poster time vs long tasks >50ms on category open).
+ */
+const MAX_CONCURRENT_READS = 3;
 
 type ObjectUrlEntry = {
   url: string;
@@ -185,17 +188,15 @@ export function loadPreviewObjectUrl(
 }
 
 /**
- * Hot path for above-the-fold / disk-cache hits — no queue, no setTimeout yield.
- * Pair with `releasePreviewObjectUrl` the same way as the async loader.
+ * Sync retain only when the blob is already warm in `objectUrlCache`.
+ * Disk miss → null; caller must use `loadPreviewObjectUrl` (priority queue).
+ * Never call `readFileSync` here — that bypasses backpressure on first paint.
  */
 export function retainPreviewObjectUrlSync(absolutePath: string): string | null {
   if (!absolutePath) return null;
   const cached = objectUrlCache.get(absolutePath);
-  if (cached) return retainEntry(cached);
-  const url = pathToObjectUrl(absolutePath);
-  if (!url) return null;
-  const entry = objectUrlCache.get(absolutePath);
-  return entry ? retainEntry(entry) : url;
+  if (!cached) return null;
+  return retainEntry(cached);
 }
 
 /**

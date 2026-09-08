@@ -575,6 +575,26 @@
   color: #d1fae5;
 }
 
+.gal-native-pending {
+  flex-shrink: 0;
+  margin: 8px 10px 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.gal-update-banner {
+  flex-shrink: 0;
+}
+
+.gal-update-banner > .relative {
+  margin-top: 8px;
+}
+
 // Login screen — Gal Toolkit profile / activate look (no Spunkram fog)
 [data-brand="gal"] .gal-login {
   background: linear-gradient(180deg, #1a1b1e 0%, #151518 50%, #121318 100%);

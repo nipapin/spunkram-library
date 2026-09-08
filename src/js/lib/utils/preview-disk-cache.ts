@@ -10,8 +10,12 @@ import { getSessionToken } from "@/lib/api/session";
 import { downloadToFile } from "@/utils/download-file";
 
 const MEDIA_MARKER = "/effects/media/";
+const HTTPS_URL_RE = /^https?:\/\//i;
 /** Cap parallel disk downloads so CEP stays responsive. */
 const MAX_CONCURRENT = 4;
+
+/** dest path → absolute local path (hit) or null (confirmed miss). Avoids double existsSync/statSync. */
+const peekCache = new Map<string, string | null>();
 
 function cepFsAvailable(): boolean {
   return (
@@ -62,10 +66,8 @@ export function previewCachePathForUrl(remoteUrl: string): string | null {
   return path.join(root, ...parts);
 }
 
-/** Sync hit — file already on disk. */
-export function peekCachedPreviewPath(remoteUrl: string): string | null {
-  const dest = previewCachePathForUrl(remoteUrl);
-  if (!dest || !fs.existsSync(dest)) return null;
+function probeDisk(dest: string): string | null {
+  if (!fs.existsSync(dest)) return null;
   try {
     const st = fs.statSync(dest);
     if (!st.isFile() || st.size <= 0) return null;
@@ -73,6 +75,24 @@ export function peekCachedPreviewPath(remoteUrl: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** Sync hit — file already on disk. Memoizes hit/miss per dest path. */
+export function peekCachedPreviewPath(remoteUrl: string): string | null {
+  const dest = previewCachePathForUrl(remoteUrl);
+  if (!dest) return null;
+
+  if (peekCache.has(dest)) {
+    return peekCache.get(dest) ?? null;
+  }
+
+  const hit = probeDisk(dest);
+  peekCache.set(dest, hit);
+  return hit;
+}
+
+function rememberPeek(dest: string, localPath: string | null): void {
+  peekCache.set(dest, localPath);
 }
 
 type CacheJob = {
@@ -113,6 +133,7 @@ async function downloadPreviewToDisk(remoteUrl: string): Promise<string | null> 
   try {
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
   } catch {
+    rememberPeek(dest, null);
     return null;
   }
 
@@ -126,13 +147,17 @@ async function downloadPreviewToDisk(remoteUrl: string): Promise<string | null> 
       stripAuthOnRedirect: true,
       timeoutMs: 60_000,
     });
-    return peekCachedPreviewPath(remoteUrl);
+    // Re-probe after write (bypass stale miss).
+    peekCache.delete(dest);
+    const hit = peekCachedPreviewPath(remoteUrl);
+    return hit;
   } catch {
     try {
       if (fs.existsSync(dest)) fs.unlinkSync(dest);
     } catch {
       /* ignore */
     }
+    rememberPeek(dest, null);
     return null;
   }
 }
@@ -142,7 +167,7 @@ async function downloadPreviewToDisk(remoteUrl: string): Promise<string | null> 
  * or `null` if caching is unavailable / download failed (caller may use HTTPS).
  */
 export function ensurePreviewCached(remoteUrl: string): Promise<string | null> {
-  if (!remoteUrl || !/^https?:\/\//i.test(remoteUrl)) {
+  if (!remoteUrl || !HTTPS_URL_RE.test(remoteUrl)) {
     return Promise.resolve(null);
   }
 
@@ -165,7 +190,7 @@ export function ensurePreviewCached(remoteUrl: string): Promise<string | null> {
 
 /** Fire-and-forget disk warm — never blocks first paint. */
 export function warmPreviewCache(remoteUrl: string): void {
-  if (!remoteUrl || !/^https?:\/\//i.test(remoteUrl)) return;
+  if (!remoteUrl || !HTTPS_URL_RE.test(remoteUrl)) return;
   if (peekCachedPreviewPath(remoteUrl)) return;
   void ensurePreviewCached(remoteUrl);
 }

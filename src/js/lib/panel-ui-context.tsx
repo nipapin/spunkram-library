@@ -1,7 +1,7 @@
 import {
   createContext,
+  use,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -152,57 +152,80 @@ export type StatusMessage = {
   };
 };
 
-type PanelUIContextValue = {
+/** Grid playback / favorites — cards subscribe here (not chrome hover/toast). */
+export type PanelGridContextValue = {
   playPreview: boolean;
   audioEnabled: boolean;
   previewVolume: number;
   thumbSize: number;
   gridColumns: number;
-  hoveredItemName: string | null;
   showFavoritesOnly: boolean;
-  /** When false, hides NEW chips in sidebar + grid (pack still marks items as new). */
   showNewBadges: boolean;
-  /** When true, grid shows only items unlocked for the current plan. */
   showAvailableOnly: boolean;
   favoriteIds: ReadonlySet<string>;
+  focusMode: boolean;
+  applyingItemId: string | null;
   togglePlayPreview: () => void;
   toggleAudio: () => void;
   setPreviewVolume: (volume: number) => void;
   setThumbSize: (size: number) => void;
-  setHoveredItemName: (name: string | null) => void;
   toggleShowFavoritesOnly: () => void;
   setShowFavoritesOnly: (value: boolean) => void;
   setShowNewBadges: (value: boolean) => void;
   toggleShowAvailableOnly: () => void;
   isFavorite: (itemId: string) => boolean;
   toggleFavorite: (itemId: string) => void;
-  /** Distraction-free mode — hides the sidebar so the grid fills the panel. */
-  focusMode: boolean;
   toggleFocusMode: () => void;
-  /** Item id currently being applied to the host (drives a spinner overlay). */
-  applyingItemId: string | null;
   setApplyingItemId: (itemId: string | null) => void;
+};
+
+/** Footer chrome — hover name + status toast. Cards must not subscribe. */
+export type PanelChromeContextValue = {
+  hoveredItemName: string | null;
   statusMessage: StatusMessage | null;
+  clearStatus: () => void;
+};
+
+/** Stable write-only actions — dispatch via refs so identity never changes. */
+export type PanelActionsContextValue = {
+  setHoveredItemName: (name: string | null) => void;
   showStatus: (
     text: string,
     tone?: StatusMessage["tone"],
     durationMs?: number,
     card?: StatusMessage["card"],
   ) => void;
-  clearStatus: () => void;
 };
+
+export type PanelUIContextValue = PanelGridContextValue &
+  PanelChromeContextValue &
+  PanelActionsContextValue;
 
 /** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
  * would disconnect Provider from consumers until a full page reload. */
-const PANEL_UI_CONTEXT_KEY = "__spunkram_panel_ui_context__";
+const PANEL_GRID_KEY = "__spunkram_panel_grid_context__";
+const PANEL_CHROME_KEY = "__spunkram_panel_chrome_context__";
+const PANEL_ACTIONS_KEY = "__spunkram_panel_actions_context__";
+
 type PanelUIGlobal = typeof globalThis & {
-  [PANEL_UI_CONTEXT_KEY]?: ReturnType<typeof createContext<PanelUIContextValue | null>>;
+  [PANEL_GRID_KEY]?: ReturnType<typeof createContext<PanelGridContextValue | null>>;
+  [PANEL_CHROME_KEY]?: ReturnType<typeof createContext<PanelChromeContextValue | null>>;
+  [PANEL_ACTIONS_KEY]?: ReturnType<typeof createContext<PanelActionsContextValue | null>>;
 };
 
-const PanelUIContext =
-  (globalThis as PanelUIGlobal)[PANEL_UI_CONTEXT_KEY] ??
-  createContext<PanelUIContextValue | null>(null);
-(globalThis as PanelUIGlobal)[PANEL_UI_CONTEXT_KEY] = PanelUIContext;
+const g = globalThis as PanelUIGlobal;
+
+const PanelGridContext =
+  g[PANEL_GRID_KEY] ?? createContext<PanelGridContextValue | null>(null);
+g[PANEL_GRID_KEY] = PanelGridContext;
+
+const PanelChromeContext =
+  g[PANEL_CHROME_KEY] ?? createContext<PanelChromeContextValue | null>(null);
+g[PANEL_CHROME_KEY] = PanelChromeContext;
+
+const PanelActionsContext =
+  g[PANEL_ACTIONS_KEY] ?? createContext<PanelActionsContextValue | null>(null);
+g[PANEL_ACTIONS_KEY] = PanelActionsContext;
 
 /** thumbSize 1 → 3 cols, 2 → 2, 3 → 1. */
 function sizeToColumns(size: number): number {
@@ -226,6 +249,10 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
   const [applyingItemId, setApplyingItemId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Refs so actions context stays referentially stable across chrome updates.
+  const setHoveredItemNameRef = useRef<(name: string | null) => void>(() => {});
+  const showStatusRef = useRef<PanelActionsContextValue["showStatus"]>(() => {});
 
   useEffect(() => {
     persistUiState({
@@ -327,36 +354,34 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
     setStatusMessage(null);
   }, []);
 
-  const value = useMemo(
+  setHoveredItemNameRef.current = setHoveredItemName;
+  showStatusRef.current = showStatus;
+
+  const gridValue = useMemo<PanelGridContextValue>(
     () => ({
       playPreview,
       audioEnabled,
       previewVolume,
       thumbSize,
       gridColumns,
-      hoveredItemName,
       showFavoritesOnly,
       showNewBadges,
       showAvailableOnly,
       favoriteIds,
+      focusMode,
+      applyingItemId,
       togglePlayPreview,
       toggleAudio,
       setPreviewVolume,
       setThumbSize,
-      setHoveredItemName,
       toggleShowFavoritesOnly,
       setShowFavoritesOnly,
       setShowNewBadges,
       toggleShowAvailableOnly,
       isFavorite,
       toggleFavorite,
-      focusMode,
       toggleFocusMode,
-      applyingItemId,
       setApplyingItemId,
-      statusMessage,
-      showStatus,
-      clearStatus,
     }),
     [
       playPreview,
@@ -364,40 +389,84 @@ export function PanelUIProvider({ children }: { children: ReactNode }) {
       previewVolume,
       thumbSize,
       gridColumns,
-      hoveredItemName,
       showFavoritesOnly,
       showNewBadges,
       showAvailableOnly,
       favoriteIds,
+      focusMode,
+      applyingItemId,
       togglePlayPreview,
       toggleAudio,
       setPreviewVolume,
       setThumbSize,
-      setHoveredItemName,
       toggleShowFavoritesOnly,
-      setShowFavoritesOnly,
       setShowNewBadges,
       toggleShowAvailableOnly,
       isFavorite,
       toggleFavorite,
-      focusMode,
       toggleFocusMode,
-      applyingItemId,
-      statusMessage,
-      showStatus,
-      clearStatus,
     ],
   );
 
+  const chromeValue = useMemo<PanelChromeContextValue>(
+    () => ({
+      hoveredItemName,
+      statusMessage,
+      clearStatus,
+    }),
+    [hoveredItemName, statusMessage, clearStatus],
+  );
+
+  // Stable forever — callers dispatch through refs.
+  const actionsValue = useMemo<PanelActionsContextValue>(
+    () => ({
+      setHoveredItemName: (name) => setHoveredItemNameRef.current(name),
+      showStatus: (text, tone, durationMs, card) =>
+        showStatusRef.current(text, tone, durationMs, card),
+    }),
+    [],
+  );
+
   return (
-    <PanelUIContext.Provider value={value}>{children}</PanelUIContext.Provider>
+    <PanelActionsContext.Provider value={actionsValue}>
+      <PanelChromeContext.Provider value={chromeValue}>
+        <PanelGridContext.Provider value={gridValue}>
+          {children}
+        </PanelGridContext.Provider>
+      </PanelChromeContext.Provider>
+    </PanelActionsContext.Provider>
   );
 }
 
-export function usePanelUI() {
-  const ctx = useContext(PanelUIContext);
+function requireCtx<T>(ctx: T | null, name: string): T {
   if (!ctx) {
-    throw new Error("usePanelUI must be used within PanelUIProvider");
+    throw new Error(`${name} must be used within PanelUIProvider`);
   }
   return ctx;
+}
+
+/** Grid playback / favorites — for PreviewCard and FootageGrid. */
+export function usePanelGrid(): PanelGridContextValue {
+  return requireCtx(use(PanelGridContext), "usePanelGrid");
+}
+
+/** Footer chrome — hover hint + status toast. */
+export function usePanelChrome(): PanelChromeContextValue {
+  return requireCtx(use(PanelChromeContext), "usePanelChrome");
+}
+
+/** Stable write-only actions (showStatus, setHoveredItemName). */
+export function usePanelActions(): PanelActionsContextValue {
+  return requireCtx(use(PanelActionsContext), "usePanelActions");
+}
+
+/** Merged view for footers / workspace / apps that need everything. */
+export function usePanelUI(): PanelUIContextValue {
+  const grid = usePanelGrid();
+  const chrome = usePanelChrome();
+  const actions = usePanelActions();
+  return useMemo(
+    () => ({ ...grid, ...chrome, ...actions }),
+    [grid, chrome, actions],
+  );
 }

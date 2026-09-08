@@ -1,0 +1,116 @@
+.spunkram-boot {
+  --sb-cta: linear-gradient(
+    145deg,
+    #3d1c8f 0%,
+    #5a2ad4 38%,
+    #6b38f0 58%,
+    #9b7eff 88%,
+    #c4b5fd 100%
+  );
+
+  position: relative;
+  display: flex;
+  height: 100%;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  background: rgb(var(--background, 6, 5, 14));
+}
+
+.spunkram-boot__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 120px;
+  height: 120px;
+}
+
+.spunkram-boot__logo {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 999px;
+  background-color: #5a2ad4;
+  background-image: var(--sb-cta);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.25),
+    0 12px 32px -14px rgba(110, 60, 255, 0.75);
+
+  img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+  }
+}
+
+.spunkram-boot__ring {
+  position: absolute;
+  inset: 50%;
+  z-index: 1;
+  border-radius: 999px;
+  border: 1px solid rgba(155, 126, 255, 0.45);
+  box-shadow: 0 0 24px rgba(107, 56, 240, 0.18);
+  pointer-events: none;
+  animation: spunkram-boot-pulse 2.4s ease-out infinite;
+}
+
+.spunkram-boot__ring--a {
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  animation-delay: 0s;
+}
+
+.spunkram-boot__ring--b {
+  width: 96px;
+  height: 96px;
+  margin: -48px 0 0 -48px;
+  animation-delay: 0.55s;
+  border-color: rgba(155, 126, 255, 0.32);
+}
+
+.spunkram-boot__ring--c {
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  animation-delay: 1.1s;
+  border-color: rgba(155, 126, 255, 0.2);
+}
+
+.spunkram-boot__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes spunkram-boot-pulse {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.55;
+  }
+  55% {
+    transform: scale(1.08);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.08);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spunkram-boot__ring {
+    animation: none;
+    opacity: 0.35;
+    transform: none;
+  }
+}

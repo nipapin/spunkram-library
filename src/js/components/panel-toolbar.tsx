@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { GraduationCap, Package, Search, SlidersHorizontal, Star } from "lucide-react";
+import { startTransition, useEffect, useState } from "react";
 
 const SHOW_TUTORIALS = false;
 
@@ -27,6 +28,11 @@ export function PanelToolbar({
 }) {
   const { showFavoritesOnly, toggleShowFavoritesOnly, setShowFavoritesOnly } = usePanelUI();
   const favoritesOn = showFavoritesOnly && !tutorialsOpen;
+  const [localQuery, setLocalQuery] = useState(query);
+
+  useEffect(() => {
+    setLocalQuery(query);
+  }, [query]);
 
   function handleToggleTutorials() {
     if (!tutorialsOpen) {
@@ -36,12 +42,14 @@ export function PanelToolbar({
   }
 
   function handleToggleFavorites() {
-    if (tutorialsOpen) {
-      onToggleTutorials?.();
-      setShowFavoritesOnly(true);
-      return;
-    }
-    toggleShowFavoritesOnly();
+    startTransition(() => {
+      if (tutorialsOpen) {
+        onToggleTutorials?.();
+        setShowFavoritesOnly(true);
+        return;
+      }
+      toggleShowFavoritesOnly();
+    });
   }
 
   return (
@@ -98,8 +106,12 @@ export function PanelToolbar({
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
-            value={query}
-            onChange={(e) => onQuery(e.target.value)}
+            value={localQuery}
+            onChange={(e) => {
+              const next = e.target.value;
+              setLocalQuery(next);
+              startTransition(() => onQuery(next));
+            }}
             placeholder="Find items"
             className="w-full rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-[#7c4dff]/60 focus:outline-none"
           />

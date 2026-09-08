@@ -384,22 +384,30 @@ CEP client: `src/js/lib/api/stock-api.ts`.
 
 ## 5. Extension update + ffmpeg
 
-Used by the CEP panel for auto-update and runtime ffmpeg download.
+Used by **both** CEP brands (Spunkram + Gal) for auto-update and runtime ffmpeg download.
+
+Product is chosen from the **Bearer device token** `client` (`spunkram-cep` → `spunkram`, `gal-cep` → `gal`). Optional `?client=` on the request is ignored by next-app; the panel may still send it for logging.
 
 ### 5.1 `GET /api/cep/update`
 
-Returns the Spunkram release manifest. **Bearer required** (signed-in CEP user). Anonymous → `401`.
+Returns the release manifest for the caller's brand. **Bearer required** (signed-in CEP user). Anonymous → `401`.
 
-- **Stable (any signed-in user):** R2 `public/downloads/spunkram/latest.json`
-- **Beta (allowlisted only):** if the user is a beta-tester (`basepackagehelp@gmail.com`, or `SPUNKRAM_BETA_EMAILS`), and `beta.json` is newer than stable, that manifest is returned instead (`channel: "beta"`).
+| Token `client` | R2 product folder |
+|---|---|
+| `spunkram-cep` (default) | `public/downloads/spunkram/` |
+| `gal-cep` | `public/downloads/gal/` |
+
+- **Stable (any signed-in user):** R2 `public/downloads/{product}/latest.json`
+- **Beta (allowlisted only):** if the user is a beta-tester (`basepackagehelp@gmail.com`, or `SPUNKRAM_BETA_EMAILS`), and `{product}/beta.json` is newer than stable, that manifest is returned instead (`channel: "beta"`).
 
 ```json
 {
-  "version": "0.1.0",
-  "zxpUrl": "https://cdn.motionflow.pro/public/downloads/spunkram/0.1.0/spunkram.zxp",
-  "changelog": "## 0.1.0\n- …",
-  "publishedAt": "2026-08-02T12:00:00.000Z",
+  "version": "0.9.17",
+  "zxpUrl": "https://cdn.motionflow.pro/public/downloads/gal/0.9.17/gal.zxp",
+  "changelog": "## 0.9.17\n- …",
+  "publishedAt": "2026-09-07T12:00:00.000Z",
   "channel": "stable",
+  "product": "gal",
   "ffmpeg": {
     "win": "https://cdn.motionflow.pro/public/downloads/ffmpeg/win/ffmpeg.exe",
     "mac": "https://cdn.motionflow.pro/public/downloads/ffmpeg/mac/ffmpeg-mac.zip"
@@ -407,16 +415,17 @@ Returns the Spunkram release manifest. **Bearer required** (signed-in CEP user).
 }
 ```
 
-Before the first published release, `version` / `zxpUrl` may be `null`; `ffmpeg` URLs are still present.
+Before the first published release for that product, `version` / `zxpUrl` may be `null`; `ffmpeg` URLs are still present.
 
 ### 5.1b `GET /api/cep/update/versions` (admin)
 
 Bearer required. Email must be on the beta/admin allowlist (`basepackagehelp@gmail.com`, `admin@mail.ru`, or `SPUNKRAM_BETA_EMAILS`).
 
-Lists every uploaded ZXP under `public/downloads/spunkram/{version}/spunkram.zxp` (newest first):
+Lists every uploaded ZXP under `public/downloads/{product}/{version}/{product}.zxp` for the **caller's brand** (newest first):
 
 ```json
 {
+  "product": "spunkram",
   "current": { "stable": "0.4.2", "beta": "0.4.3-beta.1" },
   "versions": [
     { "version": "0.4.3-beta.1", "zxpUrl": "https://cdn…/spunkram.zxp", "channel": "beta" },
@@ -427,17 +436,20 @@ Lists every uploaded ZXP under `public/downloads/spunkram/{version}/spunkram.zxp
 }
 ```
 
-CEP Settings → **Admin · Builds** shows this list and can install any build.
+CEP Settings → **Admin · Builds** shows this list and can install any build (Spunkram panel only today).
 
 ### 5.2 Public CDN keys (R2 `motionflow-public`)
 
 | Key | Purpose |
 |---|---|
-| `public/downloads/ffmpeg/win/ffmpeg.exe` | Windows ffmpeg |
-| `public/downloads/ffmpeg/mac/ffmpeg-mac.zip` | macOS ffmpeg archive |
-| `public/downloads/spunkram/{version}/spunkram.zxp` | Signed extension package |
-| `public/downloads/spunkram/latest.json` | Stable manifest for `/api/cep/update` |
-| `public/downloads/spunkram/beta.json` | Beta manifest (gated by email) |
+| `public/downloads/ffmpeg/win/ffmpeg.exe` | Windows ffmpeg (shared) |
+| `public/downloads/ffmpeg/mac/ffmpeg-mac.zip` | macOS ffmpeg archive (shared) |
+| `public/downloads/spunkram/{version}/spunkram.zxp` | Spunkram signed ZXP |
+| `public/downloads/spunkram/latest.json` | Spunkram stable pointer |
+| `public/downloads/spunkram/beta.json` | Spunkram beta pointer (email-gated) |
+| `public/downloads/gal/{version}/gal.zxp` | Gal Toolkit MAX signed ZXP |
+| `public/downloads/gal/latest.json` | Gal stable pointer |
+| `public/downloads/gal/beta.json` | Gal beta pointer (email-gated) |
 
 CEP downloads ffmpeg into userdata (not the extension folder) so ZXP overwrite updates do not delete it.
 
@@ -445,7 +457,8 @@ CEP downloads ffmpeg into userdata (not the extension folder) so ZXP overwrite u
 
 - Verify `X-Hub-Signature-256` with `GITHUB_WEBHOOK_SECRET`
 - Optional filter: `GITHUB_SPUNKRAM_REPO` (`org/repo`)
-- On `release` `published` / `edited`: download `.zxp` asset → R2
+- On `release` `published` / `edited`: download `.zxp` asset → R2 (Spunkram path unless extended)
+- Prefer CEP `npm run release:*` upload for multi-brand (`--brand=all`)
 - Prerelease / tag containing `-beta` → `beta.json`; otherwise `latest.json`
 - Optional `GITHUB_TOKEN` if release assets need auth
 
@@ -453,24 +466,30 @@ CEP downloads ffmpeg into userdata (not the extension folder) so ZXP overwrite u
 
 ```bash
 node --env-file=.env scripts/upload-spunkram-ffmpeg.mjs --win=…/ffmpeg.exe --mac=…/ffmpeg-mac.zip
-node --env-file=.env scripts/upload-spunkram-zxp.mjs --zxp=./dist/zxp/com.spunkramlibrary.cep.zxp --version=0.1.0
-node --env-file=.env scripts/upload-spunkram-zxp.mjs --zxp=./x.zxp --version=0.1.1-beta.1 --channel=beta
+node --env-file=.env scripts/upload-spunkram-zxp.mjs --product=spunkram --zxp=./dist/zxp/com.spunkramlibrary.cep.zxp --version=0.1.0
+node --env-file=.env scripts/upload-spunkram-zxp.mjs --product=gal --zxp=./dist/zxp/com.premieregal.cep.zxp --version=0.1.0
+node --env-file=.env scripts/upload-spunkram-zxp.mjs --product=spunkram --zxp=./x.zxp --version=0.1.1-beta.1 --channel=beta
 ```
 
-After R2 upload the script calls **`POST /api/cep/update/notify`** with `Authorization: Bearer <CEP_RELEASE_TOKEN>` (same `mfcep_…` device token as a signed-in panel). The server checks the user, then publishes Redis `cep:extension`. Override URL with `CEP_UPDATE_NOTIFY_URL`. Notify failure does not fail the release.
+After R2 upload the script calls **`POST /api/cep/update/notify`** with `Authorization: Bearer <CEP_RELEASE_TOKEN>` (same `mfcep_…` device token as a signed-in panel). Body includes `product: "spunkram" | "gal"` so WSS clients can filter. Override URL with `CEP_UPDATE_NOTIFY_URL`. Notify failure does not fail the release.
 
 CEP:
 
 ```bash
-npm run release:beta   # bump x.y.z-beta.N → upload beta.json only
-npm run release:patch  # from beta: promote to stable core; from stable: +patch → latest.json
+npm run release:patch -- --brand=all   # Spunkram + Gal, one version / tag
+npm run release:gal                    # Gal only
+npm run release:beta -- --brand=all    # beta.json per brand
+npm run release:patch                  # Spunkram only (default)
 ```
 
 ### 5.5 CEP client behaviour
 
-1. After sign-in → `GET /api/cep/update` (Bearer required)
-2. If remote version > local (`package.json` / manifest) → banner (beta labeled for testers)
-3. User clicks Update → download ZXP → unpack over `csi.getSystemPath("extension")` → `location.reload()`
+Shared hook: `src/js/lib/use-extension-update.ts` (Gal `GalApp` + Spunkram `main`).
+
+1. After sign-in → `GET /api/cep/update` (Bearer required; brand from token)
+2. Compare remote to **effective local** = max(build embed, `CSXS/manifest.xml` `ExtensionBundleVersion`, apply stamp on disk / panel-store) — avoids sticky UpdateBanner when CEF caches old JS
+3. If remote is newer → banner (beta labeled for testers)
+4. User clicks Update → download ZXP → unpack over `csi.getSystemPath("extension")` → write `installed-update.json` → hard reload with cache-bust query
 
 ### 5.6 Captions catalog version (`Base/manifest.json`)
 
@@ -663,7 +682,8 @@ Vite-dev проксирует `/api/cep/*`, `/api/stock/*`, `/api/generations/*`
 - [ ] Download gate server-side
 - [ ] Generations: 5 free / 10 Editor / 100 Editor AI; credits + usage scoped by author_id (0 = Motionflow)
 - [ ] В ответах CEP **нет** `author_id`
-- [ ] `GET /api/cep/update` + R2 `latest.json`
+- [ ] `GET /api/cep/update` routes by Bearer `client` → R2 `spunkram/` or `gal/` (`latest.json` / `beta.json`)
+- [ ] Upload `--product=gal|spunkram` + notify `product` on WSS
 - [ ] `POST /api/github/webhook` + `GITHUB_WEBHOOK_SECRET`
 - [ ] ffmpeg binaries on public CDN
 - [ ] `POST /api/cep/support/report` + `GROUP_CHAT_ID` / `TOPIC_ID`

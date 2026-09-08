@@ -2,6 +2,10 @@ import { fs, os, path } from "../lib/cep/node";
 import { csi } from "../lib/utils/bolt";
 import { extractZipToFolder } from "../lib/utils/pack-zip";
 import { downloadToFile, type DownloadProgress } from "./download-file";
+import {
+  markExtensionUpdateApplied,
+  reloadPanelHard,
+} from "./extension-version";
 import { BRAND } from "@brands";
 
 export type ExtensionUpdateProgress = {
@@ -326,10 +330,14 @@ export function hasPendingNativeUpdate(): boolean {
 /**
  * Download a .zxp, unpack over the live extension root (userdata install),
  * then reload the panel. Locked natives may be deferred to `.pending-update`.
+ *
+ * @param appliedVersion — remote version being installed; stamped so a sticky
+ *   UpdateBanner cannot survive CEF caching an older main.js after reload.
  */
 export async function applyExtensionUpdate(
   zxpUrl: string,
   onProgress?: (p: ExtensionUpdateProgress) => void,
+  appliedVersion?: string,
 ): Promise<ApplyExtensionUpdateResult> {
   const extRoot = csi.getSystemPath("extension");
   if (!extRoot || !fs.existsSync(extRoot)) {
@@ -383,11 +391,13 @@ export async function applyExtensionUpdate(
     copyDirOverwrite(payloadRoot, extRoot, extRoot, pending);
     writePendingMarker(extRoot, pending);
 
+    if (appliedVersion) {
+      markExtensionUpdateApplied(appliedVersion);
+    }
+
     onProgress?.({ phase: "reload", bytesReceived: 0, totalBytes: null });
     setTimeout(() => {
-      if (typeof window !== "undefined" && window.location?.reload) {
-        window.location.reload();
-      }
+      reloadPanelHard();
     }, 250);
 
     return { pendingNatives: [...new Set(pending)] };

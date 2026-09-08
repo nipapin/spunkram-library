@@ -604,6 +604,12 @@ export function usePackWorkspace() {
     }
   }, [showAvailableOnly, showFavoritesOnly, sidebarTree, category]);
 
+  /** Flatten once per tree — search/favorites only re-filter. */
+  const allSections = useMemo(
+    () => (tree.length ? collectAllContentSections(tree) : []),
+    [tree],
+  );
+
   const sections: PackContentSection[] = useMemo(() => {
     if (!tree.length) return [];
     const browseTree = showAvailableOnly ? sidebarTree : tree;
@@ -613,11 +619,11 @@ export function usePackWorkspace() {
     let next: PackContentSection[];
     if (showFavoritesOnly || category === FAVORITES_CATEGORY_ID) {
       next = filterContentSections(
-        filterFavoriteSections(collectAllContentSections(tree), favoriteIds),
+        filterFavoriteSections(allSections, favoriteIds),
         query,
       );
     } else if (hasQuery) {
-      next = filterContentSections(collectAllContentSections(tree), query);
+      next = filterContentSections(allSections, query);
     } else {
       const node =
         findPackTreeNode(browseTree, category) ?? getFirstPackRoot(browseTree);
@@ -631,6 +637,7 @@ export function usePackWorkspace() {
     return next;
   }, [
     tree,
+    allSections,
     sidebarTree,
     category,
     query,

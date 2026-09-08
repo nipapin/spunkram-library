@@ -2,6 +2,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { applyPackItemToHost } from "@/lib/utils/apply-item";
 import { openLinkInBrowser } from "@/lib/utils/bolt";
 import { packItemIsAudio, resolveItemAudioFile } from "@/lib/utils/pack-apply-paths";
+import "./footage-grid.scss";
 import {
   loadPreviewObjectUrl,
   packPrefersWebmPreview,
@@ -21,11 +22,15 @@ import type { PackHostId } from "@/lib/utils/pack-host";
 import { resolvePreviewAspectRatio, type PackContentSection } from "@/lib/utils/pack-tree";
 import type { PackSettings, PackTreeItem } from "@/lib/utils/pack-types";
 import type { GalAccountPlan } from "@/lib/utils/gal-plan";
-import { usePanelUI } from "@/lib/panel-ui-context";
+import { usePanelActions, usePanelGrid } from "@/lib/panel-ui-context";
 import { cn } from "@/lib/utils";
+import { BRAND } from "@brands";
 import { AudioLines, Check, Download, Loader2, Lock, Sparkles, Star } from "lucide-react";
 import {
+  createContext,
   memo,
+  useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -33,6 +38,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
+  type ReactNode,
 } from "react";
 
 const GRID_GAP_PX = 4;
@@ -46,10 +52,12 @@ const CARD_RADIUS_OVERLAY = "clamp(2px, 4%, 10px)";
 const CARD_RADIUS_CHIPS = "clamp(10px, 8%, 16px)";
 /** Extra margin so posters enqueue slightly before they scroll into view. */
 const PREVIEW_LOAD_ROOT_MARGIN = "150px 0px";
+const AUTOPLAY_ROOT_MARGIN = "80px 0px";
 /** Max skeleton cells per section (≈2 viewports). */
 const SKELETON_CELLS_PER_SECTION_ROWS = 8;
 /** First N rows load without waiting for IntersectionObserver. */
 const EAGER_PREVIEW_ROWS = 5;
+const HTTPS_URL_RE = /^https?:\/\//i;
 
 // --- Exclusive hover (AutoPlay off) — only one card plays at a time ----------
 
@@ -81,7 +89,8 @@ function clearExclusiveHover(): void {
 /**
  * Resolve preview URL with minimal first-paint delay:
  * - HTTPS miss → show remote immediately, warm AppData cache in background
- * - HTTPS / local disk hit → sync blob (no queue) for above-the-fold
+ * - Warm blob cache hit → sync retain (no readFileSync)
+ * - Disk miss → priority queue (eager = priority 0, still yields)
  * - `load` gates start only; scroll-away must not revoke/reload
  */
 function usePreviewObjectUrl(
@@ -147,7 +156,7 @@ function usePreviewObjectUrl(
     };
 
     // Remote HTTPS — paint ASAP; disk cache is a warm path, never a gate.
-    if (/^https?:\/\//i.test(path)) {
+    if (HTTPS_URL_RE.test(path)) {
       const cached = peekCachedPreviewPath(path);
       if (cached) {
         adoptLocalBlob(cached, eager);
@@ -214,25 +223,95 @@ function ensurePanelLeaveListeners(playPreview: boolean): void {
   document.addEventListener("visibilitychange", onVisibility);
 }
 
-// --- Preview card -----------------------------------------------------------
+// --- Shared viewport observers (one scroll root, two IOs for the whole grid) ---
 
-const PreviewCard = memo(function PreviewCard({
-  item,
-  assetsPath,
-  assetsBaseUrl,
-  assetsHost,
-  packFilePath,
-  settings,
-  locked,
-  ready,
-  accessUi,
-  accountPlan,
-  subscribeUrl,
-  preferWebm,
-  useMp4,
-  prepareApply,
-  gridIndex = 0,
+type GridViewportApi = {
+  observeNear: (el: Element, onNear: () => void) => () => void;
+  observePlay: (el: Element, onChange: (inView: boolean) => void) => () => void;
+};
+
+const GridViewportContext = createContext<GridViewportApi | null>(null);
+
+function useGridViewport(): GridViewportApi | null {
+  return useContext(GridViewportContext);
+}
+
+function GridViewportProvider({
+  scrollRoot,
+  children,
 }: {
+  scrollRoot: Element | null;
+  children: ReactNode;
+}) {
+  const nearMap = useRef(new Map<Element, () => void>());
+  const playMap = useRef(new Map<Element, (inView: boolean) => void>());
+  const nearIo = useRef<IntersectionObserver | null>(null);
+  const playIo = useRef<IntersectionObserver | null>(null);
+
+  useEffect(() => {
+    nearIo.current?.disconnect();
+    playIo.current?.disconnect();
+
+    nearIo.current = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          nearMap.current.get(entry.target)?.();
+        }
+      },
+      { root: scrollRoot, rootMargin: PREVIEW_LOAD_ROOT_MARGIN, threshold: 0.01 },
+    );
+
+    playIo.current = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          playMap.current.get(entry.target)?.(entry.isIntersecting);
+        }
+      },
+      { root: scrollRoot, rootMargin: AUTOPLAY_ROOT_MARGIN, threshold: 0.01 },
+    );
+
+    for (const el of nearMap.current.keys()) nearIo.current.observe(el);
+    for (const el of playMap.current.keys()) playIo.current.observe(el);
+
+    return () => {
+      nearIo.current?.disconnect();
+      playIo.current?.disconnect();
+      nearIo.current = null;
+      playIo.current = null;
+    };
+  }, [scrollRoot]);
+
+  const api = useMemo<GridViewportApi>(
+    () => ({
+      observeNear: (el, onNear) => {
+        nearMap.current.set(el, onNear);
+        nearIo.current?.observe(el);
+        return () => {
+          nearMap.current.delete(el);
+          nearIo.current?.unobserve(el);
+        };
+      },
+      observePlay: (el, onChange) => {
+        playMap.current.set(el, onChange);
+        playIo.current?.observe(el);
+        return () => {
+          playMap.current.delete(el);
+          playIo.current?.unobserve(el);
+        };
+      },
+    }),
+    [],
+  );
+
+  return (
+    <GridViewportContext.Provider value={api}>{children}</GridViewportContext.Provider>
+  );
+}
+
+// --- Shared media / interaction for both chrome variants --------------------
+
+type PreviewCardSharedProps = {
   item: PackTreeItem;
   assetsPath: string;
   assetsBaseUrl?: string;
@@ -241,7 +320,6 @@ const PreviewCard = memo(function PreviewCard({
   settings?: PackSettings | null;
   locked: boolean;
   ready: boolean;
-  accessUi: FootageAccessUi;
   accountPlan?: GalAccountPlan | null;
   subscribeUrl?: string;
   preferWebm: boolean;
@@ -252,36 +330,52 @@ const PreviewCard = memo(function PreviewCard({
     | { ok: true; packFilePath: string; settings: PackSettings | null }
     | { ok: false; message: string }
   >;
-  /** Flat index in the visible grid — used for top-down preview priority. */
   gridIndex?: number;
-}) {
+  onRequestSubscribe: () => void;
+};
+
+function usePreviewCardModel({
+  item,
+  assetsPath,
+  assetsBaseUrl,
+  assetsHost,
+  packFilePath,
+  settings,
+  locked,
+  ready,
+  preferWebm,
+  useMp4,
+  prepareApply,
+  gridIndex = 0,
+  onRequestSubscribe,
+  chipsMode,
+}: PreviewCardSharedProps & { chipsMode: boolean }) {
   const {
     playPreview,
     audioEnabled,
     previewVolume,
     gridColumns,
-    setHoveredItemName,
     isFavorite,
     toggleFavorite,
     applyingItemId,
     setApplyingItemId,
-    showStatus,
     showNewBadges,
-  } = usePanelUI();
+  } = usePanelGrid();
+  const { setHoveredItemName, showStatus } = usePanelActions();
+  const viewport = useGridViewport();
+
   const [hovered, setHovered] = useState(false);
   const [inView, setInView] = useState(false);
-  const eagerLoad =
-    gridIndex < Math.max(1, gridColumns) * EAGER_PREVIEW_ROWS;
+  const eagerLoad = gridIndex < Math.max(1, gridColumns) * EAGER_PREVIEW_ROWS;
   const [nearView, setNearView] = useState(eagerLoad);
   const [posterFailed, setPosterFailed] = useState(false);
   const [posterPainted, setPosterPainted] = useState(false);
-  const [subscribeOpen, setSubscribeOpen] = useState(false);
-  const [cachedLocally, setCachedLocally] = useState(ready);
+  /** Set only after a successful prepareApply in this session. */
+  const [appliedThisSession, setAppliedThisSession] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const media = useMemo(() => {
-    // Prefer HTTPS proxy when available (Gal remote catalog); local Previews may be empty.
     if (assetsBaseUrl) {
       return resolveItemRemotePreviewMedia(item, assetsBaseUrl, {
         preferWebm,
@@ -304,32 +398,26 @@ const PreviewCard = memo(function PreviewCard({
   const isApplying = applyingItemId === item.id;
   const isNew = showNewBadges && !!item.group.is_new_mark;
   const isPremium = !!item.group.premium;
-  const chipsMode = accessUi === "chips";
   const cardRadius = chipsMode ? CARD_RADIUS_CHIPS : CARD_RADIUS_OVERLAY;
-  // AutoPlay must stay silent even when footer audio is on; sound only on hover.
   const shouldMute = playPreview || !audioEnabled;
   const volumeLevel = Math.min(1, Math.max(0, (previewVolume || 0) / 100));
+  const downloaded = ready || appliedThisSession;
 
   const audioPath = useMemo(
     () => (isAudio ? resolveItemAudioFile(item, packFilePath) : null),
     [isAudio, item, packFilePath],
   );
 
-  // Reset media state whenever the cell binds a different item.
   useEffect(() => {
     setHovered(false);
     setInView(false);
     setNearView(eagerLoad);
     setPosterFailed(false);
     setPosterPainted(false);
-    setSubscribeOpen(false);
+    setAppliedThisSession(false);
     if (exclusiveHoverId === item.id) clearExclusiveHover();
     stopSfxPreview(item.id);
   }, [item.id, eagerLoad]);
-
-  useEffect(() => {
-    setCachedLocally(ready);
-  }, [ready, item.id]);
 
   const posterUrl = usePreviewObjectUrl(media.posterPath, {
     load: nearView || eagerLoad,
@@ -342,11 +430,9 @@ const PreviewCard = memo(function PreviewCard({
     if (posterUrl) setPosterFailed(false);
   }, [posterUrl]);
 
-  /** Pulse until the poster has actually painted (not just URL resolved). */
   const waitingPoster =
     Boolean(media.posterPath) && !posterFailed && (!posterUrl || !posterPainted);
 
-  // Sync exclusive hover: another card took over, or panel-wide clear.
   useEffect(() => {
     if (playPreview) return;
     const sync = () => {
@@ -356,50 +442,30 @@ const PreviewCard = memo(function PreviewCard({
     return subscribeExclusiveHover(sync);
   }, [playPreview, item.id]);
 
-  // Leave the CEP panel / tab → stop hover playback (AutoPlay keeps playing).
   useEffect(() => {
     ensurePanelLeaveListeners(playPreview);
   }, [playPreview]);
 
-  // Near-viewport gate for poster loading (top-down priority queue).
-  // Latch once true — leaving the margin must not unload / re-fetch the poster.
+  // Shared near-viewport gate — latch once true.
   useEffect(() => {
     const el = cardRef.current;
-    if (!el) return;
-    const root = closestScrollParent(el);
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setNearView(true);
-      },
-      { root, rootMargin: PREVIEW_LOAD_ROOT_MARGIN, threshold: 0.01 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [item.id]);
+    if (!el || !viewport) return;
+    return viewport.observeNear(el, () => setNearView(true));
+  }, [viewport, item.id]);
 
-  // AutoPlay: play every card currently in the scroll viewport (not just a cap of 4).
   useEffect(() => {
     if (!playPreview) {
       setInView(false);
       return;
     }
     const el = cardRef.current;
-    if (!el) return;
+    if (!el || !viewport) return;
+    return viewport.observePlay(el, setInView);
+  }, [playPreview, viewport, item.id]);
 
-    const root = closestScrollParent(el);
-    const io = new IntersectionObserver(
-      ([entry]) => setInView(entry.isIntersecting),
-      { root, rootMargin: "80px 0px", threshold: 0.01 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [playPreview, item.id]);
-
-  // AutoPlay ⇒ visible cards; otherwise hover-only.
   const wantMotion = playPreview ? inView : hovered;
   const wantAudio = isAudio && hovered && audioEnabled && !locked;
 
-  // Motion/audio still unload when not playing; posters stay via nearView latch.
   const motionUrl = usePreviewObjectUrl(wantMotion && motion ? motion.path : null, {
     load: !!wantMotion,
     priority: gridIndex,
@@ -424,9 +490,12 @@ const PreviewCard = memo(function PreviewCard({
         // ignore seek errors before metadata
       }
     }
-    void video.play().then(() => {
-      if (cancelled) video.pause();
-    }).catch(() => {});
+    void video
+      .play()
+      .then(() => {
+        if (cancelled) video.pause();
+      })
+      .catch(() => {});
 
     return () => {
       cancelled = true;
@@ -488,15 +557,11 @@ const PreviewCard = memo(function PreviewCard({
     toggleFavorite(item.id);
   }
 
-  function openSubscribeFlow() {
-    setSubscribeOpen(true);
-  }
-
   async function applyToHost() {
     if (isApplying) return;
     if (locked) {
       if (chipsMode) {
-        openSubscribeFlow();
+        onRequestSubscribe();
         return;
       }
       showStatus("Sign in with an active subscription to apply premium items.", "error");
@@ -515,8 +580,8 @@ const PreviewCard = memo(function PreviewCard({
         }
         applyPackPath = prepared.packFilePath;
         applySettings = prepared.settings;
-        setCachedLocally(true);
-      } else if (!ready && !cachedLocally) {
+        setAppliedThisSession(true);
+      } else if (!ready && !appliedThisSession) {
         showStatus(
           "Download will be available soon. Install the pack from Settings for now.",
           "info",
@@ -544,7 +609,6 @@ const PreviewCard = memo(function PreviewCard({
   }
 
   function handleImportPointerDown(e: PointerEvent) {
-    // Fire on pointerdown so CEP doesn't lose the click when hover clears.
     if (e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
@@ -564,264 +628,346 @@ const PreviewCard = memo(function PreviewCard({
 
   function handleCardClick() {
     if (!chipsMode) return;
-    if (locked) openSubscribeFlow();
+    if (locked) onRequestSubscribe();
   }
 
+  function handleFocus() {
+    setHoveredItemName(item.name);
+    if (isAudio || !playPreview) {
+      if (!playPreview) setExclusiveHoverId(item.id);
+      setHovered(true);
+    }
+  }
+
+  function handleBlur() {
+    setHoveredItemName(null);
+    if (isAudio || !playPreview) {
+      if (!playPreview && exclusiveHoverId === item.id) clearExclusiveHover();
+      setHovered(false);
+    }
+  }
+
+  return {
+    cardRef,
+    videoRef,
+    item,
+    locked,
+    favorited,
+    isNew,
+    isPremium,
+    isApplying,
+    downloaded,
+    waitingPoster,
+    imgSrc,
+    posterUrl,
+    posterFailed,
+    showAudioIcon,
+    showMotion,
+    isVideoMotion,
+    motionUrl,
+    shouldMute,
+    hovered,
+    audioEnabled,
+    gridColumns,
+    cardRadius,
+    aspectRatio,
+    chipsMode,
+    handlePointerEnter,
+    handlePointerLeave,
+    handleFavoriteClick,
+    handleImportPointerDown,
+    handleDoubleClick,
+    handleKeyDown,
+    handleCardClick,
+    handleFocus,
+    handleBlur,
+    onRequestSubscribe,
+    setPosterPainted,
+    setPosterFailed,
+  };
+}
+
+type CardModel = ReturnType<typeof usePreviewCardModel> & {
+  accountPlan?: GalAccountPlan | null;
+};
+
+function PreviewMediaLayers(m: CardModel) {
   return (
     <>
-      <div
-        ref={cardRef}
-        role="button"
-        tabIndex={0}
-        title={chipsMode ? undefined : locked ? `${item.name} (premium — sign in to apply)` : item.name}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-        onFocus={() => {
-          setHoveredItemName(item.name);
-          if (isAudio || !playPreview) {
-            if (!playPreview) setExclusiveHoverId(item.id);
-            setHovered(true);
-          }
-        }}
-        onBlur={() => {
-          setHoveredItemName(null);
-          if (isAudio || !playPreview) {
-            if (!playPreview && exclusiveHoverId === item.id) clearExclusiveHover();
-            setHovered(false);
-          }
-        }}
-        onKeyDown={handleKeyDown}
-        onClick={handleCardClick}
-        onDoubleClick={handleDoubleClick}
-        className="group relative w-full overflow-hidden border border-white/5 bg-secondary/40 outline-none ring-primary/60 transition focus-visible:ring-2"
-        style={{
-          borderRadius: cardRadius,
-          aspectRatio,
-        }}
-      >
-        {waitingPoster && (
-          <div
-            className="absolute inset-0 z-[2] animate-pulse bg-secondary/80"
-            aria-hidden
-          />
-        )}
+      {m.waitingPoster && (
+        <div
+          className="absolute inset-0 z-[2] animate-pulse bg-secondary/80"
+          aria-hidden
+        />
+      )}
 
-        {(!imgSrc || posterFailed) && !waitingPoster && !(showMotion && isVideoMotion) && (
-          <div className="absolute inset-0 bg-gradient-to-br from-secondary to-background" />
-        )}
+      {(!m.imgSrc || m.posterFailed) && !m.waitingPoster && !(m.showMotion && m.isVideoMotion) && (
+        <div className="absolute inset-0 bg-gradient-to-br from-secondary to-background" />
+      )}
 
-        {showAudioIcon && (
-          <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
-            <AudioLines
-              className={cn(
-                "text-white/35 transition-colors duration-150",
-                hovered && audioEnabled && "text-primary/75",
-              )}
-              style={{ width: "38%", height: "38%" }}
-              strokeWidth={1.5}
-            />
-          </div>
-        )}
-
-        {/* Keep poster mounted under video so hover never flashes a blank/broken frame. */}
-        {imgSrc && !posterFailed && (
-          <img
-            key={`${item.id}:poster:${posterUrl ?? "none"}`}
-            src={gifSrc || posterUrl || imgSrc}
-            alt=""
-            onLoad={() => setPosterPainted(true)}
-            onError={() => {
-              setPosterFailed(true);
-              setPosterPainted(false);
-            }}
+      {m.showAudioIcon && (
+        <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+          <AudioLines
             className={cn(
-              "absolute inset-0 size-full object-cover transition-opacity duration-150",
-              waitingPoster ? "opacity-0" : "opacity-100",
+              "text-white/35 transition-colors duration-150",
+              m.hovered && m.audioEnabled && "text-primary/75",
             )}
-            draggable={false}
+            style={{ width: "38%", height: "38%" }}
+            strokeWidth={1.5}
           />
-        )}
+        </div>
+      )}
 
-        {motion && isVideoMotion && motionUrl && showMotion && (
-          <video
-            key={`${item.id}:${motionUrl}`}
-            ref={videoRef}
-            src={motionUrl}
-            poster={posterUrl ?? undefined}
-            muted={shouldMute}
-            loop
-            playsInline
-            preload="metadata"
-            className="pointer-events-none absolute inset-0 z-[1] size-full object-cover"
-          />
-        )}
-
-        {chipsMode ? (
-          <>
-            {isNew && (
-              <span className="pointer-events-none absolute left-1 top-1 z-[9] rounded-sm bg-primary/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary-foreground">
-                New
-              </span>
-            )}
-            <button
-              type="button"
-              aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
-              aria-pressed={favorited}
-              onClick={handleFavoriteClick}
-              className={cn(
-                "absolute left-1 top-1 z-10 flex size-6 items-center justify-center rounded-md transition-opacity",
-                favorited
-                  ? "bg-black/45 text-primary opacity-100"
-                  : "bg-black/40 text-white opacity-0 group-hover:opacity-100",
-              )}
-            >
-              <Star
-                className="size-3.5"
-                fill={favorited ? "currentColor" : "none"}
-                strokeWidth={2.25}
-              />
-            </button>
-            <div className="absolute right-1 top-1 z-10">
-              {locked ? (
-                <button
-                  type="button"
-                  aria-label="Unlock with Gal Toolkit Max"
-                  title="Unlock with Gal Toolkit Max"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    openSubscribeFlow();
-                  }}
-                  className="flex size-6 items-center justify-center rounded-full bg-black/55 text-white shadow-sm"
-                >
-                  <Lock className="size-3" strokeWidth={2.25} />
-                </button>
-              ) : accountPlan === "free" ? (
-                <span
-                  className="pointer-events-none rounded-sm bg-primary/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary-foreground shadow-sm"
-                  aria-label="Included on Free"
-                >
-                  Free
-                </span>
-              ) : null}
-            </div>
-            {cachedLocally && !isApplying && (
-              <div
-                className="pointer-events-none absolute bottom-1 left-1 z-10 flex size-5 items-center justify-center rounded-full bg-black/55 text-emerald-400 shadow-sm"
-                aria-label="Downloaded"
-                title="Downloaded"
-              >
-                <Check className="size-3" strokeWidth={2.75} />
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            {(isNew || isPremium) && (
-              <div className="pointer-events-none absolute left-1 top-1 z-10 flex gap-1">
-                {isNew && (
-                  <span className="rounded-sm bg-primary/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary-foreground">
-                    New
-                  </span>
-                )}
-                {isPremium && (
-                  <span className="flex items-center gap-0.5 rounded-sm bg-black/60 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-300">
-                    <Sparkles className="size-2.5" />
-                    Pro
-                  </span>
-                )}
-              </div>
-            )}
-            <div className="absolute right-1 top-1 z-10">
-              <button
-                type="button"
-                aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
-                aria-pressed={favorited}
-                onClick={handleFavoriteClick}
-                className={cn(
-                  "flex size-6 items-center justify-center rounded-md transition-opacity",
-                  favorited
-                    ? "bg-black/45 text-primary opacity-100"
-                    : "bg-black/40 text-white opacity-0 group-hover:opacity-100",
-                )}
-              >
-                <Star
-                  className="size-3.5"
-                  fill={favorited ? "currentColor" : "none"}
-                  strokeWidth={2.25}
-                />
-              </button>
-            </div>
-          </>
-        )}
-
-        {chipsMode && !isApplying && (
-          <div
-            className={cn(
-              "absolute bottom-0 right-0 z-20 p-1 transition-opacity",
-              hovered ? "opacity-100" : "pointer-events-none opacity-0",
-            )}
-          >
-            <button
-              type="button"
-              onPointerDown={handleImportPointerDown}
-              className={cn(
-                "inline-flex items-center justify-center rounded-md bg-primary/55 font-semibold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary",
-                gridColumns <= 1
-                  ? "gap-1 px-2.5 py-1.5 text-[10px]"
-                  : gridColumns === 2
-                    ? "gap-1 px-2 py-1 text-[9px]"
-                    : "gap-0.5 px-1.5 py-0.5 text-[8px]",
-              )}
-            >
-              <Download
-                className={gridColumns >= 3 ? "size-2.5" : "size-3"}
-                strokeWidth={2.5}
-              />
-              Import
-            </button>
-          </div>
-        )}
-
-        {chipsMode && isApplying && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/45">
-            <Loader2 className="size-5 animate-spin text-white" />
-          </div>
-        )}
-
-        {!chipsMode && (isApplying || locked) && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/55">
-            {isApplying ? (
-              <Loader2 className="size-5 animate-spin text-white" />
-            ) : (
-              <Lock className="size-4 text-white/80" />
-            )}
-          </div>
-        )}
-      </div>
-
-      {chipsMode && (
-        <ConfirmDialog
-          open={subscribeOpen}
-          title="Gal Toolkit Max"
-          message="Subscribe to Gal Toolkit Max to unlock this item and the full library."
-          confirmLabel="Get Max"
-          cancelLabel="Not now"
-          onCancel={() => setSubscribeOpen(false)}
-          onConfirm={() => {
-            setSubscribeOpen(false);
-            const url = (subscribeUrl || "https://premieregal.motionflow.pro").trim();
-            if (url) openLinkInBrowser(url);
+      {m.imgSrc && !m.posterFailed && (
+        <img
+          key={`${m.item.id}:poster:${m.posterUrl ?? "none"}`}
+          src={m.imgSrc}
+          alt=""
+          onLoad={() => m.setPosterPainted(true)}
+          onError={() => {
+            m.setPosterFailed(true);
+            m.setPosterPainted(false);
           }}
+          className={cn(
+            "absolute inset-0 size-full object-cover transition-opacity duration-150",
+            m.waitingPoster ? "opacity-0" : "opacity-100",
+          )}
+          draggable={false}
+        />
+      )}
+
+      {m.isVideoMotion && m.motionUrl && m.showMotion && (
+        <video
+          key={`${m.item.id}:${m.motionUrl}`}
+          ref={m.videoRef}
+          src={m.motionUrl}
+          poster={m.posterUrl ?? undefined}
+          muted={m.shouldMute}
+          loop
+          playsInline
+          preload="metadata"
+          className="pointer-events-none absolute inset-0 z-[1] size-full object-cover"
         />
       )}
     </>
   );
+}
+
+function ChipsPreviewChrome({
+  m,
+  accountPlan,
+}: {
+  m: CardModel;
+  accountPlan?: GalAccountPlan | null;
+}) {
+  return (
+    <>
+      {m.isNew && (
+        <span className="pointer-events-none absolute left-1 top-1 z-[9] rounded-sm bg-primary/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary-foreground">
+          New
+        </span>
+      )}
+      <button
+        type="button"
+        aria-label={m.favorited ? "Remove from favorites" : "Add to favorites"}
+        aria-pressed={m.favorited}
+        onClick={m.handleFavoriteClick}
+        className={cn(
+          "absolute left-1 top-1 z-10 flex size-6 items-center justify-center rounded-md transition-opacity",
+          m.favorited
+            ? "bg-black/45 text-primary opacity-100"
+            : "bg-black/40 text-white opacity-0 group-hover:opacity-100",
+        )}
+      >
+        <Star
+          className="size-3.5"
+          fill={m.favorited ? "currentColor" : "none"}
+          strokeWidth={2.25}
+        />
+      </button>
+      <div className="absolute right-1 top-1 z-10">
+        {m.locked ? (
+          <button
+            type="button"
+            aria-label="Unlock with Gal Toolkit Max"
+            title="Unlock with Gal Toolkit Max"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              m.onRequestSubscribe();
+            }}
+            className="flex size-6 items-center justify-center rounded-full bg-black/55 text-white shadow-sm"
+          >
+            <Lock className="size-3" strokeWidth={2.25} />
+          </button>
+        ) : accountPlan === "free" ? (
+          <span
+            className="pointer-events-none rounded-sm bg-primary/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary-foreground shadow-sm"
+            aria-label="Included on Free"
+          >
+            Free
+          </span>
+        ) : null}
+      </div>
+      {m.downloaded && !m.isApplying && (
+        <div
+          className="pointer-events-none absolute bottom-1 left-1 z-10 flex size-5 items-center justify-center rounded-full bg-black/55 text-emerald-400 shadow-sm"
+          aria-label="Downloaded"
+          title="Downloaded"
+        >
+          <Check className="size-3" strokeWidth={2.75} />
+        </div>
+      )}
+      {!m.isApplying && (
+        <div
+          className={cn(
+            "absolute bottom-0 right-0 z-20 p-1 transition-opacity",
+            m.hovered ? "opacity-100" : "pointer-events-none opacity-0",
+          )}
+        >
+          <button
+            type="button"
+            onPointerDown={m.handleImportPointerDown}
+            className={cn(
+              "inline-flex items-center justify-center rounded-md bg-primary/55 font-semibold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary",
+              m.gridColumns <= 1
+                ? "gap-1 px-2.5 py-1.5 text-[10px]"
+                : m.gridColumns === 2
+                  ? "gap-1 px-2 py-1 text-[9px]"
+                  : "gap-0.5 px-1.5 py-0.5 text-[8px]",
+            )}
+          >
+            <Download
+              className={m.gridColumns >= 3 ? "size-2.5" : "size-3"}
+              strokeWidth={2.5}
+            />
+            Import
+          </button>
+        </div>
+      )}
+      {m.isApplying && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/45">
+          <Loader2 className="size-5 animate-spin text-white" />
+        </div>
+      )}
+    </>
+  );
+}
+
+function OverlayPreviewChrome({ m }: { m: CardModel }) {
+  return (
+    <>
+      {(m.isNew || m.isPremium) && (
+        <div className="pointer-events-none absolute left-1 top-1 z-10 flex gap-1">
+          {m.isNew && (
+            <span className="rounded-sm bg-primary/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-primary-foreground">
+              New
+            </span>
+          )}
+          {m.isPremium && (
+            <span className="flex items-center gap-0.5 rounded-sm bg-black/60 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-300">
+              <Sparkles className="size-2.5" />
+              Pro
+            </span>
+          )}
+        </div>
+      )}
+      <div className="absolute right-1 top-1 z-10">
+        <button
+          type="button"
+          aria-label={m.favorited ? "Remove from favorites" : "Add to favorites"}
+          aria-pressed={m.favorited}
+          onClick={m.handleFavoriteClick}
+          className={cn(
+            "flex size-6 items-center justify-center rounded-md transition-opacity",
+            m.favorited
+              ? "bg-black/45 text-primary opacity-100"
+              : "bg-black/40 text-white opacity-0 group-hover:opacity-100",
+          )}
+        >
+          <Star
+            className="size-3.5"
+            fill={m.favorited ? "currentColor" : "none"}
+            strokeWidth={2.25}
+          />
+        </button>
+      </div>
+      {(m.isApplying || m.locked) && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/55">
+          {m.isApplying ? (
+            <Loader2 className="size-5 animate-spin text-white" />
+          ) : (
+            <Lock className="size-4 text-white/80" />
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+function PreviewCardShell({
+  m,
+  accountPlan,
+  chipsMode,
+}: {
+  m: CardModel;
+  accountPlan?: GalAccountPlan | null;
+  chipsMode: boolean;
+}) {
+  return (
+    <div
+      ref={m.cardRef}
+      role="button"
+      tabIndex={0}
+      title={
+        chipsMode
+          ? undefined
+          : m.locked
+            ? `${m.item.name} (premium — sign in to apply)`
+            : m.item.name
+      }
+      onPointerEnter={m.handlePointerEnter}
+      onPointerLeave={m.handlePointerLeave}
+      onFocus={m.handleFocus}
+      onBlur={m.handleBlur}
+      onKeyDown={m.handleKeyDown}
+      onClick={m.handleCardClick}
+      onDoubleClick={m.handleDoubleClick}
+      className="footage-preview-card group relative w-full overflow-hidden border border-white/5 bg-secondary/40 outline-none ring-primary/60 transition focus-visible:ring-2"
+      style={{
+        borderRadius: m.cardRadius,
+        aspectRatio: m.aspectRatio,
+      }}
+    >
+      <PreviewMediaLayers {...m} />
+      {chipsMode ? (
+        <ChipsPreviewChrome m={m} accountPlan={accountPlan} />
+      ) : (
+        <OverlayPreviewChrome m={m} />
+      )}
+    </div>
+  );
+}
+
+const ChipsPreviewCard = memo(function ChipsPreviewCard(
+  props: PreviewCardSharedProps,
+) {
+  const m = usePreviewCardModel({ ...props, chipsMode: true });
+  return (
+    <PreviewCardShell m={m} accountPlan={props.accountPlan} chipsMode />
+  );
 });
 
-// --- Skeleton ---------------------------------------------------------------
+const OverlayPreviewCard = memo(function OverlayPreviewCard(
+  props: PreviewCardSharedProps,
+) {
+  const m = usePreviewCardModel({ ...props, chipsMode: false });
+  return <PreviewCardShell m={m} chipsMode={false} />;
+});
 
-function SectionTitleSkeleton({
+// --- Skeleton / section title -----------------------------------------------
+
+function SectionTitle({
   title,
   count,
   sticky,
@@ -886,7 +1032,7 @@ function GridSkeleton({
             className={stickySectionTitles ? "gal-footage-section" : "w-full"}
           >
             {section.title ? (
-              <SectionTitleSkeleton
+              <SectionTitle
                 title={section.title}
                 count={section.items.length}
                 sticky={stickySectionTitles}
@@ -902,7 +1048,7 @@ function GridSkeleton({
               {Array.from({ length: cells }, (_, i) => (
                 <div
                   key={i}
-                  className="animate-pulse bg-secondary/70"
+                  className="footage-preview-card animate-pulse bg-secondary/70"
                   style={{
                     aspectRatio: aspectCss,
                     borderRadius: radius,
@@ -960,29 +1106,40 @@ export function FootageGrid({
   /** Stick section titles to the top of the scroll container while browsing. */
   stickySectionTitles?: boolean;
 }) {
-  const { gridColumns } = usePanelUI();
+  const { gridColumns } = usePanelGrid();
   const preferWebm = packPrefersWebmPreview(settings);
   const useMp4 = settings?.inside_option_sets?.use_webm_preview === "mp4";
   const lockedFn = isLocked ?? (() => false);
   const readyFn = isReady ?? (() => Boolean(assetsPath && packFilePath));
+  const chipsMode = accessUi === "chips";
+  const Card = chipsMode ? ChipsPreviewCard : OverlayPreviewCard;
+
+  const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const requestSubscribe = useCallback(() => setSubscribeOpen(true), []);
+
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [scrollRoot, setScrollRoot] = useState<Element | null>(null);
+
+  useEffect(() => {
+    setScrollRoot(closestScrollParent(rootRef.current));
+  }, [sections]);
 
   const itemCount = useMemo(
     () => sections.reduce((sum, s) => sum + s.items.length, 0),
     [sections],
   );
 
-  const contentKey = useMemo(
-    () =>
-      `${gridColumns}|${assetsPath}|${assetsBaseUrl || ""}|${sections.map((s) => `${s.id}:${s.items.length}`).join("|")}`,
-    [sections, gridColumns, assetsPath, assetsBaseUrl],
+  /** Layout identity only — search/favorites must not remount the grid via skeleton. */
+  const layoutKey = useMemo(
+    () => `${gridColumns}|${assetsPath}|${assetsBaseUrl || ""}`,
+    [gridColumns, assetsPath, assetsBaseUrl],
   );
 
-  // Only defer mount for huge lists (CEP hitch). Small categories mount immediately
-  // and use per-card poster skeletons so headers don't jump and UI doesn't flash.
   const isLargeList = itemCount >= SKELETON_THRESHOLD;
-  const [gridReady, setGridReady] = useState(!isLargeList);
+  const [gridReady, setGridReady] = useState(() => itemCount < SKELETON_THRESHOLD);
+  /** One deferred mount per layout; filter updates reuse the live grid. */
+  const deferredLayoutRef = useRef<string | null>(null);
 
-  // Kick off above-the-fold HTTPS posters immediately (don't wait for card effects / IO).
   useEffect(() => {
     if (!assetsBaseUrl) return;
     const host = assetsHost === "AE" ? "AE" : "PR";
@@ -1000,13 +1157,19 @@ export function FootageGrid({
         seen += 1;
       }
     }
-  }, [contentKey, assetsBaseUrl, assetsHost, preferWebm, useMp4, gridColumns, sections]);
+  }, [layoutKey, assetsBaseUrl, assetsHost, preferWebm, useMp4, gridColumns, sections]);
 
   useEffect(() => {
-    if (!isLargeList) {
+    if (itemCount < SKELETON_THRESHOLD) {
       setGridReady(true);
       return;
     }
+    // Already painted this layout as a large list — keep cards mounted across search.
+    if (deferredLayoutRef.current === layoutKey) {
+      setGridReady(true);
+      return;
+    }
+    deferredLayoutRef.current = layoutKey;
     setGridReady(false);
     let cancelled = false;
     let timeoutId = 0;
@@ -1020,7 +1183,9 @@ export function FootageGrid({
       cancelAnimationFrame(rafId);
       if (timeoutId) window.clearTimeout(timeoutId);
     };
-  }, [contentKey, isLargeList]);
+  }, [layoutKey, itemCount]);
+
+  const subscribeHref = (subscribeUrl || BRAND.siteOrigin || "").trim();
 
   if (sections.length === 0 || itemCount === 0) {
     return (
@@ -1032,67 +1197,91 @@ export function FootageGrid({
 
   if (isLargeList && !gridReady) {
     return (
-      <GridSkeleton
-        sections={sections}
-        columns={gridColumns}
-        accessUi={accessUi}
-        stickySectionTitles={stickySectionTitles}
-      />
+      <div ref={rootRef}>
+        <GridSkeleton
+          sections={sections}
+          columns={gridColumns}
+          accessUi={accessUi}
+          stickySectionTitles={stickySectionTitles}
+        />
+      </div>
     );
   }
 
   let flatOffset = 0;
 
   return (
-    <div className="relative w-full" style={{ display: "flex", flexDirection: "column", gap: SECTION_GAP_PX }}>
-      {sections.map((section) => {
-        if (section.items.length === 0) return null;
-        const sectionStart = flatOffset;
-        flatOffset += section.items.length;
+    <div ref={rootRef}>
+      <GridViewportProvider scrollRoot={scrollRoot}>
+        <div
+          className="relative w-full"
+          style={{ display: "flex", flexDirection: "column", gap: SECTION_GAP_PX }}
+        >
+          {sections.map((section) => {
+            if (section.items.length === 0) return null;
+            const sectionStart = flatOffset;
+            flatOffset += section.items.length;
 
-        return (
-          <section
-            key={section.id}
-            className={stickySectionTitles ? "gal-footage-section" : "w-full"}
-          >
-            {section.title ? (
-              <SectionTitleSkeleton
-                title={section.title}
-                count={section.items.length}
-                sticky={stickySectionTitles}
-              />
-            ) : null}
-            <div
-              className="grid items-start"
-              style={{
-                gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
-                gap: GRID_GAP_PX,
-              }}
-            >
-              {section.items.map((clip, itemIndex) => (
-                <PreviewCard
-                  key={clip.id}
-                  item={clip}
-                  assetsPath={assetsPath}
-                  assetsBaseUrl={assetsBaseUrl}
-                  assetsHost={assetsHost}
-                  packFilePath={packFilePath}
-                  settings={settings}
-                  locked={lockedFn(clip)}
-                  ready={readyFn(clip)}
-                  accessUi={accessUi}
-                  accountPlan={accountPlan}
-                  subscribeUrl={subscribeUrl}
-                  preferWebm={preferWebm}
-                  useMp4={useMp4}
-                  prepareApply={prepareApply}
-                  gridIndex={sectionStart + itemIndex}
-                />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+            return (
+              <section
+                key={section.id}
+                className={stickySectionTitles ? "gal-footage-section" : "w-full"}
+              >
+                {section.title ? (
+                  <SectionTitle
+                    title={section.title}
+                    count={section.items.length}
+                    sticky={stickySectionTitles}
+                  />
+                ) : null}
+                <div
+                  className="grid items-start"
+                  style={{
+                    gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
+                    gap: GRID_GAP_PX,
+                  }}
+                >
+                  {section.items.map((clip, itemIndex) => (
+                    <Card
+                      key={clip.id}
+                      item={clip}
+                      assetsPath={assetsPath}
+                      assetsBaseUrl={assetsBaseUrl}
+                      assetsHost={assetsHost}
+                      packFilePath={packFilePath}
+                      settings={settings}
+                      locked={lockedFn(clip)}
+                      ready={readyFn(clip)}
+                      accountPlan={accountPlan}
+                      subscribeUrl={subscribeUrl}
+                      preferWebm={preferWebm}
+                      useMp4={useMp4}
+                      prepareApply={prepareApply}
+                      gridIndex={sectionStart + itemIndex}
+                      onRequestSubscribe={requestSubscribe}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </GridViewportProvider>
+
+      {chipsMode && (
+        <ConfirmDialog
+          open={subscribeOpen}
+          title="Gal Toolkit Max"
+          message="Subscribe to Gal Toolkit Max to unlock this item and the full library."
+          confirmLabel="Get Max"
+          cancelLabel="Not now"
+          onCancel={() => setSubscribeOpen(false)}
+          onConfirm={() => {
+            setSubscribeOpen(false);
+            if (subscribeHref) openLinkInBrowser(subscribeHref);
+          }}
+        />
+      )}
     </div>
   );
 }

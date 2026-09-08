@@ -13,9 +13,15 @@ import {
 } from "@/lib/api/preferences";
 import { selectFolder } from "@/lib/utils/bolt";
 import { notifyPackagesRescan, removeAllInstalledPacks, resolvePackagesInstallRoot, scanAndRegisterPacksAtRoot } from "@/lib/utils/pack-install";
-import { version as EXTENSION_VERSION } from "../../shared/shared";
-import { fetchSpunkramVersions, isReleaseAdminEmail, type SpunkramVersionEntry } from "@/api/update";
+import {
+  compareVersions,
+  fetchSpunkramVersions,
+  isReleaseAdminEmail,
+  type SpunkramVersionEntry,
+} from "@/api/update";
 import { applyExtensionUpdate } from "@/utils/extension-update";
+import { getEffectiveLocalVersion } from "@/utils/extension-version";
+import { version as BUILD_VERSION } from "../../shared/shared";
 import { friendlyErrorMessage } from "@/utils/user-error";
 import * as panelStore from "@/lib/userdata-store";
 import { clearAllActivePackStorageKeys } from "@/lib/utils/pack-host";
@@ -130,6 +136,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
   const [confirm, setConfirm] = useState<"reset" | "remove" | null>(null);
   const [busy, setBusy] = useState(false);
   const isAdmin = isReleaseAdminEmail(auth.email);
+  const EXTENSION_VERSION = getEffectiveLocalVersion(BUILD_VERSION);
 
   const [versions, setVersions] = useState<SpunkramVersionEntry[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
@@ -171,7 +178,11 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
 
   const selectedEntry = useMemo(() => versions.find((v) => v.version === selectedVersion), [versions, selectedVersion]);
 
-  const canInstall = Boolean(selectedEntry?.zxpUrl) && selectedEntry?.version !== EXTENSION_VERSION && !installBusy;
+  const canInstall =
+    Boolean(selectedEntry?.zxpUrl) &&
+    Boolean(selectedEntry?.version) &&
+    compareVersions(selectedEntry!.version, EXTENSION_VERSION) !== 0 &&
+    !installBusy;
 
   async function installSelectedVersion() {
     if (!selectedEntry?.zxpUrl || installBusy) return;
@@ -179,22 +190,26 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
     setInstallError(null);
     setInstallProgress(`Downloading v${selectedEntry.version}…`);
     try {
-      await applyExtensionUpdate(selectedEntry.zxpUrl, (p) => {
-        if (p.phase === "download") {
-          if (p.totalBytes && p.totalBytes > 0) {
-            const pct = Math.min(99, Math.round((p.bytesReceived / p.totalBytes) * 100));
-            setInstallProgress(`Downloading v${selectedEntry.version}… ${pct}%`);
+      await applyExtensionUpdate(
+        selectedEntry.zxpUrl,
+        (p) => {
+          if (p.phase === "download") {
+            if (p.totalBytes && p.totalBytes > 0) {
+              const pct = Math.min(99, Math.round((p.bytesReceived / p.totalBytes) * 100));
+              setInstallProgress(`Downloading v${selectedEntry.version}… ${pct}%`);
+            } else {
+              setInstallProgress(`Downloading v${selectedEntry.version}…`);
+            }
+          } else if (p.phase === "extract") {
+            setInstallProgress("Extracting…");
+          } else if (p.phase === "apply") {
+            setInstallProgress("Applying…");
           } else {
-            setInstallProgress(`Downloading v${selectedEntry.version}…`);
+            setInstallProgress("Reloading…");
           }
-        } else if (p.phase === "extract") {
-          setInstallProgress("Extracting…");
-        } else if (p.phase === "apply") {
-          setInstallProgress("Applying…");
-        } else {
-          setInstallProgress("Reloading…");
-        }
-      });
+        },
+        selectedEntry.version,
+      );
     } catch (err) {
       setInstallBusy(false);
       setInstallProgress(undefined);

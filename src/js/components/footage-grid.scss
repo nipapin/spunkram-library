@@ -1,0 +1,5 @@
+/* Off-screen cards skip layout/paint until near viewport (CEP long lists). */
+.footage-preview-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}

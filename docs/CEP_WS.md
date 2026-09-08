@@ -27,9 +27,20 @@ Hub sets Redis `cep:presence:dev:{deviceId}` (TTL 90s) on `auth.ok` and refreshe
 
 ## Extension update (`cep:extension`)
 
-`{ "type": "extension.update", "version", "zxp_url?", "changelog?", "channel?", "published_at?", "ts" }`
+```json
+{
+  "type": "extension.update",
+  "version": "0.9.18",
+  "zxp_url": "…",
+  "changelog": "…",
+  "channel": "stable",
+  "product": "spunkram",
+  "published_at": "…",
+  "ts": 0
+}
+```
 
-Re-check `GET /api/cep/update` before showing the banner.
+`product` is `"spunkram" | "gal"` (optional on older notifies). Panels ignore events for other brands (`BRAND.id`), then re-check `GET /api/cep/update` (Bearer → brand-specific manifest) before showing the Update banner.
 
 ## Device revoke (`cep:device`)
 

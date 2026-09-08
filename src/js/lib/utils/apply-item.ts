@@ -201,7 +201,11 @@ export async function applyPackItemToHost(
         }
       }
     } catch {
-      // Work range check failed — proceed anyway and let applyPackItem decide.
+      // Probe threw / evalScript failed — do not treat as success and place blindly.
+      return {
+        ok: false,
+        message: friendlyReason(appId === "PPRO" ? "NO_ACTIVE_SEQUENCE" : "COMP"),
+      };
     }
   }
 

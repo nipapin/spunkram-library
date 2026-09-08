@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { LoginScreen } from "@/components/login-screen";
+import { UpdateBanner } from "@/components/update-banner";
 import { PanelUIProvider, usePanelUI } from "@/lib/panel-ui-context";
 import { NotificationsProvider } from "@/lib/notifications-context";
 import {
@@ -9,6 +10,7 @@ import {
   useDownloadManager,
 } from "@/lib/download-manager-context";
 import { PackagesPathGateProvider } from "@/lib/packages-path-gate";
+import { useExtensionUpdate } from "@/lib/use-extension-update";
 import { FootagesPanel } from "@/footages";
 import { usePackWorkspace } from "@/lib/use-pack-workspace";
 import { asBool, readPrefSettings } from "@/lib/api/preferences";
@@ -240,6 +242,18 @@ function GalShell() {
   const [compactTabs, setCompactTabs] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   const workspace = usePackWorkspace();
+  const {
+    localVersion,
+    updateVersion,
+    updateChangelog,
+    updateChannel,
+    updateBusy,
+    updateProgress,
+    updateError,
+    hasPendingNatives,
+    showUpdateBanner,
+    handleApplyUpdate,
+  } = useExtensionUpdate();
 
   useEffect(() => {
     const useSystem = asBool(readPrefSettings().useSystemFonts);
@@ -324,6 +338,28 @@ function GalShell() {
             ))}
           </div>
         </header>
+      ) : null}
+
+      {showUpdateBanner && updateVersion ? (
+        <div className="gal-update-banner">
+          <UpdateBanner
+            version={updateVersion}
+            localVersion={localVersion}
+            changelog={updateChangelog}
+            channel={updateChannel}
+            busy={updateBusy}
+            progressLabel={updateProgress}
+            error={updateError}
+            onUpdate={handleApplyUpdate}
+          />
+        </div>
+      ) : null}
+
+      {hasPendingNatives && !showUpdateBanner ? (
+        <div className="gal-native-pending" role="status">
+          Native plugin update pending. Restart Premiere Pro / After Effects to
+          complete.
+        </div>
       ) : null}
 
       <div className="gal-shell__body">

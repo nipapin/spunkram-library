@@ -12,26 +12,21 @@ import { SettingsPanel } from "@/components/settings-panel";
 import { AccountPanel } from "@/components/account-panel";
 import { LoginScreen } from "@/components/login-screen";
 import { UpdateBanner } from "@/components/update-banner";
+import { SpunkramBootLoader } from "@/components/spunkram-boot-loader";
 import { FootagesPanel } from "@/footages";
 import { PanelUIProvider, usePanelUI } from "@/lib/panel-ui-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
-import { NotificationsProvider, useNotifications } from "@/lib/notifications-context";
+import { NotificationsProvider } from "@/lib/notifications-context";
 import {
   DownloadManagerProvider,
   useDownloadManager,
 } from "@/lib/download-manager-context";
 import { PackagesPathGateProvider } from "@/lib/packages-path-gate";
-import { fetchUpdateInfo, isRemoteNewer } from "@/api/update";
+import { useExtensionUpdate } from "@/lib/use-extension-update";
 import { fetchGenerationsStatus } from "@/api/credits";
-import {
-  applyExtensionUpdate,
-  finalizePendingNativeUpdate,
-  hasPendingNativeUpdate,
-} from "@/utils/extension-update";
 import { ensureFfmpeg } from "@/utils/ffmpeg";
 import { preloadVoiceoverPreviews } from "@/api/voiceover";
 import { openMarketUrl, resolvePackEntitlementContextForScan } from "@/api/cep-market";
-import { version as LOCAL_VERSION } from "../../../shared/shared";
 import {
   readInstallablePackages,
   loadInstalledPack,
@@ -68,7 +63,6 @@ import type { InstalledPackMeta, PackSettings, PackTreeItem, PackTreeNode } from
 import { cn } from "@/lib/utils";
 import * as panelStore from "@/lib/userdata-store";
 import { storageKey } from "@brands";
-import { friendlyErrorMessage } from "@/utils/user-error";
 import "./main.scss";
 
 const CATEGORY_BY_PACK_KEY = storageKey("categoryByPack");
@@ -450,6 +444,11 @@ function EditingWorkspace({
   );
   const packRequiresPurchase = !!packSettings?.main.required_purchase_code;
 
+  const allSections = useMemo(
+    () => (tree.length ? collectAllContentSections(tree) : []),
+    [tree],
+  );
+
   const sections: PackContentSection[] = useMemo(() => {
     if (!tree.length) return [];
 
@@ -457,20 +456,20 @@ function EditingWorkspace({
 
     if (showFavoritesOnly) {
       return filterContentSections(
-        filterFavoriteSections(collectAllContentSections(tree), favoriteIds),
+        filterFavoriteSections(allSections, favoriteIds),
         query,
       );
     }
 
     // Global search across the whole pack, independent of sidebar selection.
     if (hasQuery) {
-      return filterContentSections(collectAllContentSections(tree), query);
+      return filterContentSections(allSections, query);
     }
 
     const node = findPackTreeNode(tree, category) ?? getFirstPackRoot(tree);
     if (!node) return [];
     return filterContentSections(collectContentSections(node), "");
-  }, [tree, category, query, showFavoritesOnly, favoriteIds]);
+  }, [tree, allSections, category, query, showFavoritesOnly, favoriteIds]);
 
   // Subscribers / owned / purchased packs only — verified against market + /me.
   // When user isn't entitled to the pack, all items are locked.
@@ -535,7 +534,18 @@ function AppShell() {
   const { signedIn, authReady, generationLimit, isFreeUser, refreshMarket, subscription } =
     useAuth();
   const { setShowFavoritesOnly, showStatus } = usePanelUI();
-  const { onExtensionUpdateHint } = useNotifications();
+  const {
+    localVersion,
+    updateVersion,
+    updateChangelog,
+    updateChannel,
+    updateBusy,
+    updateProgress,
+    updateError,
+    hasPendingNatives,
+    showUpdateBanner,
+    handleApplyUpdate,
+  } = useExtensionUpdate();
   const [nav, setNav] = useState(() =>
     readInstallablePackages().length === 0 ? "market" : "editing",
   );
@@ -555,14 +565,6 @@ function AppShell() {
   const [monthlyGens, setMonthlyGens] = useState(0);
   const [extraGens, setExtraGens] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
-  const [updateZxpUrl, setUpdateZxpUrl] = useState<string | null>(null);
-  const [updateChangelog, setUpdateChangelog] = useState("");
-  const [updateChannel, setUpdateChannel] = useState<"stable" | "beta">("stable");
-  const [updateBusy, setUpdateBusy] = useState(false);
-  const [updateProgress, setUpdateProgress] = useState<string | undefined>();
-  const [updateError, setUpdateError] = useState<string | null>(null);
-  const [hasPendingNatives, setHasPendingNatives] = useState(false);
 
   const applyPack = useCallback((meta: InstalledPackMeta) => {
     loadInstalledPack(meta)
@@ -692,105 +694,6 @@ function AppShell() {
     return () => window.clearTimeout(timer);
   }, [authReady]);
 
-  // Promote Motionflow.dll (etc.) written as *.pending-update while host held the lock.
-  useEffect(() => {
-    try {
-      const { remaining } = finalizePendingNativeUpdate();
-      setHasPendingNatives(remaining.length > 0);
-      if (remaining.length > 0) {
-        showStatus(
-          "Restart Premiere Pro / After Effects to finish the native plugin update.",
-          "info",
-          12000,
-        );
-      }
-    } catch (err) {
-      console.warn(
-        "[spunkram] pending native finalize failed:",
-        err instanceof Error ? err.message : err,
-      );
-      // Check if there are still pending updates even after error
-      setHasPendingNatives(hasPendingNativeUpdate());
-    }
-  }, [showStatus]);
-
-  // Re-check after sign-in so beta testers get beta.json (Bearer required).
-  useEffect(() => {
-    if (!authReady || !signedIn) return;
-    let cancelled = false;
-    fetchUpdateInfo().then((info) => {
-      if (cancelled || !info?.version || !info.zxpUrl) return;
-      if (!isRemoteNewer(LOCAL_VERSION, info.version)) {
-        setUpdateVersion(null);
-        setUpdateZxpUrl(null);
-        setUpdateChangelog("");
-        setUpdateChannel("stable");
-        return;
-      }
-      setUpdateVersion(info.version);
-      setUpdateZxpUrl(info.zxpUrl);
-      setUpdateChangelog(typeof info.changelog === "string" ? info.changelog : "");
-      setUpdateChannel(info.channel === "beta" ? "beta" : "stable");
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [authReady, signedIn]);
-
-  // WSS wake-up when a new ZXP is uploaded — re-check /api/cep/update (beta gate).
-  useEffect(() => {
-    if (!authReady || !signedIn) return;
-    return onExtensionUpdateHint(() => {
-      void fetchUpdateInfo().then((info) => {
-        if (!info?.version || !info.zxpUrl) return;
-        if (!isRemoteNewer(LOCAL_VERSION, info.version)) return;
-        setUpdateVersion(info.version);
-        setUpdateZxpUrl(info.zxpUrl);
-        setUpdateChangelog(typeof info.changelog === "string" ? info.changelog : "");
-        setUpdateChannel(info.channel === "beta" ? "beta" : "stable");
-        showStatus(`Update available: v${info.version}`, "info", 8000);
-      });
-    });
-  }, [authReady, signedIn, onExtensionUpdateHint, showStatus]);
-
-  const handleApplyUpdate = useCallback(async () => {
-    if (!updateZxpUrl || !updateVersion || updateBusy) return;
-    setUpdateBusy(true);
-    setUpdateError(null);
-    setUpdateProgress(`Downloading v${updateVersion}…`);
-    try {
-      const result = await applyExtensionUpdate(updateZxpUrl, (p) => {
-        if (p.phase === "download") {
-          if (p.totalBytes && p.totalBytes > 0) {
-            const pct = Math.min(99, Math.round((p.bytesReceived / p.totalBytes) * 100));
-            setUpdateProgress(`Downloading v${updateVersion}… ${pct}%`);
-          } else {
-            setUpdateProgress(`Downloading v${updateVersion}…`);
-          }
-        } else if (p.phase === "extract") {
-          setUpdateProgress("Extracting…");
-        } else if (p.phase === "apply") {
-          setUpdateProgress("Applying update…");
-        } else {
-          setUpdateProgress("Reloading…");
-        }
-      });
-      if (result.pendingNatives.length > 0) {
-        setHasPendingNatives(true);
-        setUpdateProgress("Reloading… Restart host to finish natives.");
-        showStatus(
-          "Panel updated. Restart Premiere Pro / After Effects to finish the native plugin update.",
-          "info",
-          12000,
-        );
-      }
-    } catch (err) {
-      setUpdateBusy(false);
-      setUpdateProgress(undefined);
-      setUpdateError(friendlyErrorMessage(err));
-    }
-  }, [updateZxpUrl, updateVersion, updateBusy, showStatus]);
-
   useEffect(() => {
     const hex = packSettings?.inside_option_sets?.header_color_hex;
     const root = document.documentElement;
@@ -886,11 +789,7 @@ function AppShell() {
   }
 
   if (!authReady) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-background text-xs text-muted-foreground">
-        Loading…
-      </div>
-    );
+    return <SpunkramBootLoader />;
   }
 
   if (!signedIn) {
@@ -904,8 +803,6 @@ function AppShell() {
       </div>
     );
   }
-
-  const showUpdateBanner = Boolean(updateVersion && updateZxpUrl);
 
   return (
     <div className="spunkram-shell flex h-full w-full flex-col overflow-hidden text-foreground">
@@ -923,7 +820,7 @@ function AppShell() {
       {showUpdateBanner && updateVersion ? (
         <UpdateBanner
           version={updateVersion}
-          localVersion={LOCAL_VERSION}
+          localVersion={localVersion}
           changelog={updateChangelog}
           channel={updateChannel}
           busy={updateBusy}
