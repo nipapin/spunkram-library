@@ -1,5 +1,4 @@
-/* Off-screen cards skip layout/paint until near viewport (CEP long lists). */
-.footage-preview-card {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 120px;
-}
+/* Do not set content-visibility: auto on .footage-preview-card.
+   That node is the IntersectionObserver target. In CEP/CEF, skipped
+   contents often never get an "entered viewport" callback, so posters
+   stay unloaded while lock / Import chrome still paint. */

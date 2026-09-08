@@ -131,7 +131,9 @@ Gal Toolkit MAX (`client: gal-cep`): `verification_url` = `https://premieregal.m
 Успех: `{ "status": "complete", "token": "…", "user": { "id", "email", "name?" } }`.  
 Token обязан позволять серверу узнать `client` (claim или lookup).
 
-**Лимит устройств (по умолчанию 3, `CEP_DEVICE_LIMIT`):** если у аккаунта уже max активных устройств и MAC не совпал, poll возвращает:
+**Лимит устройств (по умолчанию 3, `CEP_DEVICE_LIMIT`):** если у аккаунта уже max активных устройств и пара MAC+`client` не совпала, poll возвращает:
+
+Повторный логин **того же `client`** на той же машине (MAC) ротирует токен этого устройства и не занимает слот. `gal-cep` и `spunkram-cep` на одном MAC — разные устройства, сессии независимы.
 
 ```json
 {
@@ -219,6 +221,7 @@ Browser confirm при approve может вернуть `{ "ok": true, "status"
 | `purchases[]` | sold_items пользователя по автору client; **без** `author_id`; у каждой записи `primary_type`: `AE` \| `PR` \| `null`. При `?host=AE\|PR` — только паки этого хоста (Resolve и др. не попадают) |
 | `entitlements.ai_generations_limit` | free/purchased → `5`; Editor → `10`; Editor AI → `100` |
 | `subscribe_url` / `manage_subscription_url` | опционально; CEP использует если есть |
+| `devices[]` | только сессии **этого `client`** (Gal не видит Spunkram и наоборот) |
 
 **`401`** → клиент разлогинивает.
 

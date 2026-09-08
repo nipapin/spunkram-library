@@ -32,6 +32,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -51,7 +52,8 @@ export type FootageAccessUi = "overlay" | "chips";
 const CARD_RADIUS_OVERLAY = "clamp(2px, 4%, 10px)";
 const CARD_RADIUS_CHIPS = "clamp(10px, 8%, 16px)";
 /** Extra margin so posters enqueue slightly before they scroll into view. */
-const PREVIEW_LOAD_ROOT_MARGIN = "150px 0px";
+const PREVIEW_LOAD_MARGIN_PX = 150;
+const PREVIEW_LOAD_ROOT_MARGIN = `${PREVIEW_LOAD_MARGIN_PX}px 0px`;
 const AUTOPLAY_ROOT_MARGIN = "80px 0px";
 /** Max skeleton cells per section (≈2 viewports). */
 const SKELETON_CELLS_PER_SECTION_ROWS = 8;
@@ -203,6 +205,30 @@ function closestScrollParent(el: HTMLElement | null): Element | null {
   return null;
 }
 
+/** Viewport (or scroll root) hit-test — CEF IntersectionObserver misses some cards on scroll. */
+function isElementNearRoot(
+  el: Element,
+  root: Element | null,
+  marginY: number,
+): boolean {
+  const er = el.getBoundingClientRect();
+  if (er.width <= 0 || er.height <= 0) return false;
+  const rr = root
+    ? root.getBoundingClientRect()
+    : {
+        top: 0,
+        left: 0,
+        bottom: window.innerHeight,
+        right: window.innerWidth,
+      };
+  return (
+    er.bottom >= rr.top - marginY &&
+    er.top <= rr.bottom + marginY &&
+    er.right >= rr.left &&
+    er.left <= rr.right
+  );
+}
+
 /** One shared listener for all cards — stop hover playback when leaving the CEP panel. */
 let panelLeaveBound = false;
 let panelLeavePlayPreview = false;
@@ -247,11 +273,22 @@ function GridViewportProvider({
   const playMap = useRef(new Map<Element, (inView: boolean) => void>());
   const nearIo = useRef<IntersectionObserver | null>(null);
   const playIo = useRef<IntersectionObserver | null>(null);
+  const scrollRootRef = useRef(scrollRoot);
+  scrollRootRef.current = scrollRoot;
+
+  const flushNear = useCallback(() => {
+    const root = scrollRootRef.current;
+    for (const [el, onNear] of [...nearMap.current]) {
+      if (isElementNearRoot(el, root, PREVIEW_LOAD_MARGIN_PX)) onNear();
+    }
+  }, []);
 
   useEffect(() => {
     nearIo.current?.disconnect();
     playIo.current?.disconnect();
 
+    // Viewport root (not the inner scroller): CEP/CEF often fails to deliver
+    // scroll updates when IntersectionObserver.root is an overflow:auto element.
     nearIo.current = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -259,7 +296,7 @@ function GridViewportProvider({
           nearMap.current.get(entry.target)?.();
         }
       },
-      { root: scrollRoot, rootMargin: PREVIEW_LOAD_ROOT_MARGIN, threshold: 0.01 },
+      { root: null, rootMargin: PREVIEW_LOAD_ROOT_MARGIN, threshold: 0 },
     );
 
     playIo.current = new IntersectionObserver(
@@ -268,26 +305,69 @@ function GridViewportProvider({
           playMap.current.get(entry.target)?.(entry.isIntersecting);
         }
       },
-      { root: scrollRoot, rootMargin: AUTOPLAY_ROOT_MARGIN, threshold: 0.01 },
+      { root: null, rootMargin: AUTOPLAY_ROOT_MARGIN, threshold: 0 },
     );
 
     for (const el of nearMap.current.keys()) nearIo.current.observe(el);
     for (const el of playMap.current.keys()) playIo.current.observe(el);
 
+    flushNear();
+    const rafId = requestAnimationFrame(flushNear);
+
     return () => {
+      cancelAnimationFrame(rafId);
       nearIo.current?.disconnect();
       playIo.current?.disconnect();
       nearIo.current = null;
       playIo.current = null;
     };
-  }, [scrollRoot]);
+  }, [flushNear]);
+
+  useEffect(() => {
+    flushNear();
+  }, [scrollRoot, flushNear]);
+
+  useEffect(() => {
+    if (!scrollRoot) return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf || nearMap.current.size === 0) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        flushNear();
+      });
+    };
+    scrollRoot.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      scrollRoot.removeEventListener("scroll", onScroll);
+    };
+  }, [scrollRoot, flushNear]);
 
   const api = useMemo<GridViewportApi>(
     () => ({
       observeNear: (el, onNear) => {
-        nearMap.current.set(el, onNear);
+        let done = false;
+        const fire = () => {
+          if (done) return;
+          done = true;
+          nearMap.current.delete(el);
+          nearIo.current?.unobserve(el);
+          onNear();
+        };
+        nearMap.current.set(el, fire);
         nearIo.current?.observe(el);
+        if (isElementNearRoot(el, scrollRootRef.current, PREVIEW_LOAD_MARGIN_PX)) {
+          fire();
+        } else {
+          requestAnimationFrame(() => {
+            if (!done && isElementNearRoot(el, scrollRootRef.current, PREVIEW_LOAD_MARGIN_PX)) {
+              fire();
+            }
+          });
+        }
         return () => {
+          done = true;
           nearMap.current.delete(el);
           nearIo.current?.unobserve(el);
         };
@@ -417,7 +497,11 @@ function usePreviewCardModel({
     setAppliedThisSession(false);
     if (exclusiveHoverId === item.id) clearExclusiveHover();
     stopSfxPreview(item.id);
-  }, [item.id, eagerLoad]);
+  }, [item.id]); // eagerLoad latches below — don't unload on column-count change
+
+  useEffect(() => {
+    if (eagerLoad) setNearView(true);
+  }, [eagerLoad]);
 
   const posterUrl = usePreviewObjectUrl(media.posterPath, {
     load: nearView || eagerLoad,
@@ -429,6 +513,12 @@ function usePreviewCardModel({
     setPosterPainted(false);
     if (posterUrl) setPosterFailed(false);
   }, [posterUrl]);
+
+  const markPosterPainted = useCallback(() => setPosterPainted(true), []);
+  const markPosterFailed = useCallback(() => {
+    setPosterFailed(true);
+    setPosterPainted(false);
+  }, []);
 
   const waitingPoster =
     Boolean(media.posterPath) && !posterFailed && (!posterUrl || !posterPainted);
@@ -682,14 +772,50 @@ function usePreviewCardModel({
     handleFocus,
     handleBlur,
     onRequestSubscribe,
-    setPosterPainted,
-    setPosterFailed,
+    markPosterPainted,
+    markPosterFailed,
   };
 }
 
 type CardModel = ReturnType<typeof usePreviewCardModel> & {
   accountPlan?: GalAccountPlan | null;
 };
+
+function PosterImg({
+  src,
+  waiting,
+  onPainted,
+  onFailed,
+}: {
+  src: string;
+  waiting: boolean;
+  onPainted: () => void;
+  onFailed: () => void;
+}) {
+  const ref = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const img = ref.current;
+    if (!img?.complete) return;
+    if (img.naturalWidth > 0) onPainted();
+    else onFailed();
+  }, [src, onPainted, onFailed]);
+
+  return (
+    <img
+      ref={ref}
+      src={src}
+      alt=""
+      onLoad={onPainted}
+      onError={onFailed}
+      className={cn(
+        "absolute inset-0 size-full object-cover transition-opacity duration-150",
+        waiting ? "opacity-0" : "opacity-100",
+      )}
+      draggable={false}
+    />
+  );
+}
 
 function PreviewMediaLayers(m: CardModel) {
   return (
@@ -719,20 +845,11 @@ function PreviewMediaLayers(m: CardModel) {
       )}
 
       {m.imgSrc && !m.posterFailed && (
-        <img
-          key={`${m.item.id}:poster:${m.posterUrl ?? "none"}`}
+        <PosterImg
           src={m.imgSrc}
-          alt=""
-          onLoad={() => m.setPosterPainted(true)}
-          onError={() => {
-            m.setPosterFailed(true);
-            m.setPosterPainted(false);
-          }}
-          className={cn(
-            "absolute inset-0 size-full object-cover transition-opacity duration-150",
-            m.waitingPoster ? "opacity-0" : "opacity-100",
-          )}
-          draggable={false}
+          waiting={m.waitingPoster}
+          onPainted={m.markPosterPainted}
+          onFailed={m.markPosterFailed}
         />
       )}
 
@@ -1120,10 +1237,6 @@ export function FootageGrid({
   const rootRef = useRef<HTMLDivElement>(null);
   const [scrollRoot, setScrollRoot] = useState<Element | null>(null);
 
-  useEffect(() => {
-    setScrollRoot(closestScrollParent(rootRef.current));
-  }, [sections]);
-
   const itemCount = useMemo(
     () => sections.reduce((sum, s) => sum + s.items.length, 0),
     [sections],
@@ -1184,6 +1297,10 @@ export function FootageGrid({
       if (timeoutId) window.clearTimeout(timeoutId);
     };
   }, [layoutKey, itemCount]);
+
+  useLayoutEffect(() => {
+    setScrollRoot(closestScrollParent(rootRef.current));
+  }, [sections, gridReady]);
 
   const subscribeHref = (subscribeUrl || BRAND.siteOrigin || "").trim();
 
