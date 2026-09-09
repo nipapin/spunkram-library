@@ -1,3 +1,5 @@
+import brandBuild from "./brand-build.json";
+
 export type BrandId = "gal" | "spunkram";
 
 /** Author access model. Server `/me.tier` must be one of these (or mappable). */
@@ -23,11 +25,26 @@ export type BrandAccess = {
   freePackSlots: number;
 };
 
+export type BrandBuild = {
+  version: string;
+  port: number;
+  servePort: number;
+  startingDebugPort: number;
+};
+
 export type BrandConfig = {
   id: BrandId;
   extensionId: string;
   displayName: string;
   panelDisplayName: string;
+  /** CEP ExtensionBundleVersion / ZXP / in-panel update checks. Independent per brand. */
+  version: string;
+  /** Vite HMR + CEP `.debug` live-reload (must not collide with the other brand). */
+  port: number;
+  /** `vite preview` (`npm run serve`). */
+  servePort: number;
+  /** Chrome remote-debug starting port in `.debug`. */
+  startingDebugPort: number;
   /**
    * Vite CEP panel HTML, relative to `src/js`. Only this UI is built.
    * Must be one folder deep (`./gal/index.html`, not `./ui/gal/index.html`):
@@ -64,6 +81,10 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
     extensionId: "com.premieregal.cep",
     displayName: "Gal Toolkit MAX",
     panelDisplayName: "Gal Toolkit MAX",
+    version: brandBuild.gal.version,
+    port: brandBuild.gal.port,
+    servePort: brandBuild.gal.servePort,
+    startingDebugPort: brandBuild.gal.startingDebugPort,
     panelMainPath: "./gal/index.html",
     authorName: "Premiere Gal",
     apiClient: "gal-cep",
@@ -94,6 +115,10 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
     extensionId: "com.spunkramlibrary.cep",
     displayName: "Spunkram Library",
     panelDisplayName: "Spunkram Library",
+    version: brandBuild.spunkram.version,
+    port: brandBuild.spunkram.port,
+    servePort: brandBuild.spunkram.servePort,
+    startingDebugPort: brandBuild.spunkram.startingDebugPort,
     panelMainPath: "./spunkram/index.html",
     authorName: "Spunkram",
     apiClient: "spunkram-cep",
@@ -122,6 +147,15 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
 };
 
 export const DEFAULT_BRAND: BrandId = "spunkram";
+
+export function otherBrandId(id: BrandId = activeBrandId()): BrandId {
+  return id === "gal" ? "spunkram" : "gal";
+}
+
+/** Folder under `dist/` for this brand's CEP output (`cep-spunkram`, `cep-gal`). */
+export function brandCepDist(id: BrandId = activeBrandId()): string {
+  return `cep-${id}`;
+}
 
 declare const __APP_BRAND__: string | undefined;
 

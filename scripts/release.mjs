@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * CEP release (Spunkram and/or Gal Toolkit MAX):
- *  1) optional version bump (stable or beta)
- *  2) npm run zxp / zxp:gal per brand
- *  3) git commit (if dirty) + push + tag + push tag (once)
+ *  1) optional per-brand version bump in brand-build.json (stable or beta)
+ *  2) npm run zxp:spunkram / zxp:gal
+ *  3) git commit (if dirty) + push + tag `{brand}-{version}` per brand
  *  4) upload each ZXP → R2 (next-app script) → latest.json or beta.json
  *
  * Usage (from CEP repo root):
@@ -37,7 +37,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
-const PKG_PATH = path.join(ROOT, "package.json");
+const BUILD_PATH = path.join(ROOT, "brand-build.json");
 const CHANGELOG_PATH = path.join(ROOT, "CHANGELOG.md");
 
 /** @typedef {"spunkram" | "gal"} BrandId */
@@ -46,7 +46,7 @@ const BRANDS = {
   spunkram: {
     id: "spunkram",
     extensionId: "com.spunkramlibrary.cep",
-    zxpScript: "zxp",
+    zxpScript: "zxp:spunkram",
     product: "spunkram",
     zxpFileHint: "spunkram.zxp",
   },
@@ -188,14 +188,21 @@ function bumpBeta(version) {
   return `${next}-beta.1`;
 }
 
-function readPkg() {
-  return JSON.parse(readFileSync(PKG_PATH, "utf8"));
+function readBuild() {
+  return JSON.parse(readFileSync(BUILD_PATH, "utf8"));
 }
 
-function writePkgVersion(version) {
-  const pkg = readPkg();
-  pkg.version = version;
-  writeFileSync(PKG_PATH, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
+function writeBrandVersion(brandId, version) {
+  const build = readBuild();
+  if (!build[brandId]) {
+    throw new Error(`Unknown brand in brand-build.json: ${brandId}`);
+  }
+  build[brandId].version = version;
+  writeFileSync(BUILD_PATH, `${JSON.stringify(build, null, 2)}\n`, "utf8");
+}
+
+function brandTag(brandId, version) {
+  return `${brandId}-${version}`;
 }
 
 function changelogForVersion(version) {
@@ -240,23 +247,39 @@ function resolveNextAppRoot() {
 function main() {
   const opts = parseArgs(process.argv);
   const brands = resolveBrandList(opts.brand);
-  let version = readPkg().version;
+  const build = readBuild();
 
-  if (opts.beta) {
-    const next = bumpBeta(version);
-    console.log(`[release] beta bump ${version} → ${next}`);
-    if (!opts.dryRun) writePkgVersion(next);
-    version = next;
-  } else if (opts.bump) {
-    const next = bumpSemver(version, opts.bump);
-    console.log(`[release] bump ${version} → ${next} (--bump=${opts.bump})`);
-    if (!opts.dryRun) writePkgVersion(next);
-    version = next;
+  /** @type {Map<string, string>} */
+  const versionByBrand = new Map();
+  for (const brand of brands) {
+    let version = build[brand.id]?.version;
+    if (!version) {
+      throw new Error(`No version in brand-build.json for ${brand.id}`);
+    }
+    if (opts.beta) {
+      const next = bumpBeta(version);
+      console.log(`[release] ${brand.id} beta bump ${version} → ${next}`);
+      if (!opts.dryRun) writeBrandVersion(brand.id, next);
+      version = next;
+    } else if (opts.bump) {
+      const next = bumpSemver(version, opts.bump);
+      console.log(`[release] ${brand.id} bump ${version} → ${next} (--bump=${opts.bump})`);
+      if (!opts.dryRun) writeBrandVersion(brand.id, next);
+      version = next;
+    }
+    versionByBrand.set(brand.id, version);
   }
 
-  const uploadChannel = opts.beta || /-beta/i.test(version) ? "beta" : "stable";
+  const versionLabel = brands
+    .map((b) => brandTag(b.id, versionByBrand.get(b.id)))
+    .join(", ");
+  const uploadChannel = brands.some((b) => /-beta/i.test(versionByBrand.get(b.id)))
+    ? "beta"
+    : opts.beta
+      ? "beta"
+      : "stable";
   console.log(
-    `[release] version=${version} channel=${uploadChannel} brands=${brands.map((b) => b.id).join(",")}`,
+    `[release] ${versionLabel} channel=${uploadChannel} brands=${brands.map((b) => b.id).join(",")}`,
   );
 
   /** @type {Map<string, string>} */
@@ -286,12 +309,7 @@ function main() {
   if (!opts.noGit) {
     const status = runCapture("git", ["status", "--porcelain"]);
     if (status) {
-      const brandLabel = brands.map((b) => b.id).join("+");
-      const msg =
-        opts.message ||
-        (uploadChannel === "beta"
-          ? `release: v${version} (${brandLabel}, beta)`
-          : `release: v${version} (${brandLabel})`);
+      const msg = opts.message || `release: ${versionLabel}${uploadChannel === "beta" ? " (beta)" : ""}`;
       console.log(`[release] committing local changes…`);
       if (opts.dryRun) {
         console.log(`[release] dry-run: would git add/commit: ${msg}`);
@@ -308,21 +326,24 @@ function main() {
       console.log("[release] working tree clean");
     }
 
+    const tags = brands.map((b) => brandTag(b.id, versionByBrand.get(b.id)));
     if (opts.dryRun) {
-      console.log(`[release] dry-run: would git push && tag ${version} && push tag`);
+      console.log(`[release] dry-run: would git push && tag ${tags.join(", ")} && push tags`);
     } else {
       run("git", ["push"]);
-      const existing = spawnSync("git", ["rev-parse", `refs/tags/${version}`], {
-        cwd: ROOT,
-        encoding: "utf8",
-        shell: process.platform === "win32",
-      });
-      if (existing.status === 0) {
-        console.log(`[release] tag ${version} already exists — skipping create`);
-      } else {
-        run("git", ["tag", version]);
+      for (const tag of tags) {
+        const existing = spawnSync("git", ["rev-parse", `refs/tags/${tag}`], {
+          cwd: ROOT,
+          encoding: "utf8",
+          shell: process.platform === "win32",
+        });
+        if (existing.status === 0) {
+          console.log(`[release] tag ${tag} already exists — skipping create`);
+        } else {
+          run("git", ["tag", tag]);
+        }
+        run("git", ["push", "origin", tag]);
       }
-      run("git", ["push", "origin", version]);
     }
   } else {
     console.log("[release] --no-git: skip push/tag");
@@ -338,9 +359,9 @@ function main() {
     if (!existsSync(envFile)) {
       throw new Error(`next-app .env not found: ${envFile}`);
     }
-    const notes = changelogForVersion(version);
-
     for (const brand of brands) {
+      const version = versionByBrand.get(brand.id);
+      const notes = changelogForVersion(version);
       const zxpPath =
         zxpByBrand.get(brand.id) ||
         path.join(ROOT, "dist", "zxp", `${brand.extensionId}.zxp`);
@@ -371,7 +392,7 @@ function main() {
   }
 
   console.log(
-    `[release] done → v${version} (${uploadChannel}) brands=${brands.map((b) => b.id).join(",")}`,
+    `[release] done → ${versionLabel} (${uploadChannel})`,
   );
   console.log(`  check: https://motionflow.pro/api/cep/update`);
   if (uploadChannel === "beta") {

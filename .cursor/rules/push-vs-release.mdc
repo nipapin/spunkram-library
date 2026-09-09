@@ -26,7 +26,7 @@ npm run release:patch
 npm run release:minor
 npm run release:major
 npm run release:beta
-npm run release:all          # Spunkram + Gal, one version / tag
+npm run release:all          # Spunkram + Gal, independent versions / tags
 npm run release:gal          # Gal only
 npm run release:spunkram     # Spunkram only (default for release / release:patch)
 ```

@@ -1,0 +1,14 @@
+{
+  "spunkram": {
+    "version": "0.9.21",
+    "port": 4000,
+    "servePort": 5000,
+    "startingDebugPort": 8860
+  },
+  "gal": {
+    "version": "0.9.20",
+    "port": 4010,
+    "servePort": 5010,
+    "startingDebugPort": 8870
+  }
+}

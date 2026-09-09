@@ -45,6 +45,7 @@ Grep gate after UI work: `evalTS(` only under `src/js/sdk/` and `src/js/lib/util
 ## Brands and persistence
 
 - UI strings, pack ext, bins, storage: `BRAND` / `storageKey()` from `brands.config.ts`.
+- CEP version / Vite ports / dist folder: `brand-build.json` (independent per brand). npm `package.json` name is `motionflow-cep`; its version is not the panel version.
 - Vite panel HTML is one folder deep (`src/js/gal/index.html`, `src/js/spunkram/index.html`) — plugin rewrites assets to `../assets/`.
 - Do not write new `aitools-cep-*` keys or raw `localStorage` for prefs. Use branded `panelStore`.
 - Caption Font is a **plain string** Source Text param named exactly `Caption Font`. Never JSON / font-menu objects. See `.cursor/rules/caption-font.mdc`.

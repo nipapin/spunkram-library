@@ -1,6 +1,13 @@
+const brand = process.env.APP_BRAND === "gal" ? "gal" : "spunkram";
+const otherBrand = brand === "gal" ? "spunkram" : "gal";
+
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ["./src/js/**/*.{js,ts,jsx,tsx,html}"],
+  content: [
+    "./src/js/**/*.{js,ts,jsx,tsx,html}",
+    `!./src/js/${otherBrand}/**/*`,
+    `!./src/js/ui/${otherBrand}/**/*`,
+  ],
   theme: {
     extend: {
       colors: {

@@ -7,6 +7,12 @@ import {
   reloadPanelHard,
 } from "./extension-version";
 import { BRAND } from "@brands";
+import {
+  allocateNativeBackupPath,
+  isUpdateBackupName,
+  NATIVE_BACKUP_DIR,
+  PENDING_SUFFIX,
+} from "./update-backup-path";
 
 export type ExtensionUpdateProgress = {
   phase: "download" | "extract" | "apply" | "reload";
@@ -19,8 +25,6 @@ export type ApplyExtensionUpdateResult = {
   pendingNatives: string[];
 };
 
-const UPDATE_OLD_SUFFIX = ".update-old";
-const PENDING_SUFFIX = ".pending-update";
 const PENDING_MARKER = "pending-native-update.json";
 
 type PendingMarker = {
@@ -78,15 +82,20 @@ function isNativeBinary(filePath: string): boolean {
   );
 }
 
-/** Pick a free backup path: `file.update-old`, then `file.update-old.1`, … */
+/** Rename a locked native into `_mf_old/` — never suffix-stack on leftovers. */
 function allocateUpdateOldPath(target: string): string {
-  const base = `${target}${UPDATE_OLD_SUFFIX}`;
-  if (!fs.existsSync(base)) return base;
-  for (let i = 1; i < 100; i++) {
-    const candidate = `${base}.${i}`;
-    if (!fs.existsSync(candidate)) return candidate;
+  const backup = allocateNativeBackupPath(target, {
+    exists: (p) => fs.existsSync(p),
+    join: path.join,
+    dirname: path.dirname,
+    basename: path.basename,
+  });
+  try {
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
+  } catch {
+    /* rename may still work if the folder exists */
   }
-  return `${base}.${Date.now()}`;
+  return backup;
 }
 
 function readPendingMarker(extRoot: string): PendingMarker | null {
@@ -124,6 +133,7 @@ function copyFileOverwrite(
   to: string,
   extRoot: string,
 ): string | null {
+  if (isUpdateBackupName(path.basename(to))) return null;
   try {
     fs.copyFileSync(from, to);
     return null;
@@ -181,14 +191,21 @@ function cleanupUpdateBackups(root: string): void {
     try {
       const st = fs.statSync(full);
       if (st.isDirectory()) {
-        cleanupUpdateBackups(full);
-      } else if (
-        name.includes(UPDATE_OLD_SUFFIX) ||
-        name.endsWith(PENDING_SUFFIX)
-      ) {
+        if (name === NATIVE_BACKUP_DIR) {
+          cleanupUpdateBackups(full);
+          try {
+            if (fs.readdirSync(full).length === 0) fs.rmdirSync(full);
+          } catch {
+            /* still locked */
+          }
+        } else {
+          cleanupUpdateBackups(full);
+        }
+      } else if (name.endsWith(PENDING_SUFFIX)) {
         // Do not delete pending-update here — finalize handles those.
-        if (name.endsWith(PENDING_SUFFIX)) continue;
-        if (name.includes(UPDATE_OLD_SUFFIX)) unlinkBestEffort(full);
+        continue;
+      } else if (isUpdateBackupName(name)) {
+        unlinkBestEffort(full);
       }
     } catch {
       /* ignore */
@@ -204,6 +221,7 @@ function copyDirOverwrite(
 ): void {
   if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
   for (const name of fs.readdirSync(src)) {
+    if (name === NATIVE_BACKUP_DIR || isUpdateBackupName(name)) continue;
     const from = path.join(src, name);
     const to = path.join(dest, name);
     const st = fs.statSync(from);

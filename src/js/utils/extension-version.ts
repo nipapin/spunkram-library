@@ -2,7 +2,7 @@ import { fs, path } from "@/lib/cep/node";
 import { compareVersions } from "@/api/update";
 import { csi } from "@/lib/utils/bolt";
 import * as panelStore from "@/lib/userdata-store";
-import { storageKey } from "@brands";
+import { BRAND, storageKey } from "@brands";
 import { version as BUILD_VERSION } from "../../shared/shared";
 
 /** Written into the extension root on successful ZXP apply (Node FS — not CEF cache). */
@@ -124,6 +124,16 @@ export function reloadPanelHard(): void {
   if (typeof window === "undefined" || !window.location) return;
   try {
     const url = new URL(window.location.href);
+    const filePath = url.pathname.replace(/\\/g, "/");
+    const onLegacyEntry =
+      /\/main\/index\.html$/i.test(filePath) ||
+      /\/ui\/spunkram\/index\.html$/i.test(filePath);
+    if (onLegacyEntry && BRAND.panelMainPath) {
+      const dest = new URL(BRAND.panelMainPath, url);
+      dest.searchParams.set("_cep_upd", String(Date.now()));
+      window.location.replace(dest.toString());
+      return;
+    }
     url.searchParams.set("_cep_upd", String(Date.now()));
     window.location.replace(url.toString());
   } catch {

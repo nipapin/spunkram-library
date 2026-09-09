@@ -1,19 +1,18 @@
 import type { CEP_Config } from "vite-cep-plugin";
 import { DEFAULT_BRAND, getBrand, resolveBrand } from "./brands.config";
-import { version } from "./package.json";
 
 const brand = getBrand(resolveBrand(process.env.APP_BRAND ?? DEFAULT_BRAND));
 const id = brand.extensionId;
 const displayName = brand.displayName;
 
 const config: CEP_Config = {
-  version,
+  version: brand.version,
   id,
   displayName,
   symlink: "local",
-  port: 4000,
-  servePort: 5000,
-  startingDebugPort: 8860,
+  port: brand.port,
+  servePort: brand.servePort,
+  startingDebugPort: brand.startingDebugPort,
   extensionManifestVersion: 6.0,
   requiredRuntimeVersion: 9.0,
   hosts: [

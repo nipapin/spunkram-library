@@ -3,6 +3,8 @@ name: ZXP Release
 on:
   push:
     tags:
+      - "spunkram-*.*.*"
+      - "gal-*.*.*"
       - "*.*.*"
 
 permissions:
@@ -21,8 +23,20 @@ jobs:
         uses: actions/setup-node@v2
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Resolve brand from tag
+        id: brand
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -like "gal-*") {
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "id=gal"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "script=zxp:gal"
+          } else {
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "id=spunkram"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "script=zxp:spunkram"
+          }
       - run: npm i --legacy-peer-deps
-      - run: npm run zxp
+      - run: npm run ${{ steps.brand.outputs.script }}
 
       - name: GitHub Release
         uses: softprops/action-gh-release@v1

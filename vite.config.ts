@@ -8,7 +8,19 @@ import path from "path";
 import fs from "fs";
 import { createRequire } from "module";
 import { extendscriptConfig } from "./vite.es.config";
-import { DEFAULT_BRAND, getBrand, resolveBrand } from "./brands.config";
+import {
+  brandCepDist,
+  DEFAULT_BRAND,
+  getBrand,
+  otherBrandId,
+  resolveBrand,
+} from "./brands.config";
+import { writeLegacyCepEntries } from "./src/js/utils/legacy-cep-entries";
+import {
+  allocateNativeBackupPath,
+  isUpdateBackupName,
+  NATIVE_BACKUP_DIR,
+} from "./src/js/utils/update-backup-path";
 
 const require = createRequire(import.meta.url);
 const hostPkgRoot = path.dirname(require.resolve("motionflow-host/package.json"));
@@ -16,12 +28,19 @@ const hostEntry = path.join(hostPkgRoot, "src/index.ts");
 
 const extensions = [".js", ".ts", ".tsx"];
 
+const appBrandId = resolveBrand(process.env.APP_BRAND ?? DEFAULT_BRAND);
+const brand = getBrand(appBrandId);
+const otherBrand = otherBrandId(appBrandId);
+
 const devDist = "dist";
-const cepDist = "cep";
+const cepDist = brandCepDist(appBrandId);
 
 const src = path.resolve(__dirname, "src");
 const root = path.resolve(src, "js");
 const outDir = path.resolve(__dirname, "dist", cepDist);
+// vite-cep-plugin writes dist/{cepDist}/{brand}/index.html in configResolved
+// without mkdir — create it so `vite` works on a clean tree.
+fs.mkdirSync(path.join(outDir, appBrandId), { recursive: true });
 
 function isBusyError(err: unknown): boolean {
   const code =
@@ -39,8 +58,18 @@ function copyFileOverwrite(from: string, to: string): void {
   } catch (err) {
     if (!isBusyError(err) || !fs.existsSync(to)) throw err;
   }
-  const backup = `${to}.update-old.${Date.now()}`;
+  if (isUpdateBackupName(path.basename(to))) {
+    console.warn(`[copy-motionflow-bin] skip leftover backup: ${to}`);
+    return;
+  }
+  const backup = allocateNativeBackupPath(to, {
+    exists: (p) => fs.existsSync(p),
+    join: path.join,
+    dirname: path.dirname,
+    basename: path.basename,
+  });
   try {
+    fs.mkdirSync(path.dirname(backup), { recursive: true });
     fs.renameSync(to, backup);
   } catch (err) {
     if (!isBusyError(err)) throw err;
@@ -58,6 +87,7 @@ function copyDirRecursive(from: string, to: string): void {
   for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
     const srcPath = path.join(from, entry.name);
     const destPath = path.join(to, entry.name);
+    if (entry.name === NATIVE_BACKUP_DIR || isUpdateBackupName(entry.name)) continue;
     if (entry.isDirectory()) copyDirRecursive(srcPath, destPath);
     else copyFileOverwrite(srcPath, destPath);
   }
@@ -98,6 +128,21 @@ function stripCepDebugForZxpPlugin(): Plugin {
       if (!isPackage) return;
       const debugFile = path.resolve(__dirname, "dist", cepDist, ".debug");
       if (fs.existsSync(debugFile)) fs.unlinkSync(debugFile);
+    },
+  };
+}
+
+/**
+ * 0.9.16 overlays the ZXP then `location.reload()`s `./main/index.html`.
+ * 0.9.17 reloads `./ui/spunkram/index.html`. Current MainPath is `./spunkram/`.
+ * Must run in writeBundle `pre` so signZXP sees the extra entries.
+ */
+function writeLegacyCepEntriesPlugin(): Plugin {
+  return {
+    name: "write-legacy-cep-entries",
+    enforce: "pre",
+    writeBundle() {
+      writeLegacyCepEntries(outDir, appBrandId);
     },
   };
 }
@@ -175,18 +220,42 @@ const config: CepOptions = {
 
 if (action) runAction(config, action);
 
-const appBrandId = resolveBrand(process.env.APP_BRAND ?? DEFAULT_BRAND);
-const brand = getBrand(appBrandId);
+/** Block the other brand's HTML entry so Vite does not crawl it in this process. */
+function isolateBrandHtmlPlugin(): Plugin {
+  const blocked = `/${otherBrand}`;
+  return {
+    name: "isolate-brand-html",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = (req.url ?? "").split("?")[0];
+        if (pathname === blocked || pathname.startsWith(`${blocked}/`)) {
+          res.statusCode = 404;
+          res.setHeader("Content-Type", "text/plain; charset=utf-8");
+          res.end(
+            `This Vite process serves ${appBrandId} on :${brand.port}. Use npm run dev:${otherBrand} for ${otherBrand}.`,
+          );
+          return;
+        }
+        next();
+      });
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
+    isolateBrandHtmlPlugin(),
     react(),
     cep(config),
     stripCepDebugForZxpPlugin(),
     fixNestedCepHtmlAssetsPlugin(),
+    writeLegacyCepEntriesPlugin(),
     copyMotionflowBinPlugin(),
   ],
+  optimizeDeps: {
+    entries: Object.values(input),
+  },
   define: {
     __APP_BRAND__: JSON.stringify(appBrandId),
     // Inline so panel JS never touches bare `process` (CEP CEF / ExtendScript).
@@ -207,9 +276,17 @@ export default defineConfig({
     // 127.0.0.1 over ::1. Default Vite bind is [::1] only → ERR_CONNECTION_REFUSED.
     host: "127.0.0.1",
     port: cepConfig.port,
-    // Motion Flow API → https://motionflow.pro (see `apiTarget`). Panel Vite is
-    // on :4000 — proxy avoids CORS in dev. Paths must end with `/` so Vite
-    // modules under `src/js/api/` (e.g. `/api/cep-market.ts`) are not stolen.
+    strictPort: true,
+    watch: {
+      ignored: [
+        `**/src/js/${otherBrand}/**`,
+        `**/src/js/ui/${otherBrand}/**`,
+      ],
+    },
+    // Motion Flow API → https://motionflow.pro (see `apiTarget`). Each brand
+    // has its own Vite port — proxy avoids CORS in dev. Paths must end with
+    // `/` so Vite modules under `src/js/api/` (e.g. `/api/cep-market.ts`) are
+    // not stolen.
     proxy: {
       "/api/stock/": {
         target: apiTarget,

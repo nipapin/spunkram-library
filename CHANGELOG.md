@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Chapters: rename hub/shell to “Chapters”; hide welcome card when history exists; circular back without tooltip; normalize tags as `#tag1 #tag2`
 - Voiceover: history only in IconButton modal; fixed Generate button (Captions Transcribe styles); ScrubNumber + Y-resizable Script; unified 12px body type
 
+## [0.9.21] - 2026-09-09
+
+### Fixed
+
+- In-panel update from 0.9.16/0.9.17: the ZXP includes `main/index.html` and `ui/spunkram/index.html` (plus stubs at old hashed JS names) so overlay + reload actually leaves the old panel
+- Native update leftovers (`Motionflow.dll.update-old`, stacked `.old`) are stored in `_mf_old/` instead of growing the filename until Windows MAX_PATH fails
+
 ## [0.9.19] - 2026-09-09
 
 ### Fixed
