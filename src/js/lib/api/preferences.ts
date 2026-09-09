@@ -45,6 +45,8 @@ export type MotionflowAccountSession = {
   name?: string;
   token: string;
   lastUsedAt: string;
+  /** CEP device ids on this machine — used to free the slot on sign-out. */
+  deviceIds?: string[];
 };
 
 export const MAX_MOTIONFLOW_ACCOUNTS = 5;
@@ -206,6 +208,20 @@ export function writeMotionflowAuth(auth: MotionflowAuth): boolean {
   return savePreferencesFile(file);
 }
 
+function normalizeDeviceIds(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const ids = [
+    ...new Set(
+      raw.flatMap((value) => {
+        if (typeof value !== "string") return [];
+        const id = value.trim();
+        return id ? [id] : [];
+      }),
+    ),
+  ];
+  return ids.length ? ids : undefined;
+}
+
 function normalizeAccount(
   raw: Partial<MotionflowAccountSession> | null | undefined,
 ): MotionflowAccountSession | null {
@@ -214,6 +230,7 @@ function normalizeAccount(
   const email = typeof raw.email === "string" ? raw.email.trim() : "";
   const token = typeof raw.token === "string" ? raw.token.trim() : "";
   if (!id || !email || !token) return null;
+  const deviceIds = normalizeDeviceIds(raw.deviceIds);
   return {
     id,
     email,
@@ -223,6 +240,7 @@ function normalizeAccount(
       typeof raw.lastUsedAt === "string" && raw.lastUsedAt
         ? raw.lastUsedAt
         : new Date().toISOString(),
+    ...(deviceIds ? { deviceIds } : {}),
   };
 }
 
@@ -293,15 +311,21 @@ export function upsertAccountSession(
     .map((a) => normalizeAccount(a))
     .filter((a): a is MotionflowAccountSession => Boolean(a));
 
+  const idx = accounts.findIndex((a) => a.id === String(session.id).trim());
+  const existing = idx >= 0 ? accounts[idx] : undefined;
+  const deviceIds =
+    session.deviceIds !== undefined
+      ? normalizeDeviceIds(session.deviceIds)
+      : existing?.deviceIds;
   const next: MotionflowAccountSession = {
     id: String(session.id).trim(),
     email: session.email.trim(),
     name: session.name?.trim() || undefined,
     token: session.token.trim(),
     lastUsedAt: session.lastUsedAt || new Date().toISOString(),
+    ...(deviceIds ? { deviceIds } : {}),
   };
 
-  const idx = accounts.findIndex((a) => a.id === next.id);
   if (idx >= 0) {
     accounts[idx] = next;
   } else {

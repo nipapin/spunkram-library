@@ -46,6 +46,11 @@ import { currentHostAppId } from "@/lib/utils/apply-item";
 import { applyAdminDevPlan } from "@/lib/utils/gal-plan";
 import { currentPackHost } from "@/lib/utils/pack-host";
 import { waitForNextAuthPoll } from "@/lib/wait-for-auth-poll";
+import { getUserSystemData } from "@/lib/api/usp";
+import {
+  partitionLoginDevices,
+  thisMachineDeviceIds,
+} from "@/lib/utils/device-session";
 import { isReleaseAdminEmail } from "@/api/update";
 import {
   resolveAccessTier,
@@ -179,6 +184,35 @@ function authFromSession(session: MotionflowAccountSession): MotionflowAuth {
   };
 }
 
+function persistedDeviceIdsForAccount(accountId?: string): string[] {
+  if (!accountId) return [];
+  return listAccountSessions().find((a) => a.id === accountId)?.deviceIds ?? [];
+}
+
+async function releaseLocalDeviceSlots(opts: {
+  token: string;
+  accountId?: string;
+  devices: MotionflowDevice[];
+}): Promise<void> {
+  const local = getUserSystemData();
+  const ids = new Set<string>([
+    ...thisMachineDeviceIds(opts.devices, local),
+    ...persistedDeviceIdsForAccount(opts.accountId),
+  ]);
+  if (ids.size === 0) {
+    const { data } = await fetchMe(opts.token);
+    for (const id of thisMachineDeviceIds(data?.devices ?? [], local)) {
+      ids.add(id);
+    }
+  }
+  if (ids.size === 0) return;
+  await Promise.all(
+    [...ids].map((id) =>
+      revokeMotionflowDevice(opts.token, id).catch(() => ({ ok: false as const })),
+    ),
+  );
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefsState] = useState<PrefSettings>(() => readPrefSettings());
   const [auth, setAuth] = useState<MotionflowAuth>(() => {
@@ -231,11 +265,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (next: MotionflowAuth, status: AuthStatus) => {
       setAuth(next);
       if (next.token && next.id && next.email) {
+        const deviceIds = thisMachineDeviceIds(status.devices, getUserSystemData());
         upsertAccountSession({
           id: next.id,
           email: next.email,
           name: next.name,
           token: next.token,
+          ...(deviceIds.length ? { deviceIds } : {}),
         });
       } else {
         writeMotionflowAuth(next);
@@ -449,8 +485,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (result.status === "device_limit") {
+        const { thisMachine, others } = partitionLoginDevices(
+          result.devices,
+          getUserSystemData(),
+        );
+        if (thisMachine[0]?.id) {
+          const reused = await replaceDeviceAuth({
+            code,
+            device_code,
+            revoke_device_id: thisMachine[0].id,
+          });
+          if (reused.status === "complete") {
+            return finishDeviceLogin(reused.token, reused.user);
+          }
+        }
         setLoginDeviceLimit({
-          devices: result.devices,
+          devices: others.length > 0 ? others : result.devices,
           device_limit: result.device_limit,
         });
         const revokeId = await new Promise<string | null>((resolve) => {
@@ -574,14 +624,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const current = readMotionflowAuth();
     const currentId = current.id;
 
+    try {
+      cepWs.stop();
+    } catch {
+      /* ignore */
+    }
+
     if (current.token) {
-      const currentDevice = subscription.devices.find((d) => d.current);
-      if (currentDevice?.id) {
-        try {
-          await revokeMotionflowDevice(current.token, currentDevice.id);
-        } catch {
-          /* ignore revoke errors on sign-out */
-        }
+      try {
+        await releaseLocalDeviceSlots({
+          token: current.token,
+          accountId: currentId,
+          devices: subscription.devices,
+        });
+      } catch {
+        /* ignore revoke errors on sign-out */
       }
     }
 
@@ -606,14 +663,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!target) return { ok: false, message: "Account not found" };
 
       const isActive = auth.id === id;
-      if (target.token && isActive) {
-        const currentDevice = subscription.devices.find((d) => d.current);
-        if (currentDevice?.id) {
-          try {
-            await revokeMotionflowDevice(target.token, currentDevice.id);
-          } catch {
-            /* ignore */
-          }
+      if (target.token) {
+        try {
+          await releaseLocalDeviceSlots({
+            token: target.token,
+            accountId: target.id,
+            devices: isActive ? subscription.devices : [],
+          });
+        } catch {
+          /* ignore */
         }
       }
 

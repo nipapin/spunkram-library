@@ -20,7 +20,10 @@ import {
 } from "@/lib/utils/preview-disk-cache";
 import {
   PRELOAD_CAP,
+  collectPosterPathsForPreload,
+  posterWarmupIdentity,
   preloadPosters,
+  takePosterWarmup,
 } from "@/lib/utils/preview-preload";
 import type { PackHostId } from "@/lib/utils/pack-host";
 import { resolvePreviewAspectRatio, type PackContentSection } from "@/lib/utils/pack-tree";
@@ -506,7 +509,7 @@ function usePreviewCardModel({
     if (eagerLoad) setNearView(true);
   }, [eagerLoad]);
 
-  const posterUrl = usePreviewObjectUrl(media.posterPath, {
+  const posterUrl = usePreviewObjectUrl(isAudio ? null : media.posterPath, {
     load: nearView || eagerLoad || preloaded,
     priority: gridIndex,
     eager: eagerLoad || preloaded,
@@ -524,7 +527,10 @@ function usePreviewCardModel({
   }, []);
 
   const waitingPoster =
-    Boolean(media.posterPath) && !posterFailed && (!posterUrl || !posterPainted);
+    !isAudio &&
+    Boolean(media.posterPath) &&
+    !posterFailed &&
+    (!posterUrl || !posterPainted);
 
   useEffect(() => {
     if (playPreview) return;
@@ -1167,32 +1173,23 @@ function GridSkeleton({
   columns,
   accessUi = "overlay",
   stickySectionTitles = false,
-  progress,
 }: {
   sections: PackContentSection[];
   columns: number;
   accessUi?: FootageAccessUi;
   stickySectionTitles?: boolean;
-  progress?: { done: number; total: number } | null;
 }) {
   const cols = Math.max(1, columns);
   const radius = accessUi === "chips" ? CARD_RADIUS_CHIPS : CARD_RADIUS_OVERLAY;
   const maxCells = cols * SKELETON_CELLS_PER_SECTION_ROWS;
-  const progressLabel =
-    progress && progress.total > 0
-      ? `Loading previews ${progress.done} / ${progress.total}`
-      : "Loading previews";
 
   return (
     <div
       className="relative w-full"
       style={{ display: "flex", flexDirection: "column", gap: SECTION_GAP_PX }}
       aria-busy="true"
-      aria-label={progressLabel}
+      aria-label="Loading"
     >
-      {progress && progress.total > 0 ? (
-        <p className="px-2 text-[11px] text-muted-foreground">{progressLabel}</p>
-      ) : null}
       {sections.map((section) => {
         if (section.items.length === 0) return null;
         const aspectCss =
@@ -1305,55 +1302,24 @@ export function FootageGrid({
     [sections],
   );
 
-  /** Layout identity — columns / assets base. */
-  const layoutKey = useMemo(
-    () => `${gridColumns}|${assetsPath}|${assetsBaseUrl || ""}`,
-    [gridColumns, assetsPath, assetsBaseUrl],
-  );
-
   /** Unit of preload: root category. Subgroup nav must not remount. */
   const preloadKey = useMemo(
-    () => `${layoutKey}|${rootId || "all"}`,
-    [layoutKey, rootId],
+    () => posterWarmupIdentity(rootId || "all", assetsPath, assetsBaseUrl || ""),
+    [assetsPath, assetsBaseUrl, rootId],
   );
 
-  const posterPathsForPreload = useMemo(() => {
-    const host = assetsHost === "AE" ? "AE" : "PR";
-    const paths: string[] = [];
-    for (const section of sections) {
-      for (const item of section.items) {
-        if (paths.length >= PRELOAD_CAP) return paths;
-        let posterPath: string | null = null;
-        if (assetsBaseUrl) {
-          posterPath = resolveItemRemotePreviewMedia(item, assetsBaseUrl, {
-            preferWebm,
-            useMp4,
-            host,
-          }).posterPath;
-        } else if (assetsPath) {
-          posterPath = resolveItemPreviewMedia(item, assetsPath, {
-            preferWebm,
-            useMp4,
-          }).posterPath;
-        }
-        if (posterPath) paths.push(posterPath);
-      }
-    }
-    return paths;
-  }, [
-    sections,
-    assetsBaseUrl,
-    assetsPath,
-    assetsHost,
-    preferWebm,
-    useMp4,
-  ]);
+  const posterPathsForPreload = useMemo(
+    () =>
+      collectPosterPathsForPreload(sections, {
+        assetsPath,
+        assetsBaseUrl,
+        assetsHost,
+        settings,
+      }),
+    [sections, assetsPath, assetsBaseUrl, assetsHost, settings],
+  );
 
   const [gridReady, setGridReady] = useState(false);
-  const [preloadProgress, setPreloadProgress] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
   const releasePreloadRef = useRef<(() => void) | null>(null);
   const completedPreloadKeyRef = useRef<string | null>(null);
   const posterPathsRef = useRef(posterPathsForPreload);
@@ -1363,7 +1329,6 @@ export function FootageGrid({
     if (itemCount === 0) {
       completedPreloadKeyRef.current = null;
       setGridReady(false);
-      setPreloadProgress(null);
       return;
     }
 
@@ -1372,19 +1337,20 @@ export function FootageGrid({
       return;
     }
 
+    const adopted = takePosterWarmup(preloadKey);
+    if (adopted) {
+      releasePreloadRef.current?.();
+      releasePreloadRef.current = adopted;
+      completedPreloadKeyRef.current = preloadKey;
+      setGridReady(true);
+      return;
+    }
+
     setGridReady(false);
     const paths = posterPathsRef.current;
-    setPreloadProgress({ done: 0, total: paths.length });
-
     const signal = { cancelled: false };
 
-    void preloadPosters(
-      paths,
-      (done, total) => {
-        if (!signal.cancelled) setPreloadProgress({ done, total });
-      },
-      signal,
-    ).then((cleanup) => {
+    void preloadPosters(paths, () => {}, signal).then((cleanup) => {
       if (signal.cancelled) {
         cleanup();
         return;
@@ -1426,7 +1392,7 @@ export function FootageGrid({
     );
   }
 
-  if (!gridReady) {
+  if (!gridReady && !chipsMode) {
     return (
       <div ref={rootRef}>
         <GridSkeleton
@@ -1434,7 +1400,6 @@ export function FootageGrid({
           columns={gridColumns}
           accessUi={accessUi}
           stickySectionTitles={stickySectionTitles}
-          progress={preloadProgress}
         />
       </div>
     );

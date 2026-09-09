@@ -15,14 +15,20 @@ import { FootagesPanel } from "@/footages";
 import { usePackWorkspace } from "@/lib/use-pack-workspace";
 import { asBool, readPrefSettings } from "@/lib/api/preferences";
 import { cn } from "@/lib/utils";
-import { BRAND } from "@brands";
 import {
   GalAccountZone,
   type GalAccountTab,
 } from "./GalAccountZone";
 import { GalProfileMenu } from "./GalProfileMenu";
 import { GalEffectsWorkspace } from "./GalEffectsWorkspace";
+import { GalBootScreen } from "./GalBootScreen";
 import { GalScriptsPanel } from "./scripts/GalScriptsPanel";
+import {
+  collectPosterPathsForPreload,
+  holdPosterWarmup,
+  posterWarmupIdentity,
+  preloadPosters,
+} from "@/lib/utils/preview-preload";
 import logo from "./assets/logo.png";
 import tabEffects from "./assets/tab-effects.png";
 import tabStock from "./assets/tab-stock.png";
@@ -103,116 +109,36 @@ function DownloadFloat() {
   );
 }
 
-function AssetsSyncOverlay({
-  ready,
-  sync,
-  structureLoading,
-  onRetry,
-}: {
-  ready: boolean;
-  sync: {
-    phase: string;
-    total: number;
-    done: number;
-    current?: string;
-    error?: string;
-  } | null;
-  structureLoading: boolean;
-  onRetry: () => void;
-}) {
-  if (ready) return null;
+function galBootErrorMessage(code?: string): string {
+  if (code === "NO_OFFLINE_ASSETS") {
+    return "Required files are missing. Try again.";
+  }
+  if (code === "UNAUTHORIZED") {
+    return "Session expired — sign in again, then retry.";
+  }
+  if (code === "NO_INSTALL_ROOT") {
+    return "Could not resolve a download folder.";
+  }
+  return code || "Something went wrong while starting. Try again.";
+}
 
-  const phase = sync?.phase;
-  const isError = phase === "error";
-  const total = sync?.total ?? 0;
-  const done = sync?.done ?? 0;
-  const pct =
-    total > 0
-      ? Math.max(0, Math.min(100, Math.round((done / total) * 100)))
-      : phase === "checking" || structureLoading || !sync
-        ? 8
-        : 0;
-
-  const title = isError
-    ? "Couldn’t download media assets"
-    : phase === "downloading"
-      ? "Downloading media assets"
-      : "Preparing media assets";
-
-  const detail = isError
-    ? sync?.error === "NO_OFFLINE_ASSETS"
-      ? "The server returned no offline media for this host."
-      : sync?.error === "UNAUTHORIZED"
-        ? "Session expired — sign in again, then retry."
-        : sync?.error || "Something went wrong while syncing."
-    : phase === "downloading" && total > 0
-      ? `${done} of ${total} files`
-      : "Needed once so Premiere can relink project footage.";
-
-  const fileHint =
-    !isError && sync?.current
-      ? sync.current.replace(/^Projects\/_Assets\//, "").split("/").pop()
-      : null;
-
-  return (
-    <div
-      className="gal-assets-gate"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="gal-assets-gate-title"
-      aria-busy={!isError}
-    >
-      <div className="gal-assets-gate__card">
-        <img
-          className="gal-assets-gate__logo"
-          src={logo}
-          alt=""
-          draggable={false}
-        />
-        <h2 id="gal-assets-gate-title" className="gal-assets-gate__title">
-          {title}
-        </h2>
-        <p className="gal-assets-gate__detail">{detail}</p>
-        {fileHint ? (
-          <p className="gal-assets-gate__file" title={sync?.current}>
-            {fileHint}
-          </p>
-        ) : null}
-
-        {!isError ? (
-          <div
-            className="gal-assets-gate__bar"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={pct}
-          >
-            <div
-              className="gal-assets-gate__bar-fill"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        ) : null}
-        <p className="gal-assets-gate__pct">
-          {isError ? "Download incomplete" : phase === "downloading" ? `${pct}%` : "Please wait…"}
-        </p>
-
-        {isError ? (
-          <button
-            type="button"
-            className="gal-assets-gate__retry"
-            onClick={onRetry}
-          >
-            Retry download
-          </button>
-        ) : (
-          <p className="gal-assets-gate__hint">
-            Effects stay locked until media finishes downloading.
-          </p>
-        )}
-      </div>
-    </div>
-  );
+function computeGalBootPercent(args: {
+  authReady: boolean;
+  catalogReady: boolean;
+  waitForAssets: boolean;
+  assetsFrac: number;
+  previewFrac: number;
+}): number {
+  if (!args.authReady) return 6;
+  let pct = 10;
+  pct += args.catalogReady ? 25 : 6;
+  if (args.waitForAssets) {
+    pct += Math.round(20 * Math.max(0, Math.min(1, args.assetsFrac)));
+  } else {
+    pct += 20;
+  }
+  pct += Math.round(44 * Math.max(0, Math.min(1, args.previewFrac)));
+  return Math.max(4, Math.min(98, pct));
 }
 
 function GalStatusToast() {
@@ -245,8 +171,17 @@ function GalShell() {
   const [nav, setNav] = useState<GalNav>("effects");
   const [overlay, setOverlay] = useState<GalOverlay>(null);
   const [compactTabs, setCompactTabs] = useState(false);
+  const [previewFrac, setPreviewFrac] = useState(0);
+  const [previewDone, setPreviewDone] = useState(false);
+  const [bootPct, setBootPct] = useState(4);
   const shellRef = useRef<HTMLDivElement>(null);
+  const bootPctRef = useRef(4);
+  const uiReadyRef = useRef(false);
+  const sectionsRef = useRef<ReturnType<typeof usePackWorkspace>["sections"]>(
+    [],
+  );
   const workspace = usePackWorkspace();
+  sectionsRef.current = workspace.sections;
   const {
     localVersion,
     updateVersion,
@@ -286,16 +221,131 @@ function GalShell() {
     [setShowFavoritesOnly],
   );
 
-  if (!authReady) {
-    return (
-      <div className="gal-shell gal-shell--boot">
-        <img className="gal-toolbar__logo" src={logo} alt="" />
-        <p>Starting {BRAND.panelDisplayName}…</p>
-      </div>
+  const catalogReady = !workspace.structureLoading;
+  const waitForAssets = signedIn && !workspace.galAssetsReady;
+  const assetsError =
+    workspace.galAssetsSync?.phase === "error"
+      ? galBootErrorMessage(workspace.galAssetsSync.error)
+      : null;
+  const assetsFrac =
+    !waitForAssets
+      ? 1
+      : workspace.galAssetsSync && workspace.galAssetsSync.total > 0
+        ? workspace.galAssetsSync.done / workspace.galAssetsSync.total
+        : workspace.galAssetsSync?.phase === "checking"
+          ? 0.12
+          : 0.04;
+  const bootReady =
+    signedIn &&
+    catalogReady &&
+    !waitForAssets &&
+    previewDone &&
+    !assetsError;
+
+  useEffect(() => {
+    if (!authReady || !signedIn) {
+      uiReadyRef.current = false;
+      bootPctRef.current = 4;
+      setBootPct(4);
+      setPreviewDone(false);
+      setPreviewFrac(0);
+    }
+  }, [authReady, signedIn]);
+
+  useEffect(() => {
+    if (bootReady) uiReadyRef.current = true;
+  }, [bootReady]);
+
+  useEffect(() => {
+    if (uiReadyRef.current) return;
+    const next = computeGalBootPercent({
+      authReady,
+      catalogReady: catalogReady && signedIn,
+      waitForAssets,
+      assetsFrac,
+      previewFrac,
+    });
+    const clipped = Math.max(bootPctRef.current, next);
+    bootPctRef.current = clipped;
+    setBootPct(clipped);
+  }, [
+    authReady,
+    signedIn,
+    catalogReady,
+    waitForAssets,
+    assetsFrac,
+    previewFrac,
+  ]);
+
+  useEffect(() => {
+    if (!authReady || !signedIn || uiReadyRef.current) return;
+    if (workspace.structureLoading) return;
+    if (workspace.tree.length > 0 && !workspace.activeRootId) return;
+
+    const rootId = workspace.activeRootId || "all";
+    const identity = posterWarmupIdentity(
+      rootId,
+      workspace.assetsPath,
+      workspace.assetsBaseUrl || "",
     );
+    const paths = collectPosterPathsForPreload(sectionsRef.current, {
+      assetsPath: workspace.assetsPath,
+      assetsBaseUrl: workspace.assetsBaseUrl,
+      assetsHost: workspace.assetsHost,
+      settings: workspace.packSettings,
+    });
+
+    const signal = { cancelled: false };
+    setPreviewDone(false);
+    setPreviewFrac(paths.length === 0 ? 1 : 0);
+
+    void preloadPosters(
+      paths,
+      (done, total) => {
+        if (signal.cancelled) return;
+        setPreviewFrac(total > 0 ? done / total : 1);
+      },
+      signal,
+    ).then((cleanup) => {
+      if (signal.cancelled) {
+        cleanup();
+        return;
+      }
+      holdPosterWarmup(identity, cleanup);
+      setPreviewFrac(1);
+      setPreviewDone(true);
+    });
+
+    return () => {
+      signal.cancelled = true;
+    };
+  }, [
+    authReady,
+    signedIn,
+    workspace.structureLoading,
+    workspace.tree.length,
+    workspace.activeRootId,
+    workspace.assetsPath,
+    workspace.assetsBaseUrl,
+    workspace.assetsHost,
+    workspace.packSettings,
+  ]);
+
+  if (!authReady || (signedIn && !bootReady && !assetsError)) {
+    return <GalBootScreen percent={bootPct} />;
   }
 
   if (!signedIn) return <LoginScreen />;
+
+  if (assetsError && !workspace.galAssetsReady) {
+    return (
+      <GalBootScreen
+        percent={bootPct}
+        error={assetsError}
+        onRetry={() => workspace.retryGalAssetsSync()}
+      />
+    );
+  }
 
   return (
     <div className="gal-shell" ref={shellRef}>
@@ -396,12 +446,6 @@ function GalShell() {
       </div>
 
       <DownloadFloat />
-      <AssetsSyncOverlay
-        ready={workspace.galAssetsReady}
-        sync={workspace.galAssetsSync}
-        structureLoading={workspace.structureLoading}
-        onRetry={() => workspace.retryGalAssetsSync()}
-      />
       <GalStatusToast />
     </div>
   );

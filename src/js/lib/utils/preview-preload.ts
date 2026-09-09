@@ -2,18 +2,99 @@
  * Eager poster preload for a root category before the grid mounts.
  * Warms disk cache (HTTPS) + blob object URLs so cards can sync-retain on paint.
  */
+import { packItemIsAudio } from "@/lib/utils/pack-apply-paths";
 import {
   loadPreviewObjectUrl,
+  packPrefersWebmPreview,
   releasePreviewObjectUrl,
+  resolveItemPreviewMedia,
+  resolveItemRemotePreviewMedia,
 } from "@/lib/utils/pack-preview";
+import type { PackHostId } from "@/lib/utils/pack-host";
+import type { PackContentSection } from "@/lib/utils/pack-tree";
+import type { PackSettings } from "@/lib/utils/pack-types";
 import { ensurePreviewCached } from "@/lib/utils/preview-disk-cache";
 
 /** Max posters held warm before showing the grid (rest load lazily). */
 export const PRELOAD_CAP = 500;
 
 const HTTPS_URL_RE = /^https?:\/\//i;
+const SOUND_FX_LABEL_RE = /sound\s*fx/i;
 
 export type PreloadSignal = { cancelled: boolean };
+
+export type CollectPosterPathsOpts = {
+  assetsPath: string;
+  assetsBaseUrl?: string;
+  assetsHost?: PackHostId | null;
+  settings?: PackSettings | null;
+};
+
+/** Skip Sound FX / audio cards — they use a local icon, not a poster. */
+export function collectPosterPathsForPreload(
+  sections: PackContentSection[],
+  opts: CollectPosterPathsOpts,
+): string[] {
+  const preferWebm = packPrefersWebmPreview(opts.settings);
+  const useMp4 = opts.settings?.inside_option_sets?.use_webm_preview === "mp4";
+  const host = opts.assetsHost === "AE" ? "AE" : "PR";
+  const paths: string[] = [];
+
+  for (const section of sections) {
+    const skipSection = SOUND_FX_LABEL_RE.test(section.title);
+    for (const item of section.items) {
+      if (paths.length >= PRELOAD_CAP) return paths;
+      if (
+        skipSection ||
+        packItemIsAudio(item) ||
+        item.pathSegments.some((seg) => SOUND_FX_LABEL_RE.test(seg))
+      ) {
+        continue;
+      }
+
+      let posterPath: string | null = null;
+      if (opts.assetsBaseUrl) {
+        posterPath = resolveItemRemotePreviewMedia(item, opts.assetsBaseUrl, {
+          preferWebm,
+          useMp4,
+          host,
+        }).posterPath;
+      } else if (opts.assetsPath) {
+        posterPath = resolveItemPreviewMedia(item, opts.assetsPath, {
+          preferWebm,
+          useMp4,
+        }).posterPath;
+      }
+      if (posterPath) paths.push(posterPath);
+    }
+  }
+  return paths;
+}
+
+export function posterWarmupIdentity(
+  rootId: string,
+  assetsPath: string,
+  assetsBaseUrl: string,
+): string {
+  return `${rootId}|${assetsPath}|${assetsBaseUrl}`;
+}
+
+let heldWarmup: { identity: string; cleanup: () => void } | null = null;
+
+/** Keep boot-warmed blob retains until the live grid takes them over. */
+export function holdPosterWarmup(identity: string, cleanup: () => void): void {
+  if (heldWarmup && heldWarmup.identity !== identity) {
+    heldWarmup.cleanup();
+  }
+  heldWarmup = { identity, cleanup };
+}
+
+export function takePosterWarmup(identity: string): (() => void) | null {
+  if (!heldWarmup || heldWarmup.identity !== identity) return null;
+  const cleanup = heldWarmup.cleanup;
+  heldWarmup = null;
+  return cleanup;
+}
 
 /**
  * Warm posters until they are sync-retainable blob URLs.

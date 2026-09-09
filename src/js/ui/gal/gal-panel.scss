@@ -25,14 +25,114 @@
 .gal-shell--boot {
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  color: rgba(255, 255, 255, 0.7);
+  background: #17181c;
 }
 
-.gal-shell--boot p {
+.gal-boot {
+  display: flex;
+  width: min(220px, 72%);
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+
+.gal-boot__mark {
+  position: relative;
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+}
+
+.gal-boot__glow {
+  position: absolute;
+  inset: -10px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    rgba(195, 31, 147, 0.42) 0%,
+    rgba(107, 20, 208, 0.12) 55%,
+    transparent 70%
+  );
+  animation: gal-boot-breathe 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.gal-boot__logo {
+  position: relative;
+  z-index: 1;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.4));
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.gal-boot__track {
+  width: 100%;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.gal-boot__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #c31f93, #6b14d0);
+  box-shadow: 0 0 12px rgba(195, 31, 147, 0.45);
+  transition: width 280ms ease-out;
+}
+
+.gal-boot__error {
   margin: 0;
+  max-width: 260px;
   font-size: 12px;
   font-weight: 500;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
+.gal-boot__retry {
+  margin-top: 4px;
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c31f93, #6b14d0);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gal-boot__retry:hover {
+  filter: brightness(1.08);
+}
+
+@keyframes gal-boot-breathe {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gal-boot__glow {
+    animation: none;
+    opacity: 0.75;
+    transform: none;
+  }
+
+  .gal-boot__fill {
+    transition: none;
+  }
 }
 
 .gal-toolbar {

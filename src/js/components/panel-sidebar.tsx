@@ -16,14 +16,16 @@ import {
   Sparkles,
   Star,
   Loader2,
-  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { BRAND, storageKey } from "@brands";
 import * as panelStore from "@/lib/userdata-store";
 import type { PackTreeIcon, PackTreeNode } from "@/lib/utils/pack-types";
-import { resolveGalRootCategoryIcon } from "@/ui/gal/gal-category-icons";
+import {
+  resolveGalRootCategoryIcon,
+  type GalCategoryIcon,
+} from "@/ui/gal/gal-category-icons";
 import "./panel-sidebar.scss";
 
 const SIDEBAR_WIDTH_KEY = storageKey("sidebarWidth");
@@ -90,7 +92,7 @@ function TreeIcon({
   icon: PackTreeIcon;
   active?: boolean;
   emphasized?: boolean;
-  RootIcon?: LucideIcon;
+  RootIcon?: GalCategoryIcon;
 }) {
   const className = cn(
     "size-3.5 shrink-0 sidebar-tree__icon",
