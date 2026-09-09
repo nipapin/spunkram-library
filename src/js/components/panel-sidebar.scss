@@ -14,7 +14,7 @@
 }
 
 [data-brand="gal"] aside nav::-webkit-scrollbar-track {
-  background: #17181c;
+  background: transparent;
 }
 
 [data-brand="gal"] aside nav::-webkit-scrollbar-thumb {
@@ -26,4 +26,89 @@
   display: none;
   width: 0;
   height: 0;
+}
+
+/* Gal tree: active pill, nested left border, nest lines, parent contrast */
+[data-brand="gal"] .sidebar-tree--gal {
+  background: transparent;
+}
+
+[data-brand="gal"] .sidebar-tree__row {
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+[data-brand="gal"] .sidebar-tree__row:not(.is-root-active):not(.is-active):hover {
+  background: rgba(195, 31, 147, 0.16);
+  color: #fff;
+}
+
+[data-brand="gal"] .sidebar-tree__row:not(.is-root-active):not(.is-active):hover .sidebar-tree__icon,
+[data-brand="gal"] .sidebar-tree__row:not(.is-root-active):not(.is-active):hover .sidebar-tree__label,
+[data-brand="gal"] .sidebar-tree__row:not(.is-root-active):not(.is-active):hover .sidebar-tree__chevron-icon {
+  color: #fff;
+}
+
+[data-brand="gal"] .sidebar-tree__row.is-root-active {
+  background: var(--accent-gradient, linear-gradient(to right, #c31f93, #6b14d0));
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 0 12px rgba(195, 31, 147, 0.35);
+}
+
+[data-brand="gal"] .sidebar-tree__row.is-root-active .sidebar-tree__icon,
+[data-brand="gal"] .sidebar-tree__row.is-root-active .sidebar-tree__label,
+[data-brand="gal"] .sidebar-tree__row.is-root-active .sidebar-tree__chevron-icon {
+  color: #fff;
+}
+
+[data-brand="gal"] .sidebar-tree__row.is-root-active .sidebar-tree__count {
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+}
+
+[data-brand="gal"] .sidebar-tree__row.is-active:not(.is-root) {
+  box-shadow: inset 2px 0 0 #c31f93;
+  border-radius: 0 999px 999px 0;
+  background: rgba(195, 31, 147, 0.08);
+  color: #fff;
+  font-weight: 600;
+}
+
+[data-brand="gal"] .sidebar-tree__row.is-active:not(.is-root) .sidebar-tree__icon {
+  color: #c31f93;
+}
+
+[data-brand="gal"] .sidebar-tree__row.is-root .sidebar-tree__icon,
+[data-brand="gal"] .sidebar-tree__row.is-root .sidebar-tree__label,
+[data-brand="gal"] .sidebar-tree__row.is-parent .sidebar-tree__icon,
+[data-brand="gal"] .sidebar-tree__row.is-ancestor:not(.is-root-active) .sidebar-tree__icon {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+[data-brand="gal"] .sidebar-tree__row.is-parent .sidebar-tree__label,
+[data-brand="gal"] .sidebar-tree__row.is-ancestor:not(.is-root-active) .sidebar-tree__label {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+[data-brand="gal"] .sidebar-tree__chevron-icon {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+[data-brand="gal"] .sidebar-tree__row.is-root-active .sidebar-tree__chevron-icon {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Nesting connector lines under open folders */
+[data-brand="gal"] .sidebar-tree__kids-inner {
+  position: relative;
+  margin-left: 18px;
+  padding-left: 10px;
+  border-left: 1px dotted rgba(255, 255, 255, 0.22);
+}
+
+[data-brand="gal"] .sidebar-tree__kids-inner .sidebar-tree__kids-inner {
+  margin-left: 14px;
 }

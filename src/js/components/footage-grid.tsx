@@ -906,8 +906,8 @@ function ChipsPreviewChrome({
         {m.locked ? (
           <button
             type="button"
-            aria-label="Unlock with Gal Toolkit Max"
-            title="Unlock with Gal Toolkit Max"
+            aria-label="Unlock with Gal Toolkit MAX"
+            title="Unlock with Gal Toolkit MAX"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
@@ -1093,25 +1093,69 @@ function SectionTitle({
   count: number;
   sticky: boolean;
 }) {
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+
+  useEffect(() => {
+    if (!sticky) return;
+    const titleEl = titleRef.current;
+    const sentinel = sentinelRef.current;
+    if (!titleEl || !sentinel) return;
+    const scroller = closestScrollParent(titleEl);
+    if (!scroller) return;
+
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const sentinelTop = sentinel.getBoundingClientRect().top;
+      const rootTop = scroller.getBoundingClientRect().top;
+      setStuck(sentinelTop <= rootTop + 0.5);
+    };
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(update);
+    };
+
+    update();
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      scroller.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [sticky, title, count]);
+
+  if (!sticky) {
+    return (
+      <h3 className="mb-1.5 px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground">
+        {title}
+        <span className="ml-1.5 font-medium text-muted-foreground/70">
+          {count}
+        </span>
+      </h3>
+    );
+  }
+
   return (
-    <h3
-      className={
-        sticky
-          ? "gal-footage-section__title"
-          : "mb-1.5 px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground"
-      }
-    >
-      {title}
-      <span
-        className={
-          sticky
-            ? "gal-footage-section__title-count"
-            : "ml-1.5 font-medium text-muted-foreground/70"
-        }
+    <>
+      <div
+        ref={sentinelRef}
+        className="gal-footage-section__stick-sentinel"
+        aria-hidden
+      />
+      <h3
+        ref={titleRef}
+        className={cn(
+          "gal-footage-section__title",
+          stuck && "is-stuck",
+        )}
       >
-        {count}
-      </span>
-    </h3>
+        {title}
+        <span className="gal-footage-section__title-count">{count}</span>
+      </h3>
+    </>
   );
 }
 
@@ -1388,9 +1432,9 @@ export function FootageGrid({
       {chipsMode && (
         <ConfirmDialog
           open={subscribeOpen}
-          title="Gal Toolkit Max"
-          message="Subscribe to Gal Toolkit Max to unlock this item and the full library."
-          confirmLabel="Get Max"
+          title="Gal Toolkit MAX"
+          message="Subscribe to Gal Toolkit MAX to unlock this item and the full library."
+          confirmLabel="Get MAX"
           cancelLabel="Not now"
           onCancel={() => setSubscribeOpen(false)}
           onConfirm={() => {

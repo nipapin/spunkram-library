@@ -77,8 +77,7 @@
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
   }
 
-  &__volume-range,
-  &__scale {
+  &__volume-range {
     width: 90px;
     height: 4px;
     cursor: pointer;
@@ -89,8 +88,7 @@
     outline: none;
   }
 
-  &__volume-range::-webkit-slider-thumb,
-  &__scale::-webkit-slider-thumb {
+  &__volume-range::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 12px;
@@ -99,6 +97,10 @@
     border-radius: 999px;
     background: #c31f93;
     cursor: pointer;
+  }
+
+  &__scale {
+    gap: 4px;
   }
 
   &__new {
@@ -146,9 +148,5 @@
   &__hint--success {
     opacity: 1;
     color: #6ee7b7;
-  }
-
-  &__grid-icon {
-    color: rgba(255, 255, 255, 0.4);
   }
 }

@@ -1,11 +1,13 @@
 import {
   CirclePlay,
-  Frame,
-  LayoutGrid,
+  Grid2x2,
+  Grid3x3,
   Pause,
+  Square,
   Unlock,
   Volume2,
   VolumeX,
+  type LucideIcon,
 } from "lucide-react";
 import {
   THUMB_SIZE_MAX,
@@ -13,6 +15,16 @@ import {
   usePanelUI,
 } from "@/lib/panel-ui-context";
 import "./gal-footer.scss";
+
+const SCALE_BUTTONS: Array<{
+  size: number;
+  label: string;
+  Icon: LucideIcon;
+}> = [
+  { size: 1, label: "3 columns", Icon: Grid3x3 },
+  { size: 2, label: "2 columns", Icon: Grid2x2 },
+  { size: 3, label: "1 column", Icon: Square },
+];
 
 export function GalFooter() {
   const {
@@ -22,7 +34,6 @@ export function GalFooter() {
     thumbSize,
     gridColumns,
     hoveredItemName,
-    focusMode,
     showNewBadges,
     showAvailableOnly,
     statusMessage,
@@ -30,7 +41,6 @@ export function GalFooter() {
     toggleAudio,
     setPreviewVolume,
     setThumbSize,
-    toggleFocusMode,
     setShowNewBadges,
     toggleShowAvailableOnly,
   } = usePanelUI();
@@ -145,33 +155,32 @@ export function GalFooter() {
         {hintText}
       </div>
 
-      <div className="gal-footer-bar__cluster">
-        <button
-          type="button"
-          aria-label="Full size"
-          title="Hide sidebar"
-          aria-pressed={focusMode}
-          onClick={toggleFocusMode}
-          className={
-            focusMode
-              ? "gal-footer-bar__btn gal-footer-bar__btn--on"
-              : "gal-footer-bar__btn"
-          }
-        >
-          <Frame className="size-3.5" />
-        </button>
-        <input
-          type="range"
-          min={THUMB_SIZE_MIN}
-          max={THUMB_SIZE_MAX}
-          step={1}
-          value={thumbSize}
-          onChange={(e) => setThumbSize(Number(e.target.value))}
-          aria-label="Grid scale"
-          aria-valuetext={`size ${thumbSize}, ${gridColumns} columns`}
-          className="gal-footer-bar__scale"
-        />
-        <LayoutGrid className="gal-footer-bar__grid-icon size-3.5" aria-hidden />
+      <div
+        className="gal-footer-bar__cluster gal-footer-bar__scale"
+        role="radiogroup"
+        aria-label="Grid scale"
+        aria-valuetext={`${gridColumns} columns`}
+      >
+        {SCALE_BUTTONS.filter(
+          (d) => d.size >= THUMB_SIZE_MIN && d.size <= THUMB_SIZE_MAX,
+        ).map(({ size, label, Icon }) => (
+          <button
+            key={size}
+            type="button"
+            role="radio"
+            aria-checked={thumbSize === size}
+            aria-label={label}
+            title={label}
+            className={
+              thumbSize === size
+                ? "gal-footer-bar__btn gal-footer-bar__btn--on"
+                : "gal-footer-bar__btn"
+            }
+            onClick={() => setThumbSize(size)}
+          >
+            <Icon className="size-3.5" aria-hidden />
+          </button>
+        ))}
       </div>
     </footer>
   );

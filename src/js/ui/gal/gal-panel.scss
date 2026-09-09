@@ -36,21 +36,18 @@
 }
 
 .gal-toolbar {
+  position: relative;
+  z-index: 100;
   display: flex;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
   padding: 10px 14px;
-  /* Original Gal Toolkit `#tools ul.changeViewSwitcher` — purple chrome bar */
-  background-color: #6324b1;
-  background-image: linear-gradient(
-    105deg,
-    #4a1780 0%,
-    #6324b1 32%,
-    #8a1f8e 58%,
-    #b71b65 82%,
-    #c31f93 100%
-  );
+  background-color: #1a0a2e;
+  background-image: url("./assets/galheader.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   border-bottom: 1px solid rgba(255, 255, 255, 0.125);
 }
 
@@ -77,8 +74,28 @@
   user-select: none;
 }
 
+.gal-toolbar__version {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .gal-toolbar .gal-pills {
   margin-left: auto;
+}
+
+.gal-toolbar .gal-profile-menu {
+  margin-left: 6px;
 }
 
 .gal-pills {
@@ -182,10 +199,12 @@
   flex: 1 1 auto;
   height: 28px;
   padding: 0 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
-  background: #222;
-  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 
   input {
     min-width: 0;
@@ -198,7 +217,7 @@
     outline: none;
 
     &::placeholder {
-      color: rgba(255, 255, 255, 0.35);
+      color: rgba(255, 255, 255, 0.45);
     }
   }
 
@@ -208,7 +227,7 @@
     border: 0;
     padding: 0;
     background: transparent;
-    color: rgba(255, 255, 255, 0.45);
+    color: rgba(255, 255, 255, 0.55);
     cursor: pointer;
   }
 }
@@ -219,18 +238,20 @@
   height: 28px;
   place-items: center;
   flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
-  color: rgba(255, 255, 255, 0.45);
-  background: #222;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 
   &.is-active,
   &:hover {
-    color: #c31f93;
-    border-color: rgba(195, 31, 147, 0.45);
-    background: rgba(195, 31, 147, 0.12);
+    color: #ff7bd8;
+    border-color: rgba(255, 123, 216, 0.55);
+    background: rgba(195, 31, 147, 0.28);
   }
 }
 
@@ -241,13 +262,21 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--gal-spot);
+  background:
+    radial-gradient(140% 90% at 8% 0%, rgba(107, 20, 208, 0.55) 0%, transparent 48%),
+    radial-gradient(120% 70% at 100% 12%, rgba(195, 31, 147, 0.28) 0%, transparent 42%),
+    linear-gradient(165deg, #24102f 0%, #17101f 38%, #121214 100%);
 
   > * {
     flex: 1;
     width: 100%;
     min-width: 0;
   }
+}
+
+[data-brand="gal"] .gallery-card:hover {
+  outline: 2px solid #c31f93;
+  outline-offset: 0;
 }
 
 .gal-effects {
@@ -265,14 +294,17 @@
 }
 
 .gal-effects__main {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
   /* No top padding — sticky section titles must sit flush under the toolbar. */
-  padding: 0 8px 8px;
+  padding: 0 0 8px;
   scrollbar-width: thin;
-  scrollbar-color: #c31f93 var(--gal-spot);
+  scrollbar-color: #c31f93 transparent;
+  background:
+    radial-gradient(100% 60% at 50% 0%, rgba(107, 20, 208, 0.22) 0%, transparent 55%);
 }
 
 @keyframes gal-grid-enter {
@@ -336,24 +368,54 @@
   width: 100%;
 }
 
+.gal-footage-section__stick-sentinel {
+  height: 1px;
+  margin-bottom: -1px;
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .gal-footage-section__title {
   position: sticky;
   top: 0;
-  /* Above card chips (z-10), favorite, and Import (z-20). */
-  z-index: 40;
+  /* Above card chips (z-10), favorite, and Import (z-20). Below toolbar dropdown. */
+  z-index: 30;
   display: flex;
   align-items: center;
   /* Same vertical band as sidebar tools (py-2 + 28px search + py-2). */
   box-sizing: border-box;
+  width: 100%;
   min-height: 44px;
   margin: 0 0 6px;
-  padding: 0 4px;
+  padding: 0 12px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.72);
-  background: var(--gal-spot);
-  backdrop-filter: blur(0);
+  color: rgba(255, 255, 255, 0.82);
+  background: transparent;
+  border-bottom: 1px solid transparent;
+  backdrop-filter: none;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    backdrop-filter 0.12s ease;
+}
+
+.gal-footage-section__title.is-stuck {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(195, 31, 147, 0.18) 0%,
+      rgba(107, 20, 208, 0.12) 42%,
+      rgba(18, 16, 28, 0.92) 100%
+    ),
+    rgba(18, 16, 28, 0.88);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+.gal-footage-section .grid {
+  padding: 0 8px;
 }
 
 .gal-footage-section__title-count {
@@ -384,6 +446,39 @@
   background: rgba(18, 19, 24, 0.95);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   cursor: pointer;
+}
+
+.gal-jump-group-float {
+  position: sticky;
+  bottom: 12px;
+  float: right;
+  clear: both;
+  z-index: 35;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  margin: 0 12px 0 auto;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(22, 16, 32, 0.55);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+
+  &:hover {
+    border-color: rgba(255, 123, 216, 0.55);
+    background: rgba(195, 31, 147, 0.35);
+    transform: translateY(-1px);
+  }
 }
 
 .gal-download-float__ring {

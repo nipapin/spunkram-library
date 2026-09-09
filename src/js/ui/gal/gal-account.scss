@@ -47,6 +47,7 @@
 
 .gal-account__profile {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
@@ -374,4 +375,157 @@
       cursor: pointer;
     }
   }
+}
+
+/* Toolbar profile dropdown */
+.gal-profile-menu {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.gal-profile-menu__trigger {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover,
+  &[aria-expanded="true"] {
+    border-color: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 0 12px rgba(255, 123, 216, 0.45);
+  }
+}
+
+.gal-profile-menu__avatar {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #c31f93 0%, #6b14d0 100%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.gal-profile-menu__dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 200;
+  width: 220px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(22, 16, 32, 0.62);
+  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.gal-profile-menu__card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.gal-profile-menu__card-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #c31f93 0%, #6b14d0 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.gal-profile-menu__card-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.gal-profile-menu__email {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.gal-profile-menu__plan {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.gal-profile-menu__plan-value {
+  color: #ff5bcf;
+  font-weight: 600;
+
+  &.is-muted {
+    color: rgba(255, 255, 255, 0.55);
+  }
+}
+
+.gal-profile-menu__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(195, 31, 147, 0.14);
+    color: #fff;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.gal-profile-menu__item--danger {
+  color: #fda4af;
+
+  &:hover {
+    background: rgba(248, 113, 113, 0.12);
+    color: #fecaca;
+  }
+}
+
+.gal-profile-menu__divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(255, 255, 255, 0.08);
 }

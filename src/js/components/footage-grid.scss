@@ -2,3 +2,8 @@
    That node is the IntersectionObserver target. In CEP/CEF, skipped
    contents often never get an "entered viewport" callback, so posters
    stay unloaded while lock / Import chrome still paint. */
+
+[data-brand="gal"] .footage-preview-card:hover {
+  outline: 2px solid #c31f93;
+  outline-offset: 0;
+}

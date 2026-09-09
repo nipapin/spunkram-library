@@ -1,0 +1,142 @@
+.gal-account-zone {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(107, 20, 208, 0.18) 0%, transparent 50%),
+    #121214;
+}
+
+.gal-account-zone__rail {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 148px;
+  min-height: 0;
+  padding: 12px 10px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.gal-account-zone__rail-top {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.gal-account-zone__back {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(195, 31, 147, 0.9);
+  cursor: pointer;
+
+  &:hover {
+    background: #d428a3;
+  }
+}
+
+.gal-account-zone__brand {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.gal-account-zone__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+}
+
+.gal-account-zone__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.62);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  &.is-active {
+    color: #fff;
+    background: rgba(195, 31, 147, 0.28);
+  }
+}
+
+.gal-account-zone__rail-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.gal-account-zone__logout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  color: #ff8a9b;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 90, 110, 0.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.gal-account-zone__version {
+  padding: 0 2px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.gal-account-zone__main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}

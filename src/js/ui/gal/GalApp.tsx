@@ -16,7 +16,11 @@ import { usePackWorkspace } from "@/lib/use-pack-workspace";
 import { asBool, readPrefSettings } from "@/lib/api/preferences";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@brands";
-import { GalSettings } from "./GalSettings";
+import {
+  GalAccountZone,
+  type GalAccountTab,
+} from "./GalAccountZone";
+import { GalProfileMenu } from "./GalProfileMenu";
 import { GalEffectsWorkspace } from "./GalEffectsWorkspace";
 import { GalScriptsPanel } from "./scripts/GalScriptsPanel";
 import logo from "./assets/logo.png";
@@ -26,6 +30,7 @@ import tabScripts from "./assets/tab-scripts.png";
 import "./gal-panel.scss";
 
 type GalNav = "effects" | "stock" | "scripts";
+type GalOverlay = GalAccountTab | null;
 
 const NAV: { id: GalNav; label: string; icon: string }[] = [
   { id: "effects", label: "Effects", icon: tabEffects },
@@ -238,7 +243,7 @@ function GalShell() {
   const { authReady, signedIn } = useAuth();
   const { setShowFavoritesOnly } = usePanelUI();
   const [nav, setNav] = useState<GalNav>("effects");
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [overlay, setOverlay] = useState<GalOverlay>(null);
   const [compactTabs, setCompactTabs] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   const workspace = usePackWorkspace();
@@ -274,7 +279,7 @@ function GalShell() {
 
   const onSelectNav = useCallback(
     (id: GalNav) => {
-      setSettingsOpen(false);
+      setOverlay(null);
       setNav(id);
       if (id !== "effects") setShowFavoritesOnly(false);
     },
@@ -294,12 +299,12 @@ function GalShell() {
 
   return (
     <div className="gal-shell" ref={shellRef}>
-      {!settingsOpen ? (
+      {!overlay ? (
         <header className="gal-toolbar">
           <button
             type="button"
             className="gal-toolbar__brand"
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => setOverlay("settings")}
             aria-label="Open settings"
           >
             <img
@@ -308,6 +313,9 @@ function GalShell() {
               alt=""
               draggable={false}
             />
+            <span className="gal-toolbar__version" title={`Panel v${localVersion}`}>
+              v{localVersion}
+            </span>
           </button>
           <div
             className={compactTabs ? "gal-pills is-compact" : "gal-pills"}
@@ -337,6 +345,10 @@ function GalShell() {
               </button>
             ))}
           </div>
+          <GalProfileMenu
+            onOpenProfile={() => setOverlay("profile")}
+            onOpenSettings={() => setOverlay("settings")}
+          />
         </header>
       ) : null}
 
@@ -363,9 +375,11 @@ function GalShell() {
       ) : null}
 
       <div className="gal-shell__body">
-        {settingsOpen ? (
-          <GalSettings
-            onBack={() => setSettingsOpen(false)}
+        {overlay ? (
+          <GalAccountZone
+            tab={overlay}
+            onTabChange={setOverlay}
+            onClose={() => setOverlay(null)}
             onPackReady={(meta) => {
               workspace.applyPack(meta);
             }}

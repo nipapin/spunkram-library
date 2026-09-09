@@ -1,24 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   Download,
   Folder,
   FolderOpen,
   Loader2,
-  LogOut,
-  Plus,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useDownloadManager } from "@/lib/download-manager-context";
 import { usePackagesPathGate } from "@/lib/packages-path-gate";
+import { useExtensionUpdate } from "@/lib/use-extension-update";
 import {
   asBool,
   clearPreferencesFile,
-  MAX_MOTIONFLOW_ACCOUNTS,
   type PrefSettings,
 } from "@/lib/api/preferences";
-import { getUserSystemData } from "@/lib/api/usp";
-import { parseDeviceFingerprint } from "@/lib/api/market-api";
 import { selectFolder } from "@/lib/utils/bolt";
 import {
   notifyPackagesRescan,
@@ -30,174 +26,45 @@ import {
   clearAllActivePackStorageKeys,
   currentPackHost,
 } from "@/lib/utils/pack-host";
-import {
-  GAL_DEV_PLANS,
-  galAccountPlanLabel,
-  resolveGalAccountPlan,
-  type GalAccountPlan,
-} from "@/lib/utils/gal-plan";
-import { isReleaseAdminEmail } from "@/api/update";
 import { readInstallablePackages } from "@/lib/utils/pack";
 import * as panelStore from "@/lib/userdata-store";
 import { BRAND } from "@brands";
-import { version as EXTENSION_VERSION } from "../../../shared/shared";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 import { openDirectoryInOs } from "./gal-fs";
 import aeIcon from "./assets/ae-icon.png";
 import prIcon from "./assets/pr-icon.png";
 import "./gal-settings.scss";
-import "./gal-account.scss";
-
-function accountInitial(email?: string | null, name?: string | null): string {
-  const source = (name || email || "?").trim();
-  return source.charAt(0).toUpperCase() || "?";
-}
-
-function realMacHex(raw?: string): string | null {
-  const hex = (raw || "").replace(/[^a-f0-9]/gi, "").toLowerCase();
-  return hex.length === 12 ? hex : null;
-}
-
-function uniqueSessionDevices<
-  T extends {
-    id: string;
-    ip: string;
-    user_fingerprint: string;
-    name?: string;
-    current?: boolean;
-  },
->(devices: T[], currentMac?: string): Array<T & { revokeIds: string[] }> {
-  const parent = devices.map((_, i) => i);
-  const find = (i: number): number => {
-    if (parent[i] !== i) parent[i] = find(parent[i]);
-    return parent[i];
-  };
-  const union = (a: number, b: number) => {
-    const pa = find(a);
-    const pb = find(b);
-    if (pa !== pb) parent[pa] = pb;
-  };
-  const byKey = new Map<string, number>();
-  const addKey = (key: string, index: number) => {
-    if (!key) return;
-    const existing = byKey.get(key);
-    if (existing == null) byKey.set(key, index);
-    else union(existing, index);
-  };
-
-  devices.forEach((device, index) => {
-    const fp = parseDeviceFingerprint(device.user_fingerprint || "");
-    const mac = realMacHex(fp.mac);
-    const ip = (device.ip || "").trim().toLowerCase();
-    const name = (device.name || fp.user || "").trim().toLowerCase();
-    if (mac) addKey(`mac:${mac}`, index);
-    if (device.current && currentMac) {
-      const localMac = realMacHex(currentMac);
-      if (localMac) addKey(`mac:${localMac}`, index);
-    }
-    if (name && ip) addKey(`name-ip:${name}|${ip}`, index);
-  });
-
-  const groups = new Map<number, T[]>();
-  devices.forEach((device, index) => {
-    const root = find(index);
-    const list = groups.get(root);
-    if (list) list.push(device);
-    else groups.set(root, [device]);
-  });
-
-  const currentMacHex = realMacHex(currentMac);
-  const unique: Array<T & { revokeIds: string[] }> = [];
-  for (const list of groups.values()) {
-    const preferred =
-      list.find((d) => d.current) ||
-      list.find(
-        (d) =>
-          realMacHex(parseDeviceFingerprint(d.user_fingerprint).mac) ===
-          currentMacHex,
-      ) ||
-      list[0];
-    unique.push({
-      ...preferred,
-      current:
-        list.some((d) => d.current) ||
-        list.some(
-          (d) =>
-            realMacHex(parseDeviceFingerprint(d.user_fingerprint).mac) ===
-            currentMacHex,
-        ) ||
-        preferred.current,
-      revokeIds: [...new Set(list.map((d) => d.id).filter(Boolean))],
-    });
-  }
-  unique.sort((a, b) => Number(Boolean(b.current)) - Number(Boolean(a.current)));
-  return unique;
-}
 
 export function GalSettings({
-  onBack,
   onPackReady,
 }: {
-  onBack: () => void;
   onPackReady?: (meta: InstalledPackMeta) => void;
 }) {
   const {
-    auth,
     prefs,
     setPrefs,
     signedIn,
     subscription,
-    logout,
-    revoke,
     refreshMarket,
     market,
-    savedAccounts,
-    addAccount,
-    switchAccount,
-    removeSavedAccount,
-    cancelLogin,
-    confirmReplaceDevice,
-    loginBusy,
-    loginCode,
-    loginDeviceLimit,
   } = useAuth();
   const { enqueue, jobs } = useDownloadManager();
   const { ensurePackagesPath } = usePackagesPathGate();
+  const {
+    localVersion,
+    updateVersion,
+    checkForUpdates,
+    checkBusy,
+    handleApplyUpdate,
+    updateBusy,
+    showUpdateBanner,
+  } = useExtensionUpdate();
   const [confirmReset, setConfirmReset] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [replacingId, setReplacingId] = useState<string | null>(null);
-  const sys = useMemo(() => getUserSystemData(), []);
   const host = currentPackHost();
   const hostIcon = host === "AE" ? aeIcon : prIcon;
-
-  const otherAccounts = useMemo(
-    () => savedAccounts.filter((a) => a.id !== auth.id),
-    [savedAccounts, auth.id],
-  );
-  const canAddAccount = savedAccounts.length < MAX_MOTIONFLOW_ACCOUNTS;
-  const showDeviceLimit = Boolean(loginBusy && loginDeviceLimit);
-
-  const isAdmin = isReleaseAdminEmail(auth.email);
-  const galPlan = useMemo(
-    () =>
-      resolveGalAccountPlan({
-        subscribed: subscription.subscribed,
-        purchases: subscription.purchases,
-        host,
-      }),
-    [subscription.subscribed, subscription.purchases, host],
-  );
-
-  function setAdminDevPlan(plan: GalAccountPlan) {
-    patch({ adminDevPlan: plan });
-  }
-
-  const sessionDevices = useMemo(
-    () => uniqueSessionDevices(subscription.devices, sys.mac),
-    [subscription.devices, sys.mac],
-  );
 
   const installed = useMemo(() => readInstallablePackages(host), [host, jobs]);
   const marketPack = useMemo(() => {
@@ -225,12 +92,6 @@ export function GalSettings({
 
   const packInstalled = installed.length > 0;
   const needsUpdate = !!marketPack && marketPack.action === "update";
-  const packageThumb =
-    marketPack?.image_url && marketPack.image_url.trim()
-      ? `${marketPack.image_url}${
-          marketPack.image_url.includes("?") ? "&" : "?"
-        }v=${encodeURIComponent(marketPack.version || "1")}`
-      : null;
 
   useEffect(() => {
     void refreshMarket(false);
@@ -321,195 +182,47 @@ export function GalSettings({
     });
   }
 
-  async function handleLogout() {
-    setBusy(true);
-    await logout();
-    setBusy(false);
-  }
-
-  async function handleAddAccount() {
-    if (!canAddAccount) {
-      setMessage(`You can save up to ${MAX_MOTIONFLOW_ACCOUNTS} accounts.`);
-      return;
-    }
-    setBusy(true);
-    setMessage(null);
-    const result = await addAccount();
-    setBusy(false);
-    setReplacingId(null);
-    if (!result.ok) setMessage(result.message || "Could not add account");
-    else setMessage(result.message || "Account added");
-  }
-
-  async function handleSwitchAccount(id: string) {
-    setBusy(true);
-    setMessage(null);
-    const result = await switchAccount(id);
-    setBusy(false);
-    setMessage(
-      result.ok
-        ? result.message || "Switched account"
-        : result.message || "Switch failed",
-    );
-  }
-
-  async function handleRemoveAccount(id: string) {
-    setBusy(true);
-    setMessage(null);
-    const result = await removeSavedAccount(id);
-    setBusy(false);
-    setMessage(result.ok ? "Account removed" : result.message || "Remove failed");
-  }
-
-  function handleRevokeAndContinue(deviceId: string) {
-    setReplacingId(deviceId);
-    setMessage("Disconnecting device and finishing sign-in…");
-    confirmReplaceDevice(deviceId);
-  }
-
-  async function handleRevoke(ids: string[]) {
-    setBusy(true);
-    setMessage(null);
-    let lastError: string | null = null;
-    for (const id of ids) {
-      const result = await revoke(id);
-      if (!result.ok) lastError = result.message || "Revoke failed";
-    }
-    setBusy(false);
-    if (lastError) setMessage(lastError);
-  }
-
-  const statusLabel = subscription.error
-    ? "Error"
-    : galAccountPlanLabel(galPlan);
-
-  const planAccent = !subscription.error && galPlan !== "free";
-
   const downloadLabel = activeJob
     ? activeJob.status === "installing"
       ? "Installing…"
       : `Downloading ${Math.round(activeJob.progress || 0)}%`
     : needsUpdate
-      ? "Update"
+      ? "Update pack"
       : packInstalled
         ? "Installed"
-        : "Download";
+        : "Download pack";
 
   const apiServer = Number(prefs.defaultApiServer) === 1 ? 1 : 0;
   const useSystemFonts = asBool(prefs.useSystemFonts);
+  const useProjectFolder = asBool(prefs.useCurrentProjectLocation);
 
   return (
-    <div className="gal-settings">
-      <div className="gal-settings__top">
-        <button
-          type="button"
-          className="gal-settings__back"
-          onClick={onBack}
-          aria-label="Back"
-        >
-          <ArrowLeft className="size-4" />
-        </button>
-        <span className="gal-settings__version" title="Revision">
-          {EXTENSION_VERSION}
-        </span>
-      </div>
-
+    <div className="gal-settings gal-settings--embedded">
       <div className="gal-settings__body">
-        <section className="gal-account__profile">
-          <div className="gal-account__avatar-wrap">
-            <div className="gal-account__avatar">
-              {accountInitial(auth.email, auth.name)}
-            </div>
-            <span className="gal-account__dot" aria-hidden />
-          </div>
-          <div className="gal-account__profile-copy">
-            <p className="gal-account__email">{auth.email || "Signed in"}</p>
-            <p className="gal-account__status">
-              Plan{" "}
-              <span
-                className={
-                  planAccent
-                    ? "gal-account__status-value"
-                    : "gal-account__status-value gal-account__status-value--muted"
-                }
-              >
-                {statusLabel}
-              </span>
-            </p>
-            {isAdmin ? (
-              <div className="gal-account__dev-plan">
-                <span className="gal-account__plan-switch" role="group" aria-label="Dev plan">
-                  {GAL_DEV_PLANS.map((plan) => (
-                    <button
-                      key={plan}
-                      type="button"
-                      className={
-                        prefs.adminDevPlan === plan
-                          ? "gal-account__plan-chip is-active"
-                          : "gal-account__plan-chip"
-                      }
-                      onClick={() => setAdminDevPlan(plan)}
-                    >
-                      {galAccountPlanLabel(plan)}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className={
-                      !prefs.adminDevPlan
-                        ? "gal-account__plan-chip is-active"
-                        : "gal-account__plan-chip"
-                    }
-                    onClick={() => patch({ adminDevPlan: "" })}
-                  >
-                    Live
-                  </button>
-                </span>
-                <p className="gal-account__dev-hint">Dev test · local only</p>
-              </div>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            className="gal-account__logout"
-            onClick={() => void handleLogout()}
-            disabled={busy}
-            aria-label="Log out"
-          >
-            <LogOut className="size-3.5" />
-          </button>
-        </section>
+        <header className="gal-settings__page-head">
+          <h1 className="gal-settings__page-title">Settings</h1>
+        </header>
 
-        <section className="gal-account__product">
-          <div
-            className={
-              packageThumb ? "gal-account__hero has-thumb" : "gal-account__hero"
-            }
-            style={
-              packageThumb
-                ? { backgroundImage: `url("${packageThumb}")` }
-                : undefined
-            }
-            role="img"
-            aria-label={marketPack?.name || BRAND.panelDisplayName}
-          >
-            {packageThumb ? null : <span>GAL TOOLKIT MAX</span>}
-          </div>
-          <div className="gal-account__product-row">
-            <div className="gal-account__host">
-              <img src={hostIcon} alt="" width={30} height={30} />
-            </div>
-            <div className="gal-account__product-copy">
-              <p className="gal-account__product-title">
+        <section className="gal-settings__group">
+          <div className="gal-settings__row gal-settings__row--pack">
+            <img
+              className="gal-settings__host-icon"
+              src={hostIcon}
+              alt=""
+              width={28}
+              height={28}
+            />
+            <div className="gal-settings__row-copy">
+              <p className="gal-settings__row-title">
                 {marketPack?.name || BRAND.panelDisplayName}
               </p>
-              <p className="gal-account__product-version">
-                version {marketPack?.version || EXTENSION_VERSION}
+              <p className="gal-settings__row-sub">
+                Pack {marketPack?.version || "—"} · Panel v{localVersion}
               </p>
             </div>
             <button
               type="button"
-              className="gal-account__download"
+              className="gal-settings__row-action"
               onClick={() => void handleInstall()}
               disabled={
                 !!activeJob || (!needsUpdate && packInstalled && !marketPack)
@@ -518,298 +231,192 @@ export function GalSettings({
               title={downloadLabel}
             >
               {activeJob ? (
-                <Loader2 className="size-4 animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" />
               ) : (
-                <Download className="size-4" />
+                <Download className="size-3.5" />
               )}
             </button>
           </div>
-        </section>
 
-        {message ? <p className="gal-account__msg">{message}</p> : null}
+          <div className="gal-settings__divider" />
 
-        <section className="gal-settings__block">
-          <div className="gal-settings__block-head">
-            <h2>Accounts</h2>
-            <button
-              type="button"
-              className="gal-settings__ghost-btn"
-              disabled={busy || loginBusy || !canAddAccount}
-              title={
-                canAddAccount
-                  ? "Add another Motionflow account"
-                  : `Maximum ${MAX_MOTIONFLOW_ACCOUNTS} accounts`
-              }
-              onClick={() => void handleAddAccount()}
-            >
-              {loginBusy && !showDeviceLimit ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Plus className="size-3" />
-              )}
-              Add
-            </button>
-          </div>
-
-          {showDeviceLimit ? (
-            <div className="gal-settings__login-panel">
-              <p className="gal-settings__note">
-                This account is signed in on {loginDeviceLimit!.device_limit}{" "}
-                devices. Disconnect one to continue here.
+          <div className="gal-settings__row">
+            <div className="gal-settings__row-copy">
+              <p className="gal-settings__row-title">Updates</p>
+              <p className="gal-settings__row-sub">
+                {showUpdateBanner && updateVersion
+                  ? `v${updateVersion} available`
+                  : `Current v${localVersion}`}
               </p>
-              <ul className="gal-settings__devices">
-                {loginDeviceLimit!.devices.map((device) => {
-                  const fp = parseDeviceFingerprint(device.user_fingerprint || "");
-                  const disconnectBusy = replacingId === device.id;
-                  return (
-                    <li key={device.id}>
-                      <div>
-                        <strong>{device.name || fp.user || "Device"}</strong>
-                        <span>{device.ip || "—"}</span>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={Boolean(replacingId)}
-                        onClick={() => handleRevokeAndContinue(device.id)}
-                      >
-                        {disconnectBusy ? (
-                          <Loader2 className="size-3 animate-spin" />
-                        ) : (
-                          "Disconnect"
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+            </div>
+            {showUpdateBanner && updateVersion ? (
               <button
                 type="button"
-                className="gal-settings__ghost-btn gal-settings__ghost-btn--block"
-                onClick={cancelLogin}
+                className="gal-settings__pill-btn"
+                disabled={updateBusy}
+                onClick={() => void handleApplyUpdate()}
               >
-                Cancel
+                {updateBusy ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : null}
+                Install
               </button>
-            </div>
-          ) : null}
-
-          {loginBusy && loginCode && !showDeviceLimit ? (
-            <div className="gal-settings__login-panel">
-              <p className="gal-settings__note">Confirm this code in the browser</p>
-              <p className="gal-settings__login-code">{loginCode}</p>
-              <p className="gal-settings__note gal-settings__note--row">
-                <Loader2 className="size-3 animate-spin" />
-                Waiting for confirmation…
-              </p>
-              <button
-                type="button"
-                className="gal-settings__ghost-btn gal-settings__ghost-btn--block"
-                onClick={cancelLogin}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : null}
-
-          {!loginBusy ? (
-            otherAccounts.length === 0 ? (
-              <p className="gal-settings__note">No other accounts saved</p>
             ) : (
-              <ul className="gal-settings__devices">
-                {otherAccounts.map((account) => (
-                  <li key={account.id}>
-                    <div className="gal-settings__account-row">
-                      <span className="gal-settings__account-avatar" aria-hidden>
-                        {accountInitial(account.email, account.name)}
-                      </span>
-                      <div>
-                        <strong>{account.name || account.email}</strong>
-                        <span>{account.email}</span>
-                      </div>
-                    </div>
-                    <div className="gal-settings__account-actions">
-                      <button
-                        type="button"
-                        disabled={busy || loginBusy}
-                        onClick={() => void handleSwitchAccount(account.id)}
-                      >
-                        Switch
-                      </button>
-                      <button
-                        type="button"
-                        className="is-danger"
-                        disabled={busy || loginBusy}
-                        onClick={() => void handleRemoveAccount(account.id)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )
-          ) : null}
+              <button
+                type="button"
+                className="gal-settings__pill-btn"
+                disabled={checkBusy}
+                onClick={() => void checkForUpdates()}
+              >
+                {checkBusy ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-3" />
+                )}
+                Check Updates
+              </button>
+            )}
+          </div>
         </section>
 
-        <section className="gal-settings__block">
-          <h2>Active Devices</h2>
-          {sessionDevices.length === 0 ? (
-            <p className="gal-settings__note">No devices listed</p>
-          ) : (
-            <ul className="gal-settings__devices">
-              {sessionDevices.map((device) => {
-                const fp = parseDeviceFingerprint(device.user_fingerprint || "");
-                return (
-                  <li key={device.id || device.ip}>
-                    <div>
-                      <strong>{device.name || fp.user || "Device"}</strong>
-                      <span>
-                        {device.ip}
-                        {device.current ? " · This device" : ""}
-                      </span>
-                    </div>
-                    {!device.current ? (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void handleRevoke(device.revokeIds)}
-                      >
-                        Revoke
-                      </button>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
+        {message ? <p className="gal-settings__msg">{message}</p> : null}
 
-        <section className="gal-settings__block">
-          <h2>File System</h2>
-
-          <p className="gal-settings__label">Package Installation Directory</p>
-          <div className="gal-settings__path-row">
-            <input
-              type="text"
-              readOnly
-              value={prefs.absCustomAbsolutePath || ""}
-              placeholder=""
-              className="gal-settings__input"
-            />
-            <button
-              type="button"
-              className="gal-settings__icon-btn"
-              onClick={browsePackages}
-              aria-label="Browse packages folder"
-            >
-              <Folder className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              className="gal-settings__icon-btn"
-              onClick={() =>
-                openDirectoryInOs(prefs.absCustomAbsolutePath || "")
-              }
-              aria-label="Open packages folder"
-            >
-              <FolderOpen className="size-3.5" />
-            </button>
-          </div>
-          <p className="gal-settings__note">
-            Note: Changing the custom path will move all packages to the new
-            destination.
-          </p>
-          {scanMsg ? <p className="gal-settings__msg">{scanMsg}</p> : null}
-
-          <p className="gal-settings__label gal-settings__label--spaced">
-            Stock Assets Directory
-          </p>
-          <div className="gal-settings__path-row">
-            <input
-              type="text"
-              readOnly
-              value={prefs.customStockLocation || ""}
-              placeholder=""
-              className="gal-settings__input"
-            />
-            <button
-              type="button"
-              className="gal-settings__icon-btn"
-              onClick={browseAssets}
-              aria-label="Browse stock folder"
-            >
-              <Folder className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              className="gal-settings__icon-btn"
-              onClick={() => openDirectoryInOs(prefs.customStockLocation || "")}
-              aria-label="Open stock folder"
-            >
-              <FolderOpen className="size-3.5" />
-            </button>
+        <p className="gal-settings__section-label">File System</p>
+        <section className="gal-settings__group">
+          <div className="gal-settings__field">
+            <label className="gal-settings__field-label">
+              Package Installation Directory
+            </label>
+            <div className="gal-settings__path-row">
+              <input
+                type="text"
+                readOnly
+                value={prefs.absCustomAbsolutePath || ""}
+                placeholder="Select a folder…"
+                className="gal-settings__input"
+              />
+              <button
+                type="button"
+                className="gal-settings__icon-btn"
+                onClick={browsePackages}
+                aria-label="Browse packages folder"
+              >
+                <Folder className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                className="gal-settings__icon-btn"
+                onClick={() =>
+                  openDirectoryInOs(prefs.absCustomAbsolutePath || "")
+                }
+                aria-label="Open packages folder"
+              >
+                <FolderOpen className="size-3.5" />
+              </button>
+            </div>
+            <p className="gal-settings__note">
+              Changing the path moves packages to the new destination.
+            </p>
+            {scanMsg ? <p className="gal-settings__msg">{scanMsg}</p> : null}
           </div>
 
-          <label className="gal-settings__check">
+          <div className="gal-settings__divider" />
+
+          <div className="gal-settings__field">
+            <label className="gal-settings__field-label">
+              Stock Assets Directory
+            </label>
+            <div className="gal-settings__path-row">
+              <input
+                type="text"
+                readOnly
+                value={prefs.customStockLocation || ""}
+                placeholder="Select a folder…"
+                className="gal-settings__input"
+              />
+              <button
+                type="button"
+                className="gal-settings__icon-btn"
+                onClick={browseAssets}
+                aria-label="Browse stock folder"
+              >
+                <Folder className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                className="gal-settings__icon-btn"
+                onClick={() => openDirectoryInOs(prefs.customStockLocation || "")}
+                aria-label="Open stock folder"
+              >
+                <FolderOpen className="size-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="gal-settings__divider" />
+
+          <label className="gal-settings__toggle-row">
+            <span>Use Project Folder</span>
             <input
               type="checkbox"
-              checked={asBool(prefs.useCurrentProjectLocation)}
+              className="gal-settings__switch"
+              checked={useProjectFolder}
               onChange={(e) =>
                 patch({ useCurrentProjectLocation: e.target.checked ? 1 : 0 })
               }
             />
-            <span>Use Project Folder</span>
           </label>
         </section>
 
-        <section className="gal-settings__block">
-          <h2>API Server</h2>
-          <p className="gal-settings__note">
-            Try changing the server if you are having problems downloading
-            packages.
+        <p className="gal-settings__section-label">API Server</p>
+        <section className="gal-settings__group">
+          <p className="gal-settings__group-note">
+            Change the server if package downloads fail.
           </p>
-          <div className="gal-settings__radios">
-            <label className="gal-settings__radio">
-              <input
-                type="radio"
-                name="defaultApiServer"
-                checked={apiServer === 0}
-                onChange={() => patch({ defaultApiServer: 0 })}
-              />
-              <span>Main API Server</span>
-            </label>
-            <label className="gal-settings__radio">
-              <input
-                type="radio"
-                name="defaultApiServer"
-                checked={apiServer === 1}
-                onChange={() => patch({ defaultApiServer: 1 })}
-              />
-              <span>Proxy Server #1</span>
-            </label>
-          </div>
+          <label className="gal-settings__choice">
+            <input
+              type="radio"
+              name="defaultApiServer"
+              checked={apiServer === 0}
+              onChange={() => patch({ defaultApiServer: 0 })}
+            />
+            <span>Main API Server</span>
+          </label>
+          <div className="gal-settings__divider" />
+          <label className="gal-settings__choice">
+            <input
+              type="radio"
+              name="defaultApiServer"
+              checked={apiServer === 1}
+              onChange={() => patch({ defaultApiServer: 1 })}
+            />
+            <span>Proxy Server #1</span>
+          </label>
         </section>
 
-        <section className="gal-settings__block">
-          <h2>UI</h2>
-          <label className="gal-settings__check">
+        <p className="gal-settings__section-label">UI</p>
+        <section className="gal-settings__group">
+          <label className="gal-settings__toggle-row">
+            <span>
+              Use System Fonts
+              <small>Reload required</small>
+            </span>
             <input
               type="checkbox"
+              className="gal-settings__switch"
               checked={useSystemFonts}
               onChange={(e) => {
                 patch({ useSystemFonts: e.target.checked ? 1 : 0 });
               }}
             />
-            <span>
-              Use System Fonts <small>(Reload Required)</small>
-            </span>
           </label>
         </section>
 
-        <section className="gal-settings__block">
-          <h2>Restoring An Extension</h2>
+        <p className="gal-settings__section-label">Restoring</p>
+        <section className="gal-settings__group">
           <button
             type="button"
-            className="gal-settings__reset"
+            className="gal-settings__danger-row"
             onClick={() => setConfirmReset(true)}
           >
             Reset all settings

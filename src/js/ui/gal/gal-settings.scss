@@ -8,65 +8,331 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: #17181c;
   color: #fff;
-}
 
-.gal-settings__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-  padding: 12px 14px 4px;
-}
-
-.gal-settings__back {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border: 0;
-  border-radius: 999px;
-  color: #fff;
-  background: #c31f93;
-  cursor: pointer;
-
-  &:hover {
-    background: #d428a3;
+  &--embedded {
+    background: transparent;
   }
 }
 
-.gal-settings__version {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
+.gal-settings__page-head {
+  flex-shrink: 0;
+  padding: 2px 2px 6px;
+}
+
+.gal-settings__page-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: #fff;
 }
 
 .gal-settings__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   flex: 1;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 8px 16px 20px;
+  padding: 14px 16px 28px;
+  /* CEP Chromium: avoid stacking/overlap glitches from translucent layers */
+  isolation: isolate;
+}
+
+.gal-settings__section-label {
+  flex-shrink: 0;
+  margin: 6px 4px 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.gal-settings__group {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  /* Solid fill — backdrop-filter stacks incorrectly in CEP */
+  background: #1c1a22;
+}
 
-  &::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-    display: none;
+.gal-settings__group-note {
+  margin: 0;
+  padding: 10px 14px 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.gal-settings__divider {
+  flex-shrink: 0;
+  height: 1px;
+  margin-left: 14px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.gal-settings__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  min-height: 52px;
+  padding: 10px 14px;
+}
+
+.gal-settings__row--pack {
+  min-height: 58px;
+}
+
+.gal-settings__host-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  object-fit: contain;
+}
+
+.gal-settings__row-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.gal-settings__row-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 550;
+  color: #fff;
+}
+
+.gal-settings__row-sub {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.gal-settings__row-action {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(195, 31, 147, 0.85);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #d428a3;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
 }
 
+.gal-settings__pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(195, 31, 147, 0.9);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    background: #d428a3;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.gal-settings__field {
+  flex-shrink: 0;
+  padding: 12px 14px;
+}
+
+.gal-settings__field-label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.gal-settings__path-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.gal-settings__input {
+  min-width: 0;
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 11px;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.32);
+  }
+
+  &:focus {
+    border-color: rgba(195, 31, 147, 0.55);
+    background: rgba(0, 0, 0, 0.45);
+  }
+}
+
+.gal-settings__icon-btn {
+  display: grid;
+  width: 36px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    color: #fff;
+    border-color: rgba(255, 123, 216, 0.4);
+    background: rgba(195, 31, 147, 0.18);
+  }
+}
+
+.gal-settings__note {
+  margin: 8px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.gal-settings__msg {
+  flex-shrink: 0;
+  margin: 0 2px;
+  font-size: 11px;
+  color: #ff7bd8;
+}
+
+.gal-settings__toggle-row,
+.gal-settings__choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  min-height: 48px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #fff;
+  cursor: pointer;
+
+  small {
+    display: block;
+    margin-top: 2px;
+    font-size: 10px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.4);
+  }
+}
+
+.gal-settings__choice {
+  justify-content: flex-start;
+  gap: 10px;
+
+  input {
+    accent-color: #c31f93;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.gal-settings__switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition: background 0.18s ease;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    transition: transform 0.18s ease;
+  }
+
+  &:checked {
+    background: #c31f93;
+  }
+
+  &:checked::after {
+    transform: translateX(18px);
+  }
+}
+
+.gal-settings__danger-row {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  color: #ff8a9b;
+  font-size: 13px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 90, 110, 0.08);
+  }
+}
+
+/* Shared with GalProfile */
 .gal-settings__devices {
   list-style: none;
   margin: 0;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
-  background: #1a1b1e;
+  background: #1c1a22;
   overflow: hidden;
 
   li {
@@ -96,10 +362,10 @@
     button {
       flex-shrink: 0;
       padding: 5px 10px;
-      border: 1px solid rgba(195, 31, 147, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: 999px;
       color: #fff;
-      background: transparent;
+      background: rgba(255, 255, 255, 0.06);
       font-size: 10px;
       cursor: pointer;
     }
@@ -107,13 +373,14 @@
 }
 
 .gal-settings__block {
+  flex-shrink: 0;
   margin-bottom: 0;
 
   h2 {
     margin: 0 0 10px;
     font-size: 13px;
     font-weight: 600;
-    color: #c31f93;
+    color: #ff7bd8;
   }
 }
 
@@ -135,15 +402,15 @@
   gap: 4px;
   flex-shrink: 0;
   padding: 5px 10px;
-  border: 1px solid rgba(195, 31, 147, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
   color: #fff;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.06);
   font-size: 10px;
   cursor: pointer;
 
   &:hover:not(:disabled) {
-    background: rgba(195, 31, 147, 0.15);
+    background: rgba(195, 31, 147, 0.18);
   }
 
   &:disabled {
@@ -164,9 +431,9 @@
   gap: 8px;
   margin-bottom: 10px;
   padding: 12px;
-  border: 1px solid rgba(195, 31, 147, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 14px;
-  background: #1a1b1e;
+  background: #1c1a22;
 }
 
 .gal-settings__login-code {
@@ -201,8 +468,8 @@
   flex-shrink: 0;
   place-items: center;
   border-radius: 999px;
-  background: rgba(195, 31, 147, 0.25);
-  color: #ff5bcf;
+  background: linear-gradient(135deg, #c31f93 0%, #6b14d0 100%);
+  color: #fff;
   font-size: 11px;
   font-weight: 600;
 }
@@ -216,106 +483,6 @@
 .gal-settings__devices li button.is-danger {
   border-color: rgba(255, 90, 90, 0.45);
   color: rgba(255, 180, 180, 0.95);
-}
-
-.gal-settings__label {
-  margin: 0 0 6px;
-  font-size: 12px;
-  color: #fff;
-}
-
-.gal-settings__label--spaced {
-  margin-top: 16px;
-}
-
-.gal-settings__path-row {
-  display: flex;
-  gap: 6px;
-  align-items: stretch;
-}
-
-.gal-settings__input {
-  min-width: 0;
-  flex: 1;
-  padding: 8px 10px;
-  border: 1px solid #c31f93;
-  border-radius: 6px;
-  background: #121318;
-  color: #c31f93;
-  font-size: 11px;
-  outline: none;
-}
-
-.gal-settings__icon-btn {
-  display: grid;
-  width: 34px;
-  place-items: center;
-  border: 1px solid #c31f93;
-  border-radius: 6px;
-  color: #c31f93;
-  background: #121318;
-  cursor: pointer;
-
-  &:hover {
-    background: rgba(195, 31, 147, 0.15);
-  }
-}
-
-.gal-settings__note {
-  margin: 6px 0 0;
-  font-size: 10px;
-  line-height: 1.4;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.gal-settings__msg {
-  margin: 6px 0 0;
-  font-size: 10px;
-  color: #c31f93;
-}
-
-.gal-settings__check,
-.gal-settings__radio {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  font-size: 12px;
-  color: #fff;
-  cursor: pointer;
-
-  input {
-    accent-color: #c31f93;
-    width: 14px;
-    height: 14px;
-  }
-
-  small {
-    color: rgba(255, 255, 255, 0.45);
-  }
-}
-
-.gal-settings__radios {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.gal-settings__reset {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 14px;
-  border: 1px solid #c31f93;
-  border-radius: 6px;
-  color: #fff;
-  background: transparent;
-  font-size: 12px;
-  cursor: pointer;
-
-  &:hover {
-    background: rgba(195, 31, 147, 0.15);
-  }
 }
 
 .gal-settings__confirm {
@@ -333,12 +500,12 @@
   width: min(100%, 280px);
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  background: #1a1b1e;
+  border-radius: 16px;
+  background: #1c1824;
 
   h3 {
     margin: 0;
-    font-size: 13px;
+    font-size: 14px;
   }
 
   p {
@@ -359,17 +526,17 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 8px;
-    border-radius: 8px;
+    padding: 10px;
+    border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    background: #121318;
+    background: rgba(255, 255, 255, 0.06);
     color: #fff;
     font-size: 12px;
     cursor: pointer;
   }
 
   button:first-child {
-    border-color: #c31f93;
-    background: rgba(195, 31, 147, 0.2);
+    border: 0;
+    background: rgba(195, 31, 147, 0.9);
   }
 }

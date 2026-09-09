@@ -53,7 +53,7 @@ export function resolveGalAccountPlan(opts: {
 export function galAccountPlanLabel(plan: GalAccountPlan): string {
   switch (plan) {
     case "max":
-      return "Max";
+      return "MAX";
     case "toolkit":
       return "Regular";
     default:

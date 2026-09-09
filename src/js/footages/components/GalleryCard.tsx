@@ -96,7 +96,7 @@ function GalleryCard({
   return (
     <div
       className={cn(
-        "relative cursor-pointer overflow-hidden rounded-md",
+        "gallery-card relative cursor-pointer overflow-hidden rounded-md",
         masonry
           ? "mb-2 inline-block w-full break-inside-avoid"
           : "min-w-0",

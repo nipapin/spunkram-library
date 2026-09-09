@@ -1,8 +1,10 @@
-import { Loader2, Search, Star, X } from "lucide-react";
+import { ChevronsUp, Loader2, Search, Star, X } from "lucide-react";
 import {
   memo,
   startTransition,
+  useCallback,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -10,9 +12,38 @@ import { PanelSidebar } from "@/components/panel-sidebar";
 import { FootageGrid } from "@/components/footage-grid";
 import { usePanelUI } from "@/lib/panel-ui-context";
 import { usePackWorkspace } from "@/lib/use-pack-workspace";
-import { cn } from "@/lib/utils";
 import { BRAND } from "@brands";
 import { GalFooter } from "./GalFooter";
+
+const SNAP_EPSILON_PX = 28;
+
+function scrollMainToNearestGroup(scroller: HTMLElement) {
+  const sections = Array.from(
+    scroller.querySelectorAll<HTMLElement>(".gal-footage-section"),
+  );
+  if (sections.length === 0) return;
+
+  const scrollTop = scroller.scrollTop;
+  const starts = sections.map((el) => ({
+    el,
+    top: el.offsetTop,
+  }));
+
+  // Section that currently owns the viewport top (last start <= scrollTop + eps).
+  let currentIdx = 0;
+  for (let i = 0; i < starts.length; i++) {
+    if (starts[i].top <= scrollTop + SNAP_EPSILON_PX) currentIdx = i;
+    else break;
+  }
+
+  const current = starts[currentIdx];
+  const atCurrentStart = Math.abs(scrollTop - current.top) <= SNAP_EPSILON_PX;
+  const targetIdx =
+    atCurrentStart && currentIdx > 0 ? currentIdx - 1 : currentIdx;
+  const targetTop = starts[targetIdx].top;
+
+  scroller.scrollTo({ top: targetTop, behavior: "smooth" });
+}
 
 const GalSearchTools = memo(function GalSearchTools({
   query,
@@ -87,7 +118,7 @@ export function GalEffectsWorkspace({
 }: {
   workspace: ReturnType<typeof usePackWorkspace>;
 }) {
-  const { focusMode, showFavoritesOnly, showAvailableOnly, toggleShowFavoritesOnly } =
+  const { showFavoritesOnly, showAvailableOnly, toggleShowFavoritesOnly } =
     usePanelUI();
   const {
     tree,
@@ -110,10 +141,34 @@ export function GalEffectsWorkspace({
     structureLoading,
   } = workspace;
 
-  const showSidebar = !focusMode;
   const canBrowseRemote = Boolean(assetsBaseUrl) || tree.length > 0;
   const catalogLoading = structureLoading && tree.length === 0;
-  const showFocusTools = !showSidebar;
+  const mainRef = useRef<HTMLDivElement>(null);
+  const [showJumpFab, setShowJumpFab] = useState(false);
+
+  const syncJumpFab = useCallback(() => {
+    const el = mainRef.current;
+    if (!el) {
+      setShowJumpFab(false);
+      return;
+    }
+    const sectionCount = el.querySelectorAll(".gal-footage-section").length;
+    setShowJumpFab(sectionCount > 0 && el.scrollTop > SNAP_EPSILON_PX);
+  }, []);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    syncJumpFab();
+    el.addEventListener("scroll", syncJumpFab, { passive: true });
+    return () => el.removeEventListener("scroll", syncJumpFab);
+  }, [syncJumpFab, sections, catalogLoading]);
+
+  const jumpToNearestGroup = useCallback(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    scrollMainToNearestGroup(el);
+  }, []);
 
   const searchTools: ReactNode = (
     <GalSearchTools
@@ -128,24 +183,14 @@ export function GalEffectsWorkspace({
   return (
     <div className="gal-effects">
       <div className="gal-effects__body">
-        {showSidebar ? (
-          <PanelSidebar
-            tree={showAvailableOnly ? sidebarTree : tree}
-            active={showFavoritesOnly ? "" : category}
-            onSelect={(id) => startTransition(() => setCategory(id))}
-            tools={searchTools}
-            loading={structureLoading}
-          />
-        ) : null}
-        <div
-          className={cn(
-            "gal-effects__main",
-            showFocusTools && "gal-effects__main--focus-tools",
-          )}
-        >
-          {showFocusTools ? (
-            <div className="gal-effects__focus-tools">{searchTools}</div>
-          ) : null}
+        <PanelSidebar
+          tree={showAvailableOnly ? sidebarTree : tree}
+          active={showFavoritesOnly ? "" : category}
+          onSelect={(id) => startTransition(() => setCategory(id))}
+          tools={searchTools}
+          loading={structureLoading}
+        />
+        <div className="gal-effects__main" ref={mainRef}>
           {catalogLoading ? (
             <div className="gal-effects__empty" aria-busy="true">
               <Loader2 className="gal-effects__spinner" aria-hidden />
@@ -181,6 +226,17 @@ export function GalEffectsWorkspace({
               />
             </div>
           )}
+          {showJumpFab ? (
+            <button
+              type="button"
+              className="gal-jump-group-float"
+              aria-label="Jump to nearest group"
+              title="Jump to nearest group"
+              onClick={jumpToNearestGroup}
+            >
+              <ChevronsUp className="size-4" aria-hidden />
+            </button>
+          ) : null}
         </div>
       </div>
       <GalFooter />

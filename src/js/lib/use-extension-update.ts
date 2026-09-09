@@ -175,6 +175,41 @@ export function useExtensionUpdate() {
     }
   }, [updateZxpUrl, updateVersion, updateBusy, showStatus]);
 
+  const [checkBusy, setCheckBusy] = useState(false);
+  const checkForUpdates = useCallback(async () => {
+    if (checkBusy || updateBusy) return;
+    setCheckBusy(true);
+    try {
+      const info = await fetchUpdateInfo();
+      if (!info?.version || !info.zxpUrl) {
+        showStatus("Could not reach the update server.", "error", 6000);
+        return;
+      }
+      const found = applyRemoteInfo(
+        {
+          version: info.version,
+          zxpUrl: info.zxpUrl,
+          changelog: info.changelog,
+          channel: info.channel,
+        },
+        { toast: true },
+      );
+      if (!found) {
+        showStatus(`You're up to date (v${localVersion}).`, "success", 5000);
+      }
+    } catch (err) {
+      showStatus(friendlyErrorMessage(err), "error", 6000);
+    } finally {
+      setCheckBusy(false);
+    }
+  }, [
+    checkBusy,
+    updateBusy,
+    applyRemoteInfo,
+    showStatus,
+    localVersion,
+  ]);
+
   return {
     localVersion,
     updateVersion,
@@ -186,5 +221,7 @@ export function useExtensionUpdate() {
     hasPendingNatives,
     showUpdateBanner: Boolean(updateVersion && updateZxpUrl),
     handleApplyUpdate,
+    checkForUpdates,
+    checkBusy,
   };
 }
