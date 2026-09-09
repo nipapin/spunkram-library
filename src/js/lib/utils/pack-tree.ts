@@ -333,6 +333,33 @@ export function findPackTreeNode(
   return undefined;
 }
 
+/**
+ * Root (depth-0) node whose subtree contains `id`.
+ * When `id` itself is a root, returns that root.
+ */
+export function findPackRootFor(
+  nodes: PackTreeNode[],
+  id: string,
+): PackTreeNode | undefined {
+  if (!id) return undefined;
+  for (const root of nodes) {
+    if (root.id === id || (root.kind === "group" && root.viewId === id)) {
+      return root;
+    }
+    if (root.kind === "folder" && findPackTreeNode(root.children, id)) {
+      return root;
+    }
+  }
+  return undefined;
+}
+
+/** Id of the first leaf group under `node` (or the node itself if it is a group). */
+export function firstGroupIdIn(node: PackTreeNode): string | null {
+  if (node.kind === "group") return node.id;
+  const first = flattenPackGroups(node.children)[0];
+  return first?.id ?? null;
+}
+
 /** First selectable leaf group in the tree. */
 export function getFirstPackGroup(
   nodes: PackTreeNode[],

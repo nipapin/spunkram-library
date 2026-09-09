@@ -150,6 +150,12 @@ export function LoginScreen() {
 
         {showDeviceLimit ? (
           <div className="w-full overflow-hidden rounded-xl border border-amber-500/30 bg-card/80 backdrop-blur-md">
+            {loginDeviceLimit!.devices.length === 0 ? (
+              <p className="px-3 py-3 text-center text-[11px] text-muted-foreground">
+                Couldn&apos;t load the device list. Cancel and sign in again, or disconnect a
+                device at motionflow.pro.
+              </p>
+            ) : null}
             <ul>
               {loginDeviceLimit!.devices.map((device, index) => {
                 const busy = replacingId === device.id;
@@ -204,6 +210,9 @@ export function LoginScreen() {
             <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
               <Loader2 className="size-3 animate-spin" />
               Waiting for confirmation…
+            </p>
+            <p className="mt-1 text-[10px] text-muted-foreground/80">
+              After confirming in the browser, click this panel if it stays here.
             </p>
           </div>
         )}

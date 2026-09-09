@@ -45,6 +45,7 @@ import { reportClientSession, reportInstalledPacks } from "@/api/telemetry";
 import { currentHostAppId } from "@/lib/utils/apply-item";
 import { applyAdminDevPlan } from "@/lib/utils/gal-plan";
 import { currentPackHost } from "@/lib/utils/pack-host";
+import { waitForNextAuthPoll } from "@/lib/wait-for-auth-poll";
 import { isReleaseAdminEmail } from "@/api/update";
 import {
   resolveAccessTier,
@@ -176,35 +177,6 @@ function authFromSession(session: MotionflowAccountSession): MotionflowAuth {
     email: session.email,
     name: session.name,
   };
-}
-
-/**
- * CEP throttles `setTimeout` while the user is in the browser confirm tab.
- * Resolve early when the panel is focused again so `device_limit` can appear.
- * Ignore focus flaps for the first second so Premiere UI churn cannot busy-poll.
- */
-function waitForNextAuthPoll(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const started = Date.now();
-    const minEarlyMs = Math.min(1000, Math.max(0, ms));
-    const finish = (early: boolean) => {
-      if (settled) return;
-      if (early && Date.now() - started < minEarlyMs) return;
-      settled = true;
-      window.clearTimeout(timer);
-      window.removeEventListener("focus", onEarly);
-      document.removeEventListener("visibilitychange", onVis);
-      resolve();
-    };
-    const onEarly = () => finish(true);
-    const onVis = () => {
-      if (document.visibilityState === "visible") finish(true);
-    };
-    const timer = window.setTimeout(() => finish(false), Math.max(0, ms));
-    window.addEventListener("focus", onEarly);
-    document.addEventListener("visibilitychange", onVis);
-  });
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

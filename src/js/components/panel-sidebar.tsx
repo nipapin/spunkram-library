@@ -165,6 +165,32 @@ function TreeNodeRow({
     IS_GAL && isFolder && !isRoot && !isActive && !isAncestor;
   const RootIcon =
     IS_GAL && isRoot ? resolveGalRootCategoryIcon(node.label) : undefined;
+  const rowRef = useRef<HTMLDivElement>(null);
+  const wasActiveRef = useRef(false);
+
+  // When scroll-spy (or a click) activates this row, keep it visible in the nav.
+  useEffect(() => {
+    if (!isActive) {
+      wasActiveRef.current = false;
+      return;
+    }
+    if (wasActiveRef.current) return;
+    wasActiveRef.current = true;
+    const row = rowRef.current;
+    if (!row) return;
+    const nav = row.closest(".sidebar-tree__nav");
+    if (!(nav instanceof HTMLElement)) {
+      row.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    const rowRect = row.getBoundingClientRect();
+    const navRect = nav.getBoundingClientRect();
+    const fullyVisible =
+      rowRect.top >= navRect.top && rowRect.bottom <= navRect.bottom;
+    if (!fullyVisible) {
+      row.scrollIntoView({ block: "nearest" });
+    }
+  }, [isActive]);
 
   const chevron = isFolder ? (
     <button
@@ -209,6 +235,7 @@ function TreeNodeRow({
   return (
     <div className={cn("sidebar-tree__node", open && "is-open")}>
       <div
+        ref={rowRef}
         className={cn(
           "sidebar-tree__row group flex w-full items-center gap-1.5 text-left text-xs transition-colors",
           IS_GAL ? "rounded-full py-2.5" : "rounded-lg py-1.5",

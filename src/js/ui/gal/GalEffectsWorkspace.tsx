@@ -16,6 +16,12 @@ import { BRAND } from "@brands";
 import { GalFooter } from "./GalFooter";
 
 const SNAP_EPSILON_PX = 28;
+/** Sticky section title band — scroll-spy treats this as the "active" line. */
+const STICKY_SPY_EPSILON_PX = 44;
+/** Near end of scroll: last section cannot reach the sticky line — force-activate it. */
+const SCROLL_BOTTOM_EPS_PX = 8;
+/** Ignore scroll-spy updates while programmatic scroll animates. */
+const SPY_SUPPRESS_MS = 600;
 
 function scrollMainToNearestGroup(scroller: HTMLElement) {
   const sections = Array.from(
@@ -134,6 +140,8 @@ export function GalEffectsWorkspace({
     packFilePath,
     packSettings,
     sections,
+    activeRootId,
+    scrollTargetSectionId,
     galAccountPlan,
     isLocked,
     isReady,
@@ -145,6 +153,12 @@ export function GalEffectsWorkspace({
   const catalogLoading = structureLoading && tree.length === 0;
   const mainRef = useRef<HTMLDivElement>(null);
   const [showJumpFab, setShowJumpFab] = useState(false);
+  const [gridReady, setGridReady] = useState(false);
+  const [visibleSectionId, setVisibleSectionId] = useState<string | null>(null);
+  const suppressSpyUntilRef = useRef(0);
+
+  const spyEnabled =
+    !showFavoritesOnly && query.trim().length === 0 && Boolean(activeRootId);
 
   const syncJumpFab = useCallback(() => {
     const el = mainRef.current;
@@ -156,19 +170,100 @@ export function GalEffectsWorkspace({
     setShowJumpFab(sectionCount > 0 && el.scrollTop > SNAP_EPSILON_PX);
   }, []);
 
+  const syncScrollSpy = useCallback(() => {
+    if (!spyEnabled) return;
+    if (Date.now() < suppressSpyUntilRef.current) return;
+    const el = mainRef.current;
+    if (!el) return;
+
+    const nodes = Array.from(
+      el.querySelectorAll<HTMLElement>("[data-section-id]"),
+    );
+    if (nodes.length === 0) return;
+
+    const scrollTop = el.scrollTop;
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    // Last section's title often never reaches the sticky band — not enough
+    // content below it. When pinned to the bottom, treat the last section as active.
+    const atBottom =
+      maxScroll > SCROLL_BOTTOM_EPS_PX &&
+      scrollTop >= maxScroll - SCROLL_BOTTOM_EPS_PX;
+
+    let activeId = "";
+    if (atBottom) {
+      activeId = nodes[nodes.length - 1].dataset.sectionId || "";
+    } else {
+      activeId = nodes[0].dataset.sectionId || "";
+      for (const node of nodes) {
+        const id = node.dataset.sectionId;
+        if (!id) continue;
+        if (node.offsetTop <= scrollTop + STICKY_SPY_EPSILON_PX) activeId = id;
+        else break;
+      }
+    }
+    if (activeId) {
+      setVisibleSectionId((prev) => (prev === activeId ? prev : activeId));
+    }
+  }, [spyEnabled]);
+
   useEffect(() => {
     const el = mainRef.current;
     if (!el) return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        syncJumpFab();
+        syncScrollSpy();
+      });
+    };
     syncJumpFab();
-    el.addEventListener("scroll", syncJumpFab, { passive: true });
-    return () => el.removeEventListener("scroll", syncJumpFab);
-  }, [syncJumpFab, sections, catalogLoading]);
+    syncScrollSpy();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [syncJumpFab, syncScrollSpy, sections, catalogLoading, gridReady]);
+
+  // Clear spy when leaving browse mode.
+  useEffect(() => {
+    if (!spyEnabled) setVisibleSectionId(null);
+  }, [spyEnabled]);
+
+  // Scroll to the selected subgroup once the root grid is ready (or on category click).
+  useEffect(() => {
+    if (!gridReady || !scrollTargetSectionId || !spyEnabled) return;
+    const el = mainRef.current;
+    if (!el) return;
+
+    const target = el.querySelector<HTMLElement>(
+      `[data-section-id="${scrollTargetSectionId.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"]`,
+    );
+    if (!target) return;
+
+    suppressSpyUntilRef.current = Date.now() + SPY_SUPPRESS_MS;
+    setVisibleSectionId(scrollTargetSectionId);
+    el.scrollTo({ top: target.offsetTop, behavior: "smooth" });
+  }, [category, gridReady, scrollTargetSectionId, spyEnabled]);
 
   const jumpToNearestGroup = useCallback(() => {
     const el = mainRef.current;
     if (!el) return;
+    suppressSpyUntilRef.current = Date.now() + SPY_SUPPRESS_MS;
     scrollMainToNearestGroup(el);
   }, []);
+
+  const handleReadyChange = useCallback((ready: boolean) => {
+    setGridReady(ready);
+  }, []);
+
+  const sidebarActive = showFavoritesOnly
+    ? ""
+    : spyEnabled
+      ? visibleSectionId || category
+      : category;
 
   const searchTools: ReactNode = (
     <GalSearchTools
@@ -185,7 +280,7 @@ export function GalEffectsWorkspace({
       <div className="gal-effects__body">
         <PanelSidebar
           tree={showAvailableOnly ? sidebarTree : tree}
-          active={showFavoritesOnly ? "" : category}
+          active={sidebarActive}
           onSelect={(id) => startTransition(() => setCategory(id))}
           tools={searchTools}
           loading={structureLoading}
@@ -218,6 +313,8 @@ export function GalEffectsWorkspace({
                 accountPlan={galAccountPlan}
                 subscribeUrl={BRAND.siteOrigin}
                 stickySectionTitles
+                rootId={activeRootId}
+                onReadyChange={handleReadyChange}
                 emptyMessage={
                   showAvailableOnly
                     ? "No items available on your plan in this view."

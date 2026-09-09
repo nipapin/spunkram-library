@@ -1,7 +1,7 @@
 {
   "name": "com.spunkramlibrary.cep",
   "private": true,
-  "version": "0.9.18",
+  "version": "0.9.19",
   "type": "module",
   "scripts": {
     "dev": "npm run build:deps && vite",
@@ -11,6 +11,7 @@
     "build:deps": "node scripts/build-deps.mjs",
     "build": "npm run build:deps && node scripts/clean-dist.mjs && tsc -p \"tsconfig-build.json\" && vite build --watch false",
     "build:gal": "cross-env APP_BRAND=gal npm run build",
+    "build:spunkram": "cross-env APP_BRAND=spunkram npm run build",
     "zxp": "npm run build:deps && node scripts/clean-dist.mjs && tsc -p \"tsconfig-build.json\" && cross-env ZXP_PACKAGE=true vite build --watch false",
     "zxp:gal": "cross-env APP_BRAND=gal npm run zxp",
     "zxp:dev": "npm run build:deps && node scripts/clean-dist.mjs && tsc -p \"tsconfig-build.json\" && cross-env ZXP_PACKAGE=true vite build --watch false",

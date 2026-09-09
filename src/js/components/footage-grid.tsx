@@ -18,6 +18,10 @@ import {
   peekCachedPreviewPath,
   warmPreviewCache,
 } from "@/lib/utils/preview-disk-cache";
+import {
+  PRELOAD_CAP,
+  preloadPosters,
+} from "@/lib/utils/preview-preload";
 import type { PackHostId } from "@/lib/utils/pack-host";
 import { resolvePreviewAspectRatio, type PackContentSection } from "@/lib/utils/pack-tree";
 import type { PackSettings, PackTreeItem } from "@/lib/utils/pack-types";
@@ -44,9 +48,6 @@ import {
 
 const GRID_GAP_PX = 4;
 const SECTION_GAP_PX = 16;
-/** Large lists: defer mounting real cards so CEP can paint section skeleton first. */
-const SKELETON_THRESHOLD = 64;
-const LARGE_LIST_MOUNT_MS = 40;
 /** Classic Spunkram cards vs Gal chips + Import hover. */
 export type FootageAccessUi = "overlay" | "chips";
 const CARD_RADIUS_OVERLAY = "clamp(2px, 4%, 10px)";
@@ -57,7 +58,7 @@ const PREVIEW_LOAD_ROOT_MARGIN = `${PREVIEW_LOAD_MARGIN_PX}px 0px`;
 const AUTOPLAY_ROOT_MARGIN = "80px 0px";
 /** Max skeleton cells per section (≈2 viewports). */
 const SKELETON_CELLS_PER_SECTION_ROWS = 8;
-/** First N rows load without waiting for IntersectionObserver. */
+/** First N rows load without waiting for IntersectionObserver (beyond preload cap). */
 const EAGER_PREVIEW_ROWS = 5;
 const HTTPS_URL_RE = /^https?:\/\//i;
 
@@ -135,15 +136,15 @@ function usePreviewObjectUrl(
 
     let alive = true;
 
-    const adoptLocalBlob = (localPath: string, preferSync: boolean) => {
-      if (preferSync) {
-        const syncUrl = retainPreviewObjectUrlSync(localPath);
-        if (syncUrl) {
-          loadedKeyRef.current = path;
-          blobPathRef.current = localPath;
-          setUrl(syncUrl);
-          return;
-        }
+    const adoptLocalBlob = (localPath: string, _preferSync: boolean) => {
+      // Sync retain is cheap (Map lookup only) — always try so preloaded posters paint
+      // without waiting for the async queue tick.
+      const syncUrl = retainPreviewObjectUrlSync(localPath);
+      if (syncUrl) {
+        loadedKeyRef.current = path;
+        blobPathRef.current = localPath;
+        setUrl(syncUrl);
+        return;
       }
       void loadPreviewObjectUrl(localPath, { priority: priorityRef.current }).then((next) => {
         if (!next) return;
@@ -446,7 +447,9 @@ function usePreviewCardModel({
 
   const [hovered, setHovered] = useState(false);
   const [inView, setInView] = useState(false);
-  const eagerLoad = gridIndex < Math.max(1, gridColumns) * EAGER_PREVIEW_ROWS;
+  const preloaded = gridIndex < PRELOAD_CAP;
+  const eagerLoad =
+    preloaded || gridIndex < Math.max(1, gridColumns) * EAGER_PREVIEW_ROWS;
   const [nearView, setNearView] = useState(eagerLoad);
   const [posterFailed, setPosterFailed] = useState(false);
   const [posterPainted, setPosterPainted] = useState(false);
@@ -504,9 +507,9 @@ function usePreviewCardModel({
   }, [eagerLoad]);
 
   const posterUrl = usePreviewObjectUrl(media.posterPath, {
-    load: nearView || eagerLoad,
+    load: nearView || eagerLoad || preloaded,
     priority: gridIndex,
-    eager: eagerLoad,
+    eager: eagerLoad || preloaded,
   });
 
   useEffect(() => {
@@ -1164,23 +1167,32 @@ function GridSkeleton({
   columns,
   accessUi = "overlay",
   stickySectionTitles = false,
+  progress,
 }: {
   sections: PackContentSection[];
   columns: number;
   accessUi?: FootageAccessUi;
   stickySectionTitles?: boolean;
+  progress?: { done: number; total: number } | null;
 }) {
   const cols = Math.max(1, columns);
   const radius = accessUi === "chips" ? CARD_RADIUS_CHIPS : CARD_RADIUS_OVERLAY;
   const maxCells = cols * SKELETON_CELLS_PER_SECTION_ROWS;
+  const progressLabel =
+    progress && progress.total > 0
+      ? `Loading previews ${progress.done} / ${progress.total}`
+      : "Loading previews";
 
   return (
     <div
       className="relative w-full"
       style={{ display: "flex", flexDirection: "column", gap: SECTION_GAP_PX }}
       aria-busy="true"
-      aria-label="Loading previews"
+      aria-label={progressLabel}
     >
+      {progress && progress.total > 0 ? (
+        <p className="px-2 text-[11px] text-muted-foreground">{progressLabel}</p>
+      ) : null}
       {sections.map((section) => {
         if (section.items.length === 0) return null;
         const aspectCss =
@@ -1190,6 +1202,7 @@ function GridSkeleton({
         return (
           <section
             key={section.id}
+            data-section-id={section.id}
             className={stickySectionTitles ? "gal-footage-section" : "w-full"}
           >
             {section.title ? (
@@ -1242,6 +1255,8 @@ export function FootageGrid({
   subscribeUrl,
   emptyMessage = "No matches",
   stickySectionTitles = false,
+  rootId = "",
+  onReadyChange,
 }: {
   sections: PackContentSection[];
   assetsPath: string;
@@ -1266,6 +1281,10 @@ export function FootageGrid({
   emptyMessage?: string;
   /** Stick section titles to the top of the scroll container while browsing. */
   stickySectionTitles?: boolean;
+  /** Root category id — preload key; subgroup changes must not remount. */
+  rootId?: string;
+  /** Fires when the live grid (not skeleton) is shown / hidden. */
+  onReadyChange?: (ready: boolean) => void;
 }) {
   const { gridColumns } = usePanelGrid();
   const preferWebm = packPrefersWebmPreview(settings);
@@ -1286,61 +1305,112 @@ export function FootageGrid({
     [sections],
   );
 
-  /** Layout identity only — search/favorites must not remount the grid via skeleton. */
+  /** Layout identity — columns / assets base. */
   const layoutKey = useMemo(
     () => `${gridColumns}|${assetsPath}|${assetsBaseUrl || ""}`,
     [gridColumns, assetsPath, assetsBaseUrl],
   );
 
-  const isLargeList = itemCount >= SKELETON_THRESHOLD;
-  const [gridReady, setGridReady] = useState(() => itemCount < SKELETON_THRESHOLD);
-  /** One deferred mount per layout; filter updates reuse the live grid. */
-  const deferredLayoutRef = useRef<string | null>(null);
+  /** Unit of preload: root category. Subgroup nav must not remount. */
+  const preloadKey = useMemo(
+    () => `${layoutKey}|${rootId || "all"}`,
+    [layoutKey, rootId],
+  );
 
-  useEffect(() => {
-    if (!assetsBaseUrl) return;
+  const posterPathsForPreload = useMemo(() => {
     const host = assetsHost === "AE" ? "AE" : "PR";
-    const budget = Math.max(1, gridColumns) * EAGER_PREVIEW_ROWS;
-    let seen = 0;
+    const paths: string[] = [];
     for (const section of sections) {
       for (const item of section.items) {
-        if (seen >= budget) return;
-        const media = resolveItemRemotePreviewMedia(item, assetsBaseUrl, {
-          preferWebm,
-          useMp4,
-          host,
-        });
-        if (media.posterPath) warmPreviewCache(media.posterPath);
-        seen += 1;
+        if (paths.length >= PRELOAD_CAP) return paths;
+        let posterPath: string | null = null;
+        if (assetsBaseUrl) {
+          posterPath = resolveItemRemotePreviewMedia(item, assetsBaseUrl, {
+            preferWebm,
+            useMp4,
+            host,
+          }).posterPath;
+        } else if (assetsPath) {
+          posterPath = resolveItemPreviewMedia(item, assetsPath, {
+            preferWebm,
+            useMp4,
+          }).posterPath;
+        }
+        if (posterPath) paths.push(posterPath);
       }
     }
-  }, [layoutKey, assetsBaseUrl, assetsHost, preferWebm, useMp4, gridColumns, sections]);
+    return paths;
+  }, [
+    sections,
+    assetsBaseUrl,
+    assetsPath,
+    assetsHost,
+    preferWebm,
+    useMp4,
+  ]);
+
+  const [gridReady, setGridReady] = useState(false);
+  const [preloadProgress, setPreloadProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+  const releasePreloadRef = useRef<(() => void) | null>(null);
+  const completedPreloadKeyRef = useRef<string | null>(null);
+  const posterPathsRef = useRef(posterPathsForPreload);
+  posterPathsRef.current = posterPathsForPreload;
 
   useEffect(() => {
-    if (itemCount < SKELETON_THRESHOLD) {
+    if (itemCount === 0) {
+      completedPreloadKeyRef.current = null;
+      setGridReady(false);
+      setPreloadProgress(null);
+      return;
+    }
+
+    if (completedPreloadKeyRef.current === preloadKey) {
       setGridReady(true);
       return;
     }
-    // Already painted this layout as a large list — keep cards mounted across search.
-    if (deferredLayoutRef.current === layoutKey) {
-      setGridReady(true);
-      return;
-    }
-    deferredLayoutRef.current = layoutKey;
+
     setGridReady(false);
-    let cancelled = false;
-    let timeoutId = 0;
-    const rafId = requestAnimationFrame(() => {
-      timeoutId = window.setTimeout(() => {
-        if (!cancelled) setGridReady(true);
-      }, LARGE_LIST_MOUNT_MS);
+    const paths = posterPathsRef.current;
+    setPreloadProgress({ done: 0, total: paths.length });
+
+    const signal = { cancelled: false };
+
+    void preloadPosters(
+      paths,
+      (done, total) => {
+        if (!signal.cancelled) setPreloadProgress({ done, total });
+      },
+      signal,
+    ).then((cleanup) => {
+      if (signal.cancelled) {
+        cleanup();
+        return;
+      }
+      releasePreloadRef.current?.();
+      releasePreloadRef.current = cleanup;
+      completedPreloadKeyRef.current = preloadKey;
+      setGridReady(true);
     });
+
     return () => {
-      cancelled = true;
-      cancelAnimationFrame(rafId);
-      if (timeoutId) window.clearTimeout(timeoutId);
+      signal.cancelled = true;
     };
-  }, [layoutKey, itemCount]);
+  }, [preloadKey, itemCount]);
+
+  useEffect(() => {
+    return () => {
+      releasePreloadRef.current?.();
+      releasePreloadRef.current = null;
+      completedPreloadKeyRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    onReadyChange?.(gridReady && itemCount > 0);
+  }, [gridReady, itemCount, onReadyChange]);
 
   useLayoutEffect(() => {
     setScrollRoot(closestScrollParent(rootRef.current));
@@ -1356,7 +1426,7 @@ export function FootageGrid({
     );
   }
 
-  if (isLargeList && !gridReady) {
+  if (!gridReady) {
     return (
       <div ref={rootRef}>
         <GridSkeleton
@@ -1364,6 +1434,7 @@ export function FootageGrid({
           columns={gridColumns}
           accessUi={accessUi}
           stickySectionTitles={stickySectionTitles}
+          progress={preloadProgress}
         />
       </div>
     );
@@ -1386,6 +1457,7 @@ export function FootageGrid({
             return (
               <section
                 key={section.id}
+                data-section-id={section.id}
                 className={stickySectionTitles ? "gal-footage-section" : "w-full"}
               >
                 {section.title ? (

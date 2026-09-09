@@ -519,6 +519,7 @@ function EditingWorkspace({
               packFilePath={packFilePath}
               settings={packSettings}
               isLocked={isLocked}
+              rootId={category}
             />
           </div>
         )}

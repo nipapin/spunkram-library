@@ -9,6 +9,13 @@ import { cepHttpRequest } from "@/lib/api/cep-http";
 import { getUserSystemData, getUserSystemPrint } from "@/lib/api/usp";
 import { BRAND } from "@brands";
 import { openLinkInBrowser } from "@/lib/utils/bolt";
+import {
+  interpretDeviceAuthTokenResponse,
+  type DeviceAuthTokenResult,
+  type DeviceLimitListItem,
+} from "./interpret-device-auth-poll";
+
+export type { DeviceAuthTokenResult, DeviceLimitListItem };
 
 const PUBLIC_AUTH_ORIGIN = "https://motionflow.pro";
 
@@ -131,26 +138,6 @@ export type DeviceAuthStart = {
   expires_in: number;
 };
 
-export type DeviceLimitListItem = {
-  id: string;
-  ip: string;
-  user_fingerprint: string;
-  name?: string;
-  last_seen_at?: string | null;
-  current?: boolean;
-};
-
-export type DeviceAuthTokenResult =
-  | { status: "pending" }
-  | { status: "expired" | "denied"; message?: string }
-  | {
-      status: "device_limit";
-      devices: DeviceLimitListItem[];
-      device_limit: number;
-      message?: string;
-    }
-  | { status: "complete"; token: string; user: MotionflowUser };
-
 function authHeaders(token?: string): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -253,7 +240,7 @@ export async function pollDeviceAuth(
     return { status: "expired", message: "Missing device_code" };
   }
 
-  const { data, error } = await parseJson<{
+  const { data, error, status } = await parseJson<{
     status?: string;
     error?: string;
     token?: string;
@@ -267,37 +254,9 @@ export async function pollDeviceAuth(
     body: JSON.stringify({ code, device_code: deviceCode }),
   });
 
-  const s = (data?.status || "").toLowerCase();
-  const errCode = String(data?.error || error || "").toUpperCase();
-
-  // Keep this before the `!data → pending` fallback. A 4xx DEVICE_LIMIT body
-  // used to be dropped, so the panel stayed on "Waiting for confirmation".
-  if (s === "device_limit" || errCode === "DEVICE_LIMIT") {
-    return {
-      status: "device_limit",
-      devices: Array.isArray(data?.devices) ? data.devices : [],
-      device_limit: Number(data?.device_limit) || 3,
-      message: data?.message || error,
-    };
-  }
-
-  if (!data) {
-    return { status: "pending" };
-  }
-
-  if (s === "pending" || (!data.token && !s)) {
-    if (data.token && data.user) {
-      return { status: "complete", token: data.token, user: data.user };
-    }
-    return { status: "pending" };
-  }
-  if (s === "expired" || s === "denied") {
-    return { status: s, message: data.message || error };
-  }
-  if (data.token && data.user) {
-    return { status: "complete", token: data.token, user: data.user };
-  }
-  return { status: "pending" };
+  // Keep device_limit before the `!data → pending` fallback. A 4xx DEVICE_LIMIT
+  // body used to be dropped, so the panel stayed on "Waiting for confirmation".
+  return interpretDeviceAuthTokenResponse({ data, error, httpStatus: status });
 }
 
 /** Complete a device_limit login by revoking another device. */

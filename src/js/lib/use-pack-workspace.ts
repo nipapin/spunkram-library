@@ -31,7 +31,9 @@ import {
   filterFavoriteSections,
   filterPackTree,
   filterUnlockedSections,
+  findPackRootFor,
   findPackTreeNode,
+  firstGroupIdIn,
   getFirstPackRoot,
   type PackContentSection,
 } from "@/lib/utils/pack-tree";
@@ -610,6 +612,50 @@ export function usePackWorkspace() {
     [tree],
   );
 
+  /** Root category for the current selection — unit of grid preload / mount (Gal). */
+  const activeRootId = useMemo(() => {
+    if (BRAND.id !== "gal") return "";
+    if (!tree.length) return "";
+    if (showFavoritesOnly || category === FAVORITES_CATEGORY_ID) return "";
+    if (query.trim().length > 0) return "";
+    const browseTree = showAvailableOnly ? sidebarTree : tree;
+    if (!browseTree.length) return "";
+    const root =
+      findPackRootFor(browseTree, category) ?? getFirstPackRoot(browseTree);
+    return root?.id ?? "";
+  }, [
+    tree,
+    sidebarTree,
+    category,
+    query,
+    showFavoritesOnly,
+    showAvailableOnly,
+  ]);
+
+  /**
+   * Leaf section to scroll to after a sidebar click (Gal).
+   * Folders resolve to their first descendant group; search/favorites → null.
+   */
+  const scrollTargetSectionId = useMemo(() => {
+    if (BRAND.id !== "gal") return null;
+    if (!tree.length) return null;
+    if (showFavoritesOnly || category === FAVORITES_CATEGORY_ID) return null;
+    if (query.trim().length > 0) return null;
+    const browseTree = showAvailableOnly ? sidebarTree : tree;
+    if (!browseTree.length || !category) return null;
+    const node = findPackTreeNode(browseTree, category);
+    if (!node) return null;
+    if (node.kind === "group") return node.id;
+    return firstGroupIdIn(node);
+  }, [
+    tree,
+    sidebarTree,
+    category,
+    query,
+    showFavoritesOnly,
+    showAvailableOnly,
+  ]);
+
   const sections: PackContentSection[] = useMemo(() => {
     if (!tree.length) return [];
     const browseTree = showAvailableOnly ? sidebarTree : tree;
@@ -625,8 +671,14 @@ export function usePackWorkspace() {
     } else if (hasQuery) {
       next = filterContentSections(allSections, query);
     } else {
+      // Gal: mount the full root category — subgroups only scroll/spy.
+      // Spunkram: keep leaf/folder-scoped sections.
       const node =
-        findPackTreeNode(browseTree, category) ?? getFirstPackRoot(browseTree);
+        BRAND.id === "gal"
+          ? findPackRootFor(browseTree, category) ??
+            getFirstPackRoot(browseTree)
+          : findPackTreeNode(browseTree, category) ??
+            getFirstPackRoot(browseTree);
       if (!node) return [];
       next = filterContentSections(collectContentSections(node), "");
     }
@@ -744,6 +796,8 @@ export function usePackWorkspace() {
     hasLocalAssets,
     structureLoading,
     structureSource,
+    activeRootId,
+    scrollTargetSectionId,
     sections,
     galAccountPlan,
     galAssetsSync,
