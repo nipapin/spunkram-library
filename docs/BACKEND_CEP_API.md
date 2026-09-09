@@ -474,7 +474,7 @@ node --env-file=.env scripts/upload-spunkram-zxp.mjs --product=gal --zxp=./dist/
 node --env-file=.env scripts/upload-spunkram-zxp.mjs --product=spunkram --zxp=./x.zxp --version=0.1.1-beta.1 --channel=beta
 ```
 
-After R2 upload the script calls **`POST /api/cep/update/notify`** with `Authorization: Bearer <CEP_RELEASE_TOKEN>` (same `mfcep_…` device token as a signed-in panel). Body includes `product: "spunkram" | "gal"` so WSS clients can filter. Override URL with `CEP_UPDATE_NOTIFY_URL`. Notify failure does not fail the release.
+After R2 upload the script calls **`POST /api/cep/update/notify`** with `x-motionflow-admin-secret: <MOTIONFLOW_ADMIN_API_SECRET>` (same durable secret as credits admin — not a panel `mfcep_…` session). Body includes `product: "spunkram" | "gal"` so WSS clients can filter. Override URL with `CEP_UPDATE_NOTIFY_URL`. Notify failure does not fail the release.
 
 CEP:
 
