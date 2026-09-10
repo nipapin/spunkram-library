@@ -28,6 +28,7 @@ import {
   holdPosterWarmup,
   posterWarmupIdentity,
   preloadPosters,
+  releasePosterWarmup,
 } from "@/lib/utils/preview-preload";
 import logo from "./assets/logo.png";
 import tabEffects from "./assets/tab-effects.png";
@@ -249,6 +250,7 @@ function GalShell() {
       setBootPct(4);
       setPreviewDone(false);
       setPreviewFrac(0);
+      releasePosterWarmup();
     }
   }, [authReady, signedIn]);
 
@@ -281,6 +283,7 @@ function GalShell() {
     if (!authReady || !signedIn || uiReadyRef.current) return;
     if (workspace.structureLoading) return;
     if (workspace.tree.length > 0 && !workspace.activeRootId) return;
+    if (workspace.tree.length > 0 && sectionsRef.current.length === 0) return;
 
     const rootId = workspace.activeRootId || "all";
     const identity = posterWarmupIdentity(
@@ -329,6 +332,7 @@ function GalShell() {
     workspace.assetsBaseUrl,
     workspace.assetsHost,
     workspace.packSettings,
+    workspace.sections.length,
   ]);
 
   if (!authReady || (signedIn && !bootReady && !assetsError)) {

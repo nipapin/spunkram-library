@@ -112,6 +112,42 @@
   color: rgba(255, 255, 255, 0.55);
 }
 
+.gal-account__gens {
+  h2 {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+.gal-account__gens-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gal-account__gens-total {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: #fff;
+}
+
+.gal-account__gens-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.gal-account__gens-extra {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .gal-account__dev-plan {
   margin-top: 8px;
 }

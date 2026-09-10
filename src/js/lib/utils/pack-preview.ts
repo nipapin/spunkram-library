@@ -199,6 +199,12 @@ export function retainPreviewObjectUrlSync(absolutePath: string): string | null 
   return retainEntry(cached);
 }
 
+/** Read a warm blob URL without retaining — safe to call during render. */
+export function peekPreviewObjectUrlSync(absolutePath: string): string | null {
+  if (!absolutePath) return null;
+  return objectUrlCache.get(absolutePath)?.url ?? null;
+}
+
 /**
  * Drop one retain from `loadPreviewObjectUrl`. The blob is revoked after a short
  * delay once no retainers remain, so Strict Mode remounts can reuse the same URL.

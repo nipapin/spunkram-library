@@ -6,6 +6,7 @@ import { packItemIsAudio } from "@/lib/utils/pack-apply-paths";
 import {
   loadPreviewObjectUrl,
   packPrefersWebmPreview,
+  peekPreviewObjectUrlSync,
   releasePreviewObjectUrl,
   resolveItemPreviewMedia,
   resolveItemRemotePreviewMedia,
@@ -13,7 +14,10 @@ import {
 import type { PackHostId } from "@/lib/utils/pack-host";
 import type { PackContentSection } from "@/lib/utils/pack-tree";
 import type { PackSettings } from "@/lib/utils/pack-types";
-import { ensurePreviewCached } from "@/lib/utils/preview-disk-cache";
+import {
+  ensurePreviewCached,
+  peekCachedPreviewPath,
+} from "@/lib/utils/preview-disk-cache";
 
 /** Max posters held warm before showing the grid (rest load lazily). */
 export const PRELOAD_CAP = 500;
@@ -81,7 +85,7 @@ export function posterWarmupIdentity(
 
 let heldWarmup: { identity: string; cleanup: () => void } | null = null;
 
-/** Keep boot-warmed blob retains until the live grid takes them over. */
+/** Keep boot-warmed blob retains for the session so the grid can paint from cache. */
 export function holdPosterWarmup(identity: string, cleanup: () => void): void {
   if (heldWarmup && heldWarmup.identity !== identity) {
     heldWarmup.cleanup();
@@ -94,6 +98,40 @@ export function takePosterWarmup(identity: string): (() => void) | null {
   const cleanup = heldWarmup.cleanup;
   heldWarmup = null;
   return cleanup;
+}
+
+/** Boot warmup still holds blobs — grid must not take/release them. */
+export function peekPosterWarmup(identity: string): boolean {
+  return Boolean(heldWarmup && heldWarmup.identity === identity);
+}
+
+export function releasePosterWarmup(): void {
+  if (!heldWarmup) return;
+  heldWarmup.cleanup();
+  heldWarmup = null;
+}
+
+/**
+ * Blob URL already created by boot warmup / a previous retain.
+ * HTTPS paths resolve through the disk cache first. Safe during render (no retain).
+ */
+export function peekWarmPosterUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (HTTPS_URL_RE.test(path)) {
+    const local = peekCachedPreviewPath(path);
+    return local ? peekPreviewObjectUrlSync(local) : null;
+  }
+  return peekPreviewObjectUrlSync(path);
+}
+
+function decodePreviewUrl(url: string): Promise<void> {
+  if (typeof Image === "undefined") return Promise.resolve();
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = () => resolve();
+    img.src = url;
+  });
 }
 
 /**
@@ -140,7 +178,10 @@ export async function preloadPosters(
             if (url) releasePreviewObjectUrl(local);
             break;
           }
-          if (url) retainedLocalPaths.push(local);
+          if (url) {
+            retainedLocalPaths.push(local);
+            await decodePreviewUrl(url);
+          }
         }
         // Cache miss / CEP FS unavailable — card will paint remote HTTPS directly.
       } else {
@@ -149,7 +190,10 @@ export async function preloadPosters(
           if (url) releasePreviewObjectUrl(path);
           break;
         }
-        if (url) retainedLocalPaths.push(path);
+        if (url) {
+          retainedLocalPaths.push(path);
+          await decodePreviewUrl(url);
+        }
       }
     } catch {
       // Count as done so one bad file does not block the gate forever.

@@ -2,6 +2,7 @@
  * User identity for AI generations API.
  * Prefer Motionflow CEP session (preferences), then userdata panel store.
  */
+import { storageKey } from "@brands";
 import { readMotionflowAuth } from "@/lib/api/preferences";
 import * as panelStore from "@/lib/userdata-store";
 
@@ -13,14 +14,14 @@ export interface UserIdentity {
   token?: string;
 }
 
-const STORAGE_KEY = "spunkram-library-ai-user";
+const STORAGE_KEY = storageKey("ai-user");
+const LEGACY_STORAGE_KEY = "spunkram-library-ai-user";
 
 const emptyUser = (): UserIdentity => ({ id: "" });
 
-const readStoredUser = (): UserIdentity | null => {
+const parseStoredUser = (raw: string | null): UserIdentity | null => {
+  if (!raw) return null;
   try {
-    const raw = panelStore.getItem(STORAGE_KEY);
-    if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<UserIdentity>;
     return {
       id: typeof parsed.id === "string" ? parsed.id : "",
@@ -28,6 +29,23 @@ const readStoredUser = (): UserIdentity | null => {
       email: typeof parsed.email === "string" ? parsed.email : undefined,
       token: typeof parsed.token === "string" ? parsed.token : undefined,
     };
+  } catch {
+    return null;
+  }
+};
+
+const readStoredUser = (): UserIdentity | null => {
+  try {
+    const branded = parseStoredUser(panelStore.getItem(STORAGE_KEY));
+    if (branded) return branded;
+    // One-time migrate legacy Spunkram-only key into branded storage.
+    const legacy = parseStoredUser(panelStore.getItem(LEGACY_STORAGE_KEY));
+    if (legacy) {
+      panelStore.setItem(STORAGE_KEY, JSON.stringify(legacy));
+      panelStore.removeItem(LEGACY_STORAGE_KEY);
+      return legacy;
+    }
+    return null;
   } catch {
     return null;
   }

@@ -136,6 +136,22 @@ function folderPathToActive(
   return null;
 }
 
+/** True when this row sits under a folder that is closed (or closing). */
+function isRowInsideCollapsedKids(row: HTMLElement): boolean {
+  let el: HTMLElement | null = row.parentElement;
+  while (el) {
+    if (
+      el.classList.contains("sidebar-tree__node") &&
+      !el.classList.contains("is-open") &&
+      el.querySelector(":scope > .sidebar-tree__kids")
+    ) {
+      return true;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
+
 function TreeNodeRow({
   node,
   active,
@@ -171,6 +187,7 @@ function TreeNodeRow({
   const wasActiveRef = useRef(false);
 
   // When scroll-spy (or a click) activates this row, keep it visible in the nav.
+  // Skip while the row is inside a collapsed/collapsing folder (avoids scroll-on-close).
   useEffect(() => {
     if (!isActive) {
       wasActiveRef.current = false;
@@ -180,6 +197,9 @@ function TreeNodeRow({
     wasActiveRef.current = true;
     const row = rowRef.current;
     if (!row) return;
+    if (isRowInsideCollapsedKids(row)) return;
+    // Collapsing this folder itself: kids are closing — don't chase the row.
+    if (isFolder && !open) return;
     const nav = row.closest(".sidebar-tree__nav");
     if (!(nav instanceof HTMLElement)) {
       row.scrollIntoView({ block: "nearest" });
@@ -192,7 +212,7 @@ function TreeNodeRow({
     if (!fullyVisible) {
       row.scrollIntoView({ block: "nearest" });
     }
-  }, [isActive]);
+  }, [isActive, isFolder, open]);
 
   const chevron = isFolder ? (
     <button
@@ -240,7 +260,12 @@ function TreeNodeRow({
         ref={rowRef}
         className={cn(
           "sidebar-tree__row group flex w-full items-center gap-1.5 text-left text-xs transition-colors",
-          IS_GAL ? "rounded-full py-2.5" : "rounded-lg py-1.5",
+          // Nested Gal rows use left-flat radius via SCSS — only roots get rounded-full.
+          IS_GAL
+            ? isRoot
+              ? "rounded-full py-2.5"
+              : "py-2.5"
+            : "rounded-lg py-1.5",
           !IS_GAL &&
             (isActive
               ? "bg-[#7c4dff]/15 font-semibold text-foreground"
@@ -274,9 +299,10 @@ function TreeNodeRow({
         <button
           type="button"
           onClick={() => {
-            // Gal: LMB on folder toggles when already selected; first click selects
-            // (ancestors auto-open via effect). Chevron still toggles without select.
-            if (IS_GAL && isFolder && isActive) {
+            // Gal: LMB on folder on the active path toggles open/close without
+            // re-selecting (spy leaves roots as is-ancestor, not is-active).
+            // Chevron still toggles without select for any folder.
+            if (IS_GAL && isFolder && (isActive || isAncestor)) {
               onToggleOpen(node.id);
               return;
             }
@@ -348,6 +374,10 @@ export function PanelSidebar({
   loading?: boolean;
 }) {
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
+  /** Folders the user explicitly collapsed — auto-open must not reopen these. */
+  const [userCollapsedIds, setUserCollapsedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [width, setWidth] = useState(loadSidebarWidth);
   const [resizing, setResizing] = useState(false);
   const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -405,6 +435,7 @@ export function PanelSidebar({
     }
   };
 
+  // Auto-open ancestors of the active leaf — but honor explicit user collapses.
   useEffect(() => {
     if (!active || tree.length === 0) return;
     const path = folderPathToActive(tree, active);
@@ -413,6 +444,7 @@ export function PanelSidebar({
       let changed = false;
       const next = new Set(prev);
       for (const id of path) {
+        if (userCollapsedIds.has(id)) continue;
         if (!next.has(id)) {
           next.add(id);
           changed = true;
@@ -420,16 +452,61 @@ export function PanelSidebar({
       }
       return changed ? next : prev;
     });
-  }, [active, tree]);
+  }, [active, tree, userCollapsedIds]);
 
-  function toggleOpen(id: string) {
+  const toggleOpen = useCallback((id: string) => {
     setOpenIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+        setUserCollapsedIds((collapsed) => {
+          if (collapsed.has(id)) return collapsed;
+          const c = new Set(collapsed);
+          c.add(id);
+          return c;
+        });
+      } else {
+        next.add(id);
+        setUserCollapsedIds((collapsed) => {
+          if (!collapsed.has(id)) return collapsed;
+          const c = new Set(collapsed);
+          c.delete(id);
+          return c;
+        });
+      }
       return next;
     });
-  }
+  }, []);
+
+  /** Explicit nav select: clear collapsed flags for folders on the path, then select. */
+  const handleSelect = useCallback(
+    (id: string) => {
+      const path = folderPathToActive(tree, id);
+      if (path && path.length > 0) {
+        setUserCollapsedIds((prev) => {
+          let changed = false;
+          const next = new Set(prev);
+          for (const folderId of path) {
+            if (next.delete(folderId)) changed = true;
+          }
+          return changed ? next : prev;
+        });
+        setOpenIds((prev) => {
+          let changed = false;
+          const next = new Set(prev);
+          for (const folderId of path) {
+            if (!next.has(folderId)) {
+              next.add(folderId);
+              changed = true;
+            }
+          }
+          return changed ? next : prev;
+        });
+      }
+      onSelect(id);
+    },
+    [tree, onSelect],
+  );
 
   if (orientation === "horizontal") {
     return (
@@ -542,7 +619,7 @@ export function PanelSidebar({
                 key={node.id}
                 node={node}
                 active={active}
-                onSelect={onSelect}
+                onSelect={handleSelect}
                 depth={0}
                 openIds={openIds}
                 onToggleOpen={toggleOpen}

@@ -6,7 +6,7 @@
     "startingDebugPort": 8860
   },
   "gal": {
-    "version": "0.9.20",
+    "version": "0.9.21",
     "port": 4010,
     "servePort": 5010,
     "startingDebugPort": 8870

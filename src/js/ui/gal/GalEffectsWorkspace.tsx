@@ -4,6 +4,7 @@ import {
   startTransition,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -20,14 +21,14 @@ const SNAP_EPSILON_PX = 28;
 const STICKY_SPY_EPSILON_PX = 44;
 /** Near end of scroll: last section cannot reach the sticky line — force-activate it. */
 const SCROLL_BOTTOM_EPS_PX = 8;
-/** Ignore scroll-spy updates while programmatic scroll animates. */
-const SPY_SUPPRESS_MS = 600;
+/** Programmatic smooth scroll is settled when within this of the target top. */
+const SCROLL_SETTLE_EPS_PX = 2;
 
-function scrollMainToNearestGroup(scroller: HTMLElement) {
+function nearestGroupScrollTop(scroller: HTMLElement): number | null {
   const sections = Array.from(
     scroller.querySelectorAll<HTMLElement>(".gal-footage-section"),
   );
-  if (sections.length === 0) return;
+  if (sections.length === 0) return null;
 
   const scrollTop = scroller.scrollTop;
   const starts = sections.map((el) => ({
@@ -46,9 +47,22 @@ function scrollMainToNearestGroup(scroller: HTMLElement) {
   const atCurrentStart = Math.abs(scrollTop - current.top) <= SNAP_EPSILON_PX;
   const targetIdx =
     atCurrentStart && currentIdx > 0 ? currentIdx - 1 : currentIdx;
-  const targetTop = starts[targetIdx].top;
+  return starts[targetIdx].top;
+}
 
-  scroller.scrollTo({ top: targetTop, behavior: "smooth" });
+function sectionIdAtTop(scroller: HTMLElement, top: number): string | null {
+  const nodes = Array.from(
+    scroller.querySelectorAll<HTMLElement>("[data-section-id]"),
+  );
+  if (nodes.length === 0) return null;
+  let activeId = nodes[0].dataset.sectionId || null;
+  for (const node of nodes) {
+    const id = node.dataset.sectionId;
+    if (!id) continue;
+    if (node.offsetTop <= top + STICKY_SPY_EPSILON_PX) activeId = id;
+    else break;
+  }
+  return activeId;
 }
 
 const GalSearchTools = memo(function GalSearchTools({
@@ -155,10 +169,27 @@ export function GalEffectsWorkspace({
   const [showJumpFab, setShowJumpFab] = useState(false);
   const [gridReady, setGridReady] = useState(false);
   const [visibleSectionId, setVisibleSectionId] = useState<string | null>(null);
-  const suppressSpyUntilRef = useRef(0);
+  /** Bumps on every sidebar select so re-clicking the same group still scrolls. */
+  const [navClickNonce, setNavClickNonce] = useState(0);
+  /** Target scrollTop while smooth programmatic scroll runs; null = spy free. */
+  const programmaticTargetTopRef = useRef<number | null>(null);
 
   const spyEnabled =
     !showFavoritesOnly && query.trim().length === 0 && Boolean(activeRootId);
+
+  const beginProgrammaticScroll = useCallback(
+    (el: HTMLElement, top: number, sectionId?: string | null) => {
+      programmaticTargetTopRef.current = top;
+      if (sectionId) {
+        setVisibleSectionId(sectionId);
+      } else {
+        const id = sectionIdAtTop(el, top);
+        if (id) setVisibleSectionId(id);
+      }
+      el.scrollTo({ top, behavior: "smooth" });
+    },
+    [],
+  );
 
   const syncJumpFab = useCallback(() => {
     const el = mainRef.current;
@@ -172,9 +203,18 @@ export function GalEffectsWorkspace({
 
   const syncScrollSpy = useCallback(() => {
     if (!spyEnabled) return;
-    if (Date.now() < suppressSpyUntilRef.current) return;
     const el = mainRef.current;
     if (!el) return;
+
+    // Suppress spy until programmatic scroll settles (not a fixed timer).
+    const target = programmaticTargetTopRef.current;
+    if (target !== null) {
+      if (Math.abs(el.scrollTop - target) <= SCROLL_SETTLE_EPS_PX) {
+        programmaticTargetTopRef.current = null;
+      } else {
+        return;
+      }
+    }
 
     const nodes = Array.from(
       el.querySelectorAll<HTMLElement>("[data-section-id]"),
@@ -218,12 +258,18 @@ export function GalEffectsWorkspace({
         syncScrollSpy();
       });
     };
+    // User wheel cancels programmatic suppress so spy tracks immediately.
+    const onWheel = () => {
+      programmaticTargetTopRef.current = null;
+    };
     syncJumpFab();
     syncScrollSpy();
     el.addEventListener("scroll", onScroll, { passive: true });
+    el.addEventListener("wheel", onWheel, { passive: true });
     return () => {
       if (raf) cancelAnimationFrame(raf);
       el.removeEventListener("scroll", onScroll);
+      el.removeEventListener("wheel", onWheel);
     };
   }, [syncJumpFab, syncScrollSpy, sections, catalogLoading, gridReady]);
 
@@ -232,32 +278,64 @@ export function GalEffectsWorkspace({
     if (!spyEnabled) setVisibleSectionId(null);
   }, [spyEnabled]);
 
+  // Instant jump to top when first-order root / search / favorites change.
+  useLayoutEffect(() => {
+    if (!gridReady) return;
+    const el = mainRef.current;
+    if (!el) return;
+    programmaticTargetTopRef.current = null;
+    el.scrollTop = 0;
+    syncJumpFab();
+  }, [activeRootId, query, showFavoritesOnly, gridReady, syncJumpFab]);
+
   // Scroll to the selected subgroup once the root grid is ready (or on category click).
   useEffect(() => {
     if (!gridReady || !scrollTargetSectionId || !spyEnabled) return;
     const el = mainRef.current;
     if (!el) return;
 
+    // Root-folder select: stay at top (layout effect already reset); only highlight.
+    if (category === activeRootId) {
+      programmaticTargetTopRef.current = null;
+      setVisibleSectionId(scrollTargetSectionId);
+      return;
+    }
+
     const target = el.querySelector<HTMLElement>(
       `[data-section-id="${scrollTargetSectionId.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"]`,
     );
     if (!target) return;
 
-    suppressSpyUntilRef.current = Date.now() + SPY_SUPPRESS_MS;
-    setVisibleSectionId(scrollTargetSectionId);
-    el.scrollTo({ top: target.offsetTop, behavior: "smooth" });
-  }, [category, gridReady, scrollTargetSectionId, spyEnabled]);
+    beginProgrammaticScroll(el, target.offsetTop, scrollTargetSectionId);
+  }, [
+    category,
+    activeRootId,
+    gridReady,
+    scrollTargetSectionId,
+    spyEnabled,
+    navClickNonce,
+    beginProgrammaticScroll,
+  ]);
 
   const jumpToNearestGroup = useCallback(() => {
     const el = mainRef.current;
     if (!el) return;
-    suppressSpyUntilRef.current = Date.now() + SPY_SUPPRESS_MS;
-    scrollMainToNearestGroup(el);
-  }, []);
+    const targetTop = nearestGroupScrollTop(el);
+    if (targetTop === null) return;
+    beginProgrammaticScroll(el, targetTop);
+  }, [beginProgrammaticScroll]);
 
   const handleReadyChange = useCallback((ready: boolean) => {
     setGridReady(ready);
   }, []);
+
+  const handleSidebarSelect = useCallback(
+    (id: string) => {
+      setNavClickNonce((n) => n + 1);
+      startTransition(() => setCategory(id));
+    },
+    [setCategory],
+  );
 
   const sidebarActive = showFavoritesOnly
     ? ""
@@ -281,7 +359,7 @@ export function GalEffectsWorkspace({
         <PanelSidebar
           tree={showAvailableOnly ? sidebarTree : tree}
           active={sidebarActive}
-          onSelect={(id) => startTransition(() => setCategory(id))}
+          onSelect={handleSidebarSelect}
           tools={searchTools}
           loading={structureLoading}
         />

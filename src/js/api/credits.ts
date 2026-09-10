@@ -1,3 +1,4 @@
+import { BRAND } from "@brands";
 import { apiUrl, GENERATIONS_ENDPOINTS } from "./config";
 import { getUserIdentity } from "./user";
 
@@ -18,6 +19,7 @@ export type GenerationsStatus = {
 /**
  * Fetch generation credits for the current CEP user.
  * Uses Bearer token when available; otherwise posts CEP identity fields.
+ * Always sends `client` so Gal / Spunkram balances stay separate on the server.
  */
 export async function fetchGenerationsStatus(
   signal?: AbortSignal,
@@ -32,6 +34,7 @@ export async function fetchGenerationsStatus(
       credentials: "include",
       signal,
       body: JSON.stringify({
+        client: BRAND.apiClient,
         email: user.email || undefined,
         userId: user.id || undefined,
       }),

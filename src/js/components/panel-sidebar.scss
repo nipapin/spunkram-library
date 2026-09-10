@@ -40,10 +40,15 @@
 }
 
 [data-brand="gal"] .sidebar-tree__row {
+  position: relative;
   transition:
     background 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease;
+    color 0.15s ease;
+}
+
+/* Nested rows keep left-flat radius always — avoids radius flicker when spy toggles active. */
+[data-brand="gal"] .sidebar-tree__row:not(.is-root) {
+  border-radius: 0 999px 999px 0;
 }
 
 [data-brand="gal"] .sidebar-tree__row:not(.is-root-active):not(.is-active):hover {
@@ -76,11 +81,22 @@
 }
 
 [data-brand="gal"] .sidebar-tree__row.is-active:not(.is-root) {
-  box-shadow: inset 2px 0 0 #c31f93;
-  border-radius: 0 999px 999px 0;
   background: rgba(195, 31, 147, 0.08);
   color: #fff;
   font-weight: 600;
+}
+
+/* Inset bar via ::before — no box-shadow transition that curves the left edge. */
+[data-brand="gal"] .sidebar-tree__row.is-active:not(.is-root)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #c31f93;
+  border-radius: 0;
+  pointer-events: none;
 }
 
 [data-brand="gal"] .sidebar-tree__row.is-active:not(.is-root) .sidebar-tree__icon {

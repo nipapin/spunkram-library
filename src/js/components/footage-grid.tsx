@@ -21,9 +21,10 @@ import {
 import {
   PRELOAD_CAP,
   collectPosterPathsForPreload,
+  peekPosterWarmup,
+  peekWarmPosterUrl,
   posterWarmupIdentity,
   preloadPosters,
-  takePosterWarmup,
 } from "@/lib/utils/preview-preload";
 import type { PackHostId } from "@/lib/utils/pack-host";
 import { resolvePreviewAspectRatio, type PackContentSection } from "@/lib/utils/pack-tree";
@@ -94,8 +95,8 @@ function clearExclusiveHover(): void {
 
 /**
  * Resolve preview URL with minimal first-paint delay:
+ * - Warm blob cache hit → URL available during render (no gray flash)
  * - HTTPS miss → show remote immediately, warm AppData cache in background
- * - Warm blob cache hit → sync retain (no readFileSync)
  * - Disk miss → priority queue (eager = priority 0, still yields)
  * - `load` gates start only; scroll-away must not revoke/reload
  */
@@ -105,13 +106,59 @@ function usePreviewObjectUrl(
 ): string | null {
   const [url, setUrl] = useState<string | null>(null);
   const load = opts?.load ?? true;
-  const eager = opts?.eager ?? false;
   const priorityRef = useRef(opts?.priority ?? 0);
   /** Props path we already resolved (remote URL or local file). */
   const loadedKeyRef = useRef<string | null>(null);
   /** Local path retained in the blob cache (for release). */
   const blobPathRef = useRef<string | null>(null);
   priorityRef.current = opts?.priority ?? 0;
+
+  const warmUrl = path && load ? peekWarmPosterUrl(path) : null;
+  const remoteFallback =
+    path && load && !warmUrl && HTTPS_URL_RE.test(path) ? path : null;
+
+  const adoptLocalBlob = (
+    localPath: string,
+    sourcePath: string,
+    alive: { current: boolean },
+  ) => {
+    const syncUrl = retainPreviewObjectUrlSync(localPath);
+    if (syncUrl) {
+      loadedKeyRef.current = sourcePath;
+      blobPathRef.current = localPath;
+      setUrl(syncUrl);
+      return;
+    }
+    void loadPreviewObjectUrl(localPath, { priority: priorityRef.current }).then(
+      (next) => {
+        if (!next) return;
+        if (!alive.current) {
+          releasePreviewObjectUrl(localPath);
+          return;
+        }
+        loadedKeyRef.current = sourcePath;
+        blobPathRef.current = localPath;
+        setUrl(next);
+      },
+    );
+  };
+
+  // Retain a boot-warmed blob before paint so Strict Mode remounts keep the URL.
+  useLayoutEffect(() => {
+    if (!path || !load) return;
+    const local = HTTPS_URL_RE.test(path)
+      ? peekCachedPreviewPath(path)
+      : path;
+    if (!local) return;
+    const syncUrl = retainPreviewObjectUrlSync(local);
+    if (!syncUrl) return;
+    if (blobPathRef.current && blobPathRef.current !== local) {
+      releasePreviewObjectUrl(blobPathRef.current);
+    }
+    blobPathRef.current = local;
+    loadedKeyRef.current = path;
+    setUrl((prev) => (prev === syncUrl ? prev : syncUrl));
+  }, [path, load]);
 
   useEffect(() => {
     if (!path) {
@@ -137,37 +184,14 @@ function usePreviewObjectUrl(
 
     if (!load) return;
 
-    let alive = true;
+    const alive = { current: true };
 
-    const adoptLocalBlob = (localPath: string, _preferSync: boolean) => {
-      // Sync retain is cheap (Map lookup only) — always try so preloaded posters paint
-      // without waiting for the async queue tick.
-      const syncUrl = retainPreviewObjectUrlSync(localPath);
-      if (syncUrl) {
-        loadedKeyRef.current = path;
-        blobPathRef.current = localPath;
-        setUrl(syncUrl);
-        return;
-      }
-      void loadPreviewObjectUrl(localPath, { priority: priorityRef.current }).then((next) => {
-        if (!next) return;
-        if (!alive) {
-          releasePreviewObjectUrl(localPath);
-          return;
-        }
-        loadedKeyRef.current = path;
-        blobPathRef.current = localPath;
-        setUrl(next);
-      });
-    };
-
-    // Remote HTTPS — paint ASAP; disk cache is a warm path, never a gate.
     if (HTTPS_URL_RE.test(path)) {
       const cached = peekCachedPreviewPath(path);
       if (cached) {
-        adoptLocalBlob(cached, eager);
+        adoptLocalBlob(cached, path, alive);
         return () => {
-          alive = false;
+          alive.current = false;
         };
       }
 
@@ -176,15 +200,15 @@ function usePreviewObjectUrl(
       setUrl(path);
       warmPreviewCache(path);
       return () => {
-        alive = false;
+        alive.current = false;
       };
     }
 
-    adoptLocalBlob(path, eager);
+    adoptLocalBlob(path, path, alive);
     return () => {
-      alive = false;
+      alive.current = false;
     };
-  }, [path, load, eager]);
+  }, [path, load]);
 
   useEffect(() => {
     return () => {
@@ -196,7 +220,7 @@ function usePreviewObjectUrl(
     };
   }, []);
 
-  return url;
+  return url ?? warmUrl ?? remoteFallback;
 }
 
 function closestScrollParent(el: HTMLElement | null): Element | null {
@@ -455,7 +479,6 @@ function usePreviewCardModel({
     preloaded || gridIndex < Math.max(1, gridColumns) * EAGER_PREVIEW_ROWS;
   const [nearView, setNearView] = useState(eagerLoad);
   const [posterFailed, setPosterFailed] = useState(false);
-  const [posterPainted, setPosterPainted] = useState(false);
   /** Set only after a successful prepareApply in this session. */
   const [appliedThisSession, setAppliedThisSession] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -499,7 +522,6 @@ function usePreviewCardModel({
     setInView(false);
     setNearView(eagerLoad);
     setPosterFailed(false);
-    setPosterPainted(false);
     setAppliedThisSession(false);
     if (exclusiveHoverId === item.id) clearExclusiveHover();
     stopSfxPreview(item.id);
@@ -516,21 +538,15 @@ function usePreviewCardModel({
   });
 
   useEffect(() => {
-    setPosterPainted(false);
     if (posterUrl) setPosterFailed(false);
   }, [posterUrl]);
 
-  const markPosterPainted = useCallback(() => setPosterPainted(true), []);
   const markPosterFailed = useCallback(() => {
     setPosterFailed(true);
-    setPosterPainted(false);
   }, []);
 
   const waitingPoster =
-    !isAudio &&
-    Boolean(media.posterPath) &&
-    !posterFailed &&
-    (!posterUrl || !posterPainted);
+    !isAudio && Boolean(media.posterPath) && !posterFailed && !posterUrl;
 
   useEffect(() => {
     if (playPreview) return;
@@ -781,7 +797,6 @@ function usePreviewCardModel({
     handleFocus,
     handleBlur,
     onRequestSubscribe,
-    markPosterPainted,
     markPosterFailed,
   };
 }
@@ -793,12 +808,10 @@ type CardModel = ReturnType<typeof usePreviewCardModel> & {
 function PosterImg({
   src,
   waiting,
-  onPainted,
   onFailed,
 }: {
   src: string;
   waiting: boolean;
-  onPainted: () => void;
   onFailed: () => void;
 }) {
   const ref = useRef<HTMLImageElement>(null);
@@ -806,16 +819,14 @@ function PosterImg({
   useEffect(() => {
     const img = ref.current;
     if (!img?.complete) return;
-    if (img.naturalWidth > 0) onPainted();
-    else onFailed();
-  }, [src, onPainted, onFailed]);
+    if (img.naturalWidth === 0) onFailed();
+  }, [src, onFailed]);
 
   return (
     <img
       ref={ref}
       src={src}
       alt=""
-      onLoad={onPainted}
       onError={onFailed}
       className={cn(
         "absolute inset-0 size-full object-cover transition-opacity duration-150",
@@ -857,7 +868,6 @@ function PreviewMediaLayers(m: CardModel) {
         <PosterImg
           src={m.imgSrc}
           waiting={m.waitingPoster}
-          onPainted={m.markPosterPainted}
           onFailed={m.markPosterFailed}
         />
       )}
@@ -1319,7 +1329,7 @@ export function FootageGrid({
     [sections, assetsPath, assetsBaseUrl, assetsHost, settings],
   );
 
-  const [gridReady, setGridReady] = useState(false);
+  const [gridReady, setGridReady] = useState(() => peekPosterWarmup(preloadKey));
   const releasePreloadRef = useRef<(() => void) | null>(null);
   const completedPreloadKeyRef = useRef<string | null>(null);
   const posterPathsRef = useRef(posterPathsForPreload);
@@ -1337,10 +1347,9 @@ export function FootageGrid({
       return;
     }
 
-    const adopted = takePosterWarmup(preloadKey);
-    if (adopted) {
-      releasePreloadRef.current?.();
-      releasePreloadRef.current = adopted;
+    // Boot warmup keeps its own retains. Taking them would revoke blobs on
+    // Strict Mode remount / tab switch and force a second load + gray cards.
+    if (peekPosterWarmup(preloadKey)) {
       completedPreloadKeyRef.current = preloadKey;
       setGridReady(true);
       return;

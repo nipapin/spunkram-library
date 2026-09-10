@@ -23,10 +23,10 @@ import {
 } from "@/lib/download-manager-context";
 import { PackagesPathGateProvider } from "@/lib/packages-path-gate";
 import { useExtensionUpdate } from "@/lib/use-extension-update";
-import { fetchGenerationsStatus } from "@/api/credits";
 import { ensureFfmpeg } from "@/utils/ffmpeg";
 import { preloadVoiceoverPreviews } from "@/api/voiceover";
 import { openMarketUrl, resolvePackEntitlementContextForScan } from "@/api/cep-market";
+import { useGenerationsBalance } from "@/hooks/use-generations-balance";
 import {
   readInstallablePackages,
   loadInstalledPack,
@@ -66,7 +66,6 @@ import { storageKey } from "@brands";
 import "./main.scss";
 
 const CATEGORY_BY_PACK_KEY = storageKey("categoryByPack");
-const GENERATIONS_STORAGE_KEY = storageKey("generations");
 
 function hostActivePackKey(host: PackHostId | null = currentPackHost()): string | null {
   return host ? activePackStorageKey(host) : null;
@@ -132,61 +131,6 @@ function resolveCategoryForPack(tree: PackTreeNode[], packPath: string): string 
   const saved = loadCategoryByPack()[packPath];
   if (saved && findPackTreeNode(tree, saved)) return saved;
   return getFirstPackRoot(tree)?.id ?? "";
-}
-
-type GenerationsState = {
-  monthly: number;
-  extra: number;
-  monthKey: string;
-  /** Allotment the stored monthly counter was capped against. */
-  limit: number;
-};
-
-function currentMonthKey(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${now.getMonth()}`;
-}
-
-function loadGenerationsState(limit: number | null): GenerationsState {
-  const monthKey = currentMonthKey();
-  if (limit == null || limit <= 0) {
-    return { monthly: 0, extra: 0, monthKey, limit: 0 };
-  }
-  const fallback: GenerationsState = {
-    monthly: limit,
-    extra: 0,
-    monthKey,
-    limit,
-  };
-  try {
-    const raw = panelStore.getItem(GENERATIONS_STORAGE_KEY);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as Partial<GenerationsState>;
-    if (parsed.monthKey !== fallback.monthKey) return fallback;
-    const storedLimit = typeof parsed.limit === "number" ? parsed.limit : limit;
-    let monthly = typeof parsed.monthly === "number" ? parsed.monthly : limit;
-    // Tier changed (e.g. free → subscribed): top up to the new allotment.
-    if (storedLimit !== limit) {
-      monthly = Math.min(limit, Math.max(0, monthly + (limit - storedLimit)));
-    }
-    monthly = Math.max(0, Math.min(limit, monthly));
-    return {
-      monthly,
-      extra: typeof parsed.extra === "number" ? parsed.extra : 0,
-      monthKey: fallback.monthKey,
-      limit,
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-function saveGenerationsState(state: GenerationsState): void {
-  try {
-    panelStore.setItem(GENERATIONS_STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // ignore storage errors
-  }
 }
 
 function PurchaseGateBanner({ onOpenAccount }: { onOpenAccount: () => void }) {
@@ -532,8 +476,9 @@ function EditingWorkspace({
 }
 
 function AppShell() {
-  const { signedIn, authReady, generationLimit, isFreeUser, refreshMarket, subscription } =
+  const { signedIn, authReady, refreshMarket, subscription } =
     useAuth();
+  const gens = useGenerationsBalance();
   const { setShowFavoritesOnly, showStatus } = usePanelUI();
   const {
     localVersion,
@@ -563,8 +508,6 @@ function AppShell() {
     () => readInstallablePackages().length > 0,
   );
   const [hasUserNavigated, setHasUserNavigated] = useState(false);
-  const [monthlyGens, setMonthlyGens] = useState(0);
-  const [extraGens, setExtraGens] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const applyPack = useCallback((meta: InstalledPackMeta) => {
@@ -713,53 +656,13 @@ function AppShell() {
     };
   }, [packSettings]);
 
-  useEffect(() => {
-    if (generationLimit == null) return;
-    const next = loadGenerationsState(generationLimit);
-    setMonthlyGens(next.monthly);
-    setExtraGens(next.extra);
-  }, [generationLimit]);
-
-  useEffect(() => {
-    if (generationLimit == null) return;
-    saveGenerationsState({
-      monthly: monthlyGens,
-      extra: extraGens,
-      monthKey: currentMonthKey(),
-      limit: generationLimit,
-    });
-  }, [monthlyGens, extraGens, generationLimit]);
-
-  /** Server (`user_generations`) is source of truth — userdata store is cache only. */
-  const refreshGenerationsFromServer = useCallback(async () => {
-    const status = await fetchGenerationsStatus();
-    if (!status?.authenticated) return;
-    const monthly =
-      typeof status.subscription_generations_left === "number"
-        ? status.subscription_generations_left
-        : typeof status.remaining === "number"
-          ? status.remaining
-          : null;
-    const extra =
-      typeof status.extra_generations_left === "number"
-        ? status.extra_generations_left
-        : null;
-    if (monthly !== null) setMonthlyGens(Math.max(0, monthly));
-    if (extra !== null) setExtraGens(Math.max(0, extra));
-  }, []);
-
-  useEffect(() => {
-    if (!authReady || !signedIn) return;
-    void refreshGenerationsFromServer();
-  }, [authReady, signedIn, generationLimit, refreshGenerationsFromServer]);
-
   const aiToolsProps = {
-    monthly: monthlyGens,
-    extra: extraGens,
-    monthlyLimit: generationLimit,
-    isFreeUser,
+    monthly: gens.monthly,
+    extra: gens.extra,
+    monthlyLimit: gens.monthlyLimit,
+    isFreeUser: gens.isFreeUser,
     onUse: () => {
-      void refreshGenerationsFromServer();
+      void gens.refresh();
     },
   };
 

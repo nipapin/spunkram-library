@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Infinity as InfinityIcon, Loader2, Plus, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
   MAX_MOTIONFLOW_ACCOUNTS,
@@ -15,6 +15,8 @@ import {
 } from "@/lib/utils/gal-plan";
 import { isReleaseAdminEmail } from "@/api/update";
 import { currentPackHost } from "@/lib/utils/pack-host";
+import { openMotionflowSubscribe } from "@/api/motionflow-auth";
+import { useGenerationsBalance } from "@/hooks/use-generations-balance";
 import "./gal-settings.scss";
 import "./gal-account.scss";
 
@@ -121,11 +123,14 @@ export function GalProfile() {
     loginCode,
     loginDeviceLimit,
   } = useAuth();
+  const gens = useGenerationsBalance();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [replacingId, setReplacingId] = useState<string | null>(null);
   const sys = useMemo(() => getUserSystemData(), []);
   const host = currentPackHost();
+  const gensLimitLabel =
+    gens.monthlyLimit != null ? String(gens.monthlyLimit) : "—";
 
   const otherAccounts = useMemo(
     () => savedAccounts.filter((a) => a.id !== auth.id),
@@ -283,6 +288,44 @@ export function GalProfile() {
         </section>
 
         {message ? <p className="gal-account__msg">{message}</p> : null}
+
+        <section className="gal-settings__block gal-account__gens">
+          <div className="gal-settings__block-head">
+            <h2>
+              <Sparkles className="size-3.5" strokeWidth={2.25} />
+              AI Generations
+            </h2>
+            <button
+              type="button"
+              className="gal-settings__ghost-btn"
+              onClick={() => openMotionflowSubscribe()}
+            >
+              <Plus className="size-3" />
+              Get more
+            </button>
+          </div>
+          <div className="gal-account__gens-row">
+            <span className="gal-account__gens-total">{gens.totalLeft}</span>
+            <div className="gal-account__gens-legend">
+              <span>
+                {gens.monthly}/{gensLimitLabel}{" "}
+                {gens.isFreeUser ? "free plan" : "monthly"}
+              </span>
+              {!gens.isFreeUser ? (
+                <span className="gal-account__gens-extra">
+                  <InfinityIcon className="size-3" />
+                  {gens.extra} extra
+                </span>
+              ) : null}
+            </div>
+          </div>
+          {gens.monthlyLimit == null ? (
+            <p className="gal-settings__note">
+              No Gal generation allotment yet. Credits appear after the server
+              grants them to this account.
+            </p>
+          ) : null}
+        </section>
 
         <section className="gal-settings__block">
           <div className="gal-settings__block-head">

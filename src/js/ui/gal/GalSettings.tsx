@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Loader2,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useDownloadManager } from "@/lib/download-manager-context";
@@ -30,6 +31,13 @@ import { readInstallablePackages } from "@/lib/utils/pack";
 import * as panelStore from "@/lib/userdata-store";
 import { BRAND } from "@brands";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
+import { isReleaseAdminEmail } from "@/api/update";
+import { useConfiguration } from "../../../context/ConfigurationWrapper";
+import {
+  clearCaptionControlsCache,
+  getStoredCaptionsLocalRoot,
+  setCaptionsLocalRoot,
+} from "@/styles";
 import { openDirectoryInOs } from "./gal-fs";
 import aeIcon from "./assets/ae-icon.png";
 import prIcon from "./assets/pr-icon.png";
@@ -47,7 +55,10 @@ export function GalSettings({
     subscription,
     refreshMarket,
     market,
+    auth,
   } = useAuth();
+  const { refreshStyles } = useConfiguration();
+  const isAdmin = isReleaseAdminEmail(auth.email);
   const { enqueue, jobs } = useDownloadManager();
   const { ensurePackagesPath } = usePackagesPathGate();
   const {
@@ -63,6 +74,12 @@ export function GalSettings({
   const [busy, setBusy] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [captionsLocalPath, setCaptionsLocalPath] = useState(() =>
+    getStoredCaptionsLocalRoot(),
+  );
+  const [captionsSourceMsg, setCaptionsSourceMsg] = useState<string | null>(
+    null,
+  );
   const host = currentPackHost();
   const hostIcon = host === "AE" ? aeIcon : prIcon;
 
@@ -148,6 +165,35 @@ export function GalSettings({
         });
       },
     );
+  }
+
+  async function applyCaptionsLocalSource(folder: string | null) {
+    setCaptionsLocalRoot(folder);
+    setCaptionsLocalPath(folder || "");
+    clearCaptionControlsCache();
+    setCaptionsSourceMsg(
+      folder ? "Using local Captions folder." : "Back to CDN / API.",
+    );
+    try {
+      await refreshStyles();
+    } catch {
+      setCaptionsSourceMsg("Path saved — reopen Captions to refresh the grid.");
+    }
+  }
+
+  function browseCaptionsSource() {
+    selectFolder(
+      captionsLocalPath || "",
+      "Select Captions source folder (R2 layout)",
+      (folder) => {
+        if (!folder) return;
+        void applyCaptionsLocalSource(folder);
+      },
+    );
+  }
+
+  function clearCaptionsSource() {
+    void applyCaptionsLocalSource(null);
   }
 
   function reloadExtension() {
@@ -411,6 +457,52 @@ export function GalSettings({
             />
           </label>
         </section>
+
+        {isAdmin ? (
+          <>
+            <p className="gal-settings__section-label">Admin · Captions source</p>
+            <section className="gal-settings__group">
+              <p className="gal-settings__group-note">
+                Local folder with the same layout as R2 (
+                <strong>{BRAND.captionsCdnPrefix}/</strong>
+                ): {"{Pack}/{Pack}.aep|mogrt"} + style folders. Clear to use CDN /
+                API again.
+              </p>
+              <div className="gal-settings__field">
+                <div className="gal-settings__path-row">
+                  <input
+                    type="text"
+                    readOnly
+                    value={captionsLocalPath}
+                    placeholder="CDN / API (default)"
+                    className="gal-settings__input"
+                  />
+                  <button
+                    type="button"
+                    className="gal-settings__icon-btn"
+                    onClick={browseCaptionsSource}
+                    aria-label="Browse captions source folder"
+                  >
+                    <Folder className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="gal-settings__icon-btn"
+                    disabled={!captionsLocalPath}
+                    onClick={clearCaptionsSource}
+                    aria-label="Clear captions source"
+                    title="Clear (use CDN)"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+                {captionsSourceMsg ? (
+                  <p className="gal-settings__msg">{captionsSourceMsg}</p>
+                ) : null}
+              </div>
+            </section>
+          </>
+        ) : null}
 
         <p className="gal-settings__section-label">Restoring</p>
         <section className="gal-settings__group">
