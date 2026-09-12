@@ -137,15 +137,35 @@ export function pathToObjectUrl(absolutePath: string): string | null {
   }
 }
 
+/** Async disk reads keep cached posters and large hover videos off the UI thread. */
+function readObjectUrl(absolutePath: string): Promise<string | null> {
+  const cached = objectUrlCache.get(absolutePath);
+  if (cached) return Promise.resolve(cached.url);
+  if (typeof fs?.readFile !== "function") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    fs.readFile(absolutePath, (error, data) => {
+      if (error) { resolve(null); return; }
+      const existing = objectUrlCache.get(absolutePath);
+      if (existing) { resolve(existing.url); return; }
+      try {
+        const blob = new Blob([new Uint8Array(data)], { type: mimeFromExt(absolutePath) });
+        const url = URL.createObjectURL(blob);
+        objectUrlCache.set(absolutePath, { url, refs: 0, revokeTimer: null });
+        resolve(url);
+      } catch { resolve(null); }
+    });
+  });
+}
+
 function pumpReadQueue(): void {
   while (activeReads < MAX_CONCURRENT_READS && readQueue.length > 0) {
     const job = readQueue.shift();
     if (!job) break;
     activeReads += 1;
     // Yield between reads so CEF can paint / handle input.
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
-        job.resolve(pathToObjectUrl(job.path));
+        job.resolve(await readObjectUrl(job.path));
       } catch {
         job.resolve(null);
       } finally {

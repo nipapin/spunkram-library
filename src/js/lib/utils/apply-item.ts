@@ -12,6 +12,7 @@
 import { cepHostAppId } from "./bolt";
 import { Motionflow } from "@/sdk";
 import { fs, path } from "../cep/node";
+import { esPath } from "@/utils/ae-import-path";
 import {
   resolveItemSourceFile,
   resolvePackTemplatesPath,
@@ -136,7 +137,7 @@ export async function applyPackItemToHost(
     };
   }
 
-  const filePath = resolved.file;
+  const filePath = esPath(resolved.file);
 
   // Premiere FULL_PROJECT — native copy/paste chain (not simplified importFiles).
   // Never run this path in After Effects — AE packs use applyComp + .aep.

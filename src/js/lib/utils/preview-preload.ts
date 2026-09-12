@@ -19,8 +19,8 @@ import {
   peekCachedPreviewPath,
 } from "@/lib/utils/preview-disk-cache";
 
-/** Max posters held warm before showing the grid (rest load lazily). */
-export const PRELOAD_CAP = 500;
+/** Boot must not wait for media. Cards load through the viewport poster queue. */
+export const PRELOAD_CAP = 0;
 
 const HTTPS_URL_RE = /^https?:\/\//i;
 const SOUND_FX_LABEL_RE = /sound\s*fx/i;

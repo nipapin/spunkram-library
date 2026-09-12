@@ -8,6 +8,7 @@ import {
   finalizePendingNativeUpdate,
   hasPendingNativeUpdate,
 } from "@/utils/extension-update";
+import { pendingNativesOnly } from "@/utils/replace-live-file";
 import { getEffectiveLocalVersion } from "@/utils/extension-version";
 import { friendlyErrorMessage } from "@/utils/user-error";
 import { version as BUILD_VERSION } from "../../shared/shared";
@@ -76,8 +77,9 @@ export function useExtensionUpdate() {
   useEffect(() => {
     try {
       const { remaining } = finalizePendingNativeUpdate();
-      setHasPendingNatives(remaining.length > 0);
-      if (remaining.length > 0) {
+      const nativeLeft = pendingNativesOnly(remaining);
+      setHasPendingNatives(nativeLeft.length > 0);
+      if (nativeLeft.length > 0) {
         showStatus(
           "Restart Premiere Pro / After Effects to finish the native plugin update.",
           "info",

@@ -7,12 +7,15 @@ import {
   reloadPanelHard,
 } from "./extension-version";
 import { BRAND } from "@brands";
+import { isUpdateBackupName, NATIVE_BACKUP_DIR } from "./update-backup-path";
 import {
-  allocateNativeBackupPath,
-  isUpdateBackupName,
-  NATIVE_BACKUP_DIR,
-  PENDING_SUFFIX,
-} from "./update-backup-path";
+  cleanupUpdateBackups,
+  copyFileOverwrite,
+  pendingNativesOnly,
+  promotePendingUpdates,
+  type ReplaceIo,
+} from "./replace-live-file";
+import { buildSwapHtml, pathToFileUrl, SWAP_PAGE_NAME } from "./update-swap-page";
 
 export type ExtensionUpdateProgress = {
   phase: "download" | "extract" | "apply" | "reload";
@@ -31,6 +34,8 @@ type PendingMarker = {
   files: string[];
   updatedAt: string;
 };
+
+const io: ReplaceIo = { fs, path };
 
 function rimrafSafe(target: string): void {
   if (!fs.existsSync(target)) return;
@@ -53,49 +58,12 @@ function rimrafSafe(target: string): void {
   }
 }
 
-function isBusyError(err: unknown): boolean {
-  const code =
-    err && typeof err === "object" && "code" in err
-      ? String((err as { code: unknown }).code)
-      : "";
-  return code === "EBUSY" || code === "EPERM" || code === "EACCES";
-}
-
 function unlinkBestEffort(target: string): void {
   try {
     if (fs.existsSync(target)) fs.unlinkSync(target);
   } catch {
-    /* ignore — often still locked until host restarts */
+    /* ignore */
   }
-}
-
-function isNativeBinary(filePath: string): boolean {
-  const lower = filePath.replace(/\\/g, "/").toLowerCase();
-  if (lower.includes("/bin/")) return true;
-  return (
-    lower.endsWith(".dll") ||
-    lower.endsWith(".bundle") ||
-    lower.endsWith(".acsrf") ||
-    lower.endsWith(".prm") ||
-    lower.endsWith(".dylib") ||
-    lower.endsWith(".so")
-  );
-}
-
-/** Rename a locked native into `_mf_old/` — never suffix-stack on leftovers. */
-function allocateUpdateOldPath(target: string): string {
-  const backup = allocateNativeBackupPath(target, {
-    exists: (p) => fs.existsSync(p),
-    join: path.join,
-    dirname: path.dirname,
-    basename: path.basename,
-  });
-  try {
-    fs.mkdirSync(path.dirname(backup), { recursive: true });
-  } catch {
-    /* rename may still work if the folder exists */
-  }
-  return backup;
 }
 
 function readPendingMarker(extRoot: string): PendingMarker | null {
@@ -123,96 +91,6 @@ function writePendingMarker(extRoot: string, files: string[]): void {
   fs.writeFileSync(markerPath, JSON.stringify(payload, null, 2), "utf8");
 }
 
-/**
- * Overwrite a file even when Windows has it mapped (e.g. Motionflow.dll).
- * On rename failure for natives: write `{name}.pending-update` and continue.
- * Returns the relative path that was deferred, or null if applied.
- */
-function copyFileOverwrite(
-  from: string,
-  to: string,
-  extRoot: string,
-): string | null {
-  if (isUpdateBackupName(path.basename(to))) return null;
-  try {
-    fs.copyFileSync(from, to);
-    return null;
-  } catch (err) {
-    if (!isBusyError(err) || !fs.existsSync(to)) throw err;
-  }
-
-  const backup = allocateUpdateOldPath(to);
-  try {
-    fs.renameSync(to, backup);
-  } catch (renameErr) {
-    if (!isNativeBinary(to)) {
-      const name = path.basename(to);
-      throw new Error(
-        `Cannot replace locked file "${name}". Close Premiere Pro / After Effects and try again. (${
-          renameErr instanceof Error ? renameErr.message : String(renameErr)
-        })`,
-      );
-    }
-    const pendingPath = `${to}${PENDING_SUFFIX}`;
-    unlinkBestEffort(pendingPath);
-    fs.copyFileSync(from, pendingPath);
-    const rel = path.relative(extRoot, to).replace(/\\/g, "/");
-    return rel || path.basename(to);
-  }
-
-  try {
-    fs.copyFileSync(from, to);
-  } catch (copyErr) {
-    try {
-      if (!fs.existsSync(to) && fs.existsSync(backup)) {
-        fs.renameSync(backup, to);
-      }
-    } catch {
-      /* ignore restore failure */
-    }
-    throw copyErr;
-  }
-
-  unlinkBestEffort(backup);
-  return null;
-}
-
-/** Best-effort removal of leftover `*.update-old` / `*.update-old.N`. */
-function cleanupUpdateBackups(root: string): void {
-  if (!fs.existsSync(root)) return;
-  let entries: string[];
-  try {
-    entries = fs.readdirSync(root);
-  } catch {
-    return;
-  }
-  for (const name of entries) {
-    const full = path.join(root, name);
-    try {
-      const st = fs.statSync(full);
-      if (st.isDirectory()) {
-        if (name === NATIVE_BACKUP_DIR) {
-          cleanupUpdateBackups(full);
-          try {
-            if (fs.readdirSync(full).length === 0) fs.rmdirSync(full);
-          } catch {
-            /* still locked */
-          }
-        } else {
-          cleanupUpdateBackups(full);
-        }
-      } else if (name.endsWith(PENDING_SUFFIX)) {
-        // Do not delete pending-update here — finalize handles those.
-        continue;
-      } else if (isUpdateBackupName(name)) {
-        unlinkBestEffort(full);
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
 function copyDirOverwrite(
   src: string,
   dest: string,
@@ -222,13 +100,14 @@ function copyDirOverwrite(
   if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
   for (const name of fs.readdirSync(src)) {
     if (name === NATIVE_BACKUP_DIR || isUpdateBackupName(name)) continue;
+    if (name === SWAP_PAGE_NAME || name === PENDING_MARKER) continue;
     const from = path.join(src, name);
     const to = path.join(dest, name);
     const st = fs.statSync(from);
     if (st.isDirectory()) {
       copyDirOverwrite(from, to, extRoot, pending);
     } else {
-      const deferred = copyFileOverwrite(from, to, extRoot);
+      const deferred = copyFileOverwrite(io, from, to, extRoot);
       if (deferred) pending.push(deferred);
     }
   }
@@ -238,7 +117,6 @@ function extractArchive(archivePath: string, destDir: string): void {
   rimrafSafe(destDir);
   fs.mkdirSync(destDir, { recursive: true });
 
-  // ZXP is a zip; use in-process reader (no PowerShell / unzip CLI).
   const zipPath = archivePath.toLowerCase().endsWith(".zip")
     ? archivePath
     : `${archivePath}.zip`;
@@ -254,9 +132,40 @@ function extractArchive(archivePath: string, destDir: string): void {
   }
 }
 
+function panelDestRel(): string {
+  return (BRAND.panelMainPath || "./index.html").replace(/^[./\\]+/, "").replace(/\\/g, "/");
+}
+
+function reloadAfterApply(extRoot: string, pending: string[]): void {
+  const destRel = panelDestRel();
+  const needsSwap = pending.some((rel) => !pendingNativesOnly([rel]).length);
+  if (needsSwap) {
+    try {
+      fs.writeFileSync(
+        path.join(extRoot, SWAP_PAGE_NAME),
+        buildSwapHtml(extRoot, destRel),
+        "utf8",
+      );
+      const swapUrl = pathToFileUrl(path.join(extRoot, SWAP_PAGE_NAME));
+      setTimeout(() => {
+        if (typeof window !== "undefined" && window.location) {
+          window.location.replace(`${swapUrl}?_cep_upd=${Date.now()}`);
+        }
+      }, 250);
+      return;
+    } catch (err) {
+      console.warn("[extension-update] swap page failed, falling back to reload", err);
+    }
+  }
+  setTimeout(() => {
+    reloadPanelHard();
+  }, 250);
+}
+
 /**
- * Try to promote `*.pending-update` files written while Premiere held the DLL.
- * Safe to call on every panel boot.
+ * Try to promote `*.pending-update` files written while CEF / Premiere held a lock.
+ * Safe to call on every panel boot. Panel HTML/JS usually promote after the swap
+ * page unloads the old document; natives may remain until host restart.
  */
 export function finalizePendingNativeUpdate(): {
   remaining: string[];
@@ -268,73 +177,12 @@ export function finalizePendingNativeUpdate(): {
   }
 
   const marker = readPendingMarker(extRoot);
-  const candidates = new Set<string>(marker?.files ?? []);
-
-  // Also discover any orphaned *.pending-update under bin/
-  const scanPending = (dir: string): void => {
-    if (!fs.existsSync(dir)) return;
-    let entries: string[];
-    try {
-      entries = fs.readdirSync(dir);
-    } catch {
-      return;
-    }
-    for (const name of entries) {
-      const full = path.join(dir, name);
-      try {
-        const st = fs.statSync(full);
-        if (st.isDirectory()) {
-          scanPending(full);
-        } else if (name.endsWith(PENDING_SUFFIX)) {
-          const live = full.slice(0, -PENDING_SUFFIX.length);
-          const rel = path.relative(extRoot, live).replace(/\\/g, "/");
-          if (rel) candidates.add(rel);
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-  };
-  scanPending(path.join(extRoot, "bin"));
-
-  const remaining: string[] = [];
-  const applied: string[] = [];
-
-  for (const rel of candidates) {
-    const live = path.join(extRoot, rel);
-    const pendingPath = `${live}${PENDING_SUFFIX}`;
-    if (!fs.existsSync(pendingPath)) {
-      applied.push(rel);
-      continue;
-    }
-
-    try {
-      if (fs.existsSync(live)) {
-        const backup = allocateUpdateOldPath(live);
-        try {
-          fs.renameSync(live, backup);
-        } catch {
-          remaining.push(rel);
-          continue;
-        }
-        unlinkBestEffort(backup);
-      }
-      fs.renameSync(pendingPath, live);
-      applied.push(rel);
-    } catch {
-      // Fallback: copy pending over live if rename of pending fails
-      try {
-        fs.copyFileSync(pendingPath, live);
-        unlinkBestEffort(pendingPath);
-        applied.push(rel);
-      } catch {
-        remaining.push(rel);
-      }
-    }
-  }
-
+  const { remaining, applied } = promotePendingUpdates(
+    io,
+    extRoot,
+    marker?.files ?? [],
+  );
   writePendingMarker(extRoot, remaining);
-  cleanupUpdateBackups(extRoot);
   return { remaining, applied };
 }
 
@@ -342,15 +190,15 @@ export function hasPendingNativeUpdate(): boolean {
   const extRoot = csi.getSystemPath("extension");
   if (!extRoot) return false;
   const marker = readPendingMarker(extRoot);
-  return Boolean(marker && marker.files.length > 0);
+  return Boolean(marker && pendingNativesOnly(marker.files).length > 0);
 }
 
 /**
  * Download a .zxp, unpack over the live extension root (userdata install),
- * then reload the panel. Locked natives may be deferred to `.pending-update`.
- *
- * @param appliedVersion — remote version being installed; stamped so a sticky
- *   UpdateBanner cannot survive CEF caching an older main.js after reload.
+ * then reload the panel. Locked files are renamed away or written as
+ * `*.pending-update`; a swap page unloads CEF so HTML/JS can be promoted
+ * without restarting Premiere / After Effects. Mapped natives may still
+ * need a host restart.
  */
 export async function applyExtensionUpdate(
   zxpUrl: string,
@@ -386,7 +234,6 @@ export async function applyExtensionUpdate(
     onProgress?.({ phase: "extract", bytesReceived: 0, totalBytes: null });
     extractArchive(zxpPath, extractDir);
 
-    // Some ZXPs nest a single root folder — unwrap if so
     let payloadRoot = extractDir;
     const top = fs.readdirSync(extractDir).filter((n) => n !== "__MACOSX");
     if (top.length === 1) {
@@ -401,8 +248,7 @@ export async function applyExtensionUpdate(
     }
 
     onProgress?.({ phase: "apply", bytesReceived: 0, totalBytes: null });
-    // Do not ExternalObject.terminate() — breaks Motionflow.dll reload this session.
-    cleanupUpdateBackups(extRoot);
+    cleanupUpdateBackups(io, extRoot);
 
     const prior = readPendingMarker(extRoot);
     const pending: string[] = [...(prior?.files ?? [])];
@@ -413,12 +259,11 @@ export async function applyExtensionUpdate(
       markExtensionUpdateApplied(appliedVersion);
     }
 
+    const natives = pendingNativesOnly(pending);
     onProgress?.({ phase: "reload", bytesReceived: 0, totalBytes: null });
-    setTimeout(() => {
-      reloadPanelHard();
-    }, 250);
+    reloadAfterApply(extRoot, pending);
 
-    return { pendingNatives: [...new Set(pending)] };
+    return { pendingNatives: natives };
   } finally {
     try {
       rimrafSafe(workDir);

@@ -18,18 +18,23 @@ import {
   peekCachedPreviewPath,
   warmPreviewCache,
 } from "@/lib/utils/preview-disk-cache";
-import {
-  PRELOAD_CAP,
-  collectPosterPathsForPreload,
-  peekPosterWarmup,
-  peekWarmPosterUrl,
-  posterWarmupIdentity,
-  preloadPosters,
-} from "@/lib/utils/preview-preload";
+import { peekWarmPosterUrl } from "@/lib/utils/preview-preload";
+import { posterQueue } from "@/lib/utils/poster-loader";
 import type { PackHostId } from "@/lib/utils/pack-host";
 import { resolvePreviewAspectRatio, type PackContentSection } from "@/lib/utils/pack-tree";
 import type { PackSettings, PackTreeItem } from "@/lib/utils/pack-types";
 import type { GalAccountPlan } from "@/lib/utils/gal-plan";
+import {
+  GAL_GRID_PAD_X_PX,
+  GRID_GAP_PX,
+  PLAIN_TITLE_HEIGHT_PX,
+  SECTION_GAP_PX,
+  STICKY_TITLE_HEIGHT_PX,
+  WINDOW_BUFFER_PX,
+  layoutGridSections,
+  windowGridSections,
+  windowRangeKey,
+} from "@/lib/utils/footage-grid-window";
 import { usePanelActions, usePanelGrid } from "@/lib/panel-ui-context";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@brands";
@@ -50,20 +55,11 @@ import {
   type ReactNode,
 } from "react";
 
-const GRID_GAP_PX = 4;
-const SECTION_GAP_PX = 16;
 /** Classic Spunkram cards vs Gal chips + Import hover. */
 export type FootageAccessUi = "overlay" | "chips";
 const CARD_RADIUS_OVERLAY = "clamp(2px, 4%, 10px)";
 const CARD_RADIUS_CHIPS = "clamp(10px, 8%, 16px)";
-/** Extra margin so posters enqueue slightly before they scroll into view. */
-const PREVIEW_LOAD_MARGIN_PX = 150;
-const PREVIEW_LOAD_ROOT_MARGIN = `${PREVIEW_LOAD_MARGIN_PX}px 0px`;
 const AUTOPLAY_ROOT_MARGIN = "80px 0px";
-/** Max skeleton cells per section (≈2 viewports). */
-const SKELETON_CELLS_PER_SECTION_ROWS = 8;
-/** First N rows load without waiting for IntersectionObserver (beyond preload cap). */
-const EAGER_PREVIEW_ROWS = 5;
 const HTTPS_URL_RE = /^https?:\/\//i;
 
 // --- Exclusive hover (AutoPlay off) — only one card plays at a time ----------
@@ -233,30 +229,6 @@ function closestScrollParent(el: HTMLElement | null): Element | null {
   return null;
 }
 
-/** Viewport (or scroll root) hit-test — CEF IntersectionObserver misses some cards on scroll. */
-function isElementNearRoot(
-  el: Element,
-  root: Element | null,
-  marginY: number,
-): boolean {
-  const er = el.getBoundingClientRect();
-  if (er.width <= 0 || er.height <= 0) return false;
-  const rr = root
-    ? root.getBoundingClientRect()
-    : {
-        top: 0,
-        left: 0,
-        bottom: window.innerHeight,
-        right: window.innerWidth,
-      };
-  return (
-    er.bottom >= rr.top - marginY &&
-    er.top <= rr.bottom + marginY &&
-    er.right >= rr.left &&
-    er.left <= rr.right
-  );
-}
-
 /** One shared listener for all cards — stop hover playback when leaving the CEP panel. */
 let panelLeaveBound = false;
 let panelLeavePlayPreview = false;
@@ -277,10 +249,9 @@ function ensurePanelLeaveListeners(playPreview: boolean): void {
   document.addEventListener("visibilitychange", onVisibility);
 }
 
-// --- Shared viewport observers (one scroll root, two IOs for the whole grid) ---
+// --- Shared viewport observers (one scroll root, one IO for autoplay) ---
 
 type GridViewportApi = {
-  observeNear: (el: Element, onNear: () => void) => () => void;
   observePlay: (el: Element, onChange: (inView: boolean) => void) => () => void;
 };
 
@@ -290,43 +261,12 @@ function useGridViewport(): GridViewportApi | null {
   return useContext(GridViewportContext);
 }
 
-function GridViewportProvider({
-  scrollRoot,
-  children,
-}: {
-  scrollRoot: Element | null;
-  children: ReactNode;
-}) {
-  const nearMap = useRef(new Map<Element, () => void>());
+function GridViewportProvider({ children }: { children: ReactNode }) {
   const playMap = useRef(new Map<Element, (inView: boolean) => void>());
-  const nearIo = useRef<IntersectionObserver | null>(null);
   const playIo = useRef<IntersectionObserver | null>(null);
-  const scrollRootRef = useRef(scrollRoot);
-  scrollRootRef.current = scrollRoot;
-
-  const flushNear = useCallback(() => {
-    const root = scrollRootRef.current;
-    for (const [el, onNear] of [...nearMap.current]) {
-      if (isElementNearRoot(el, root, PREVIEW_LOAD_MARGIN_PX)) onNear();
-    }
-  }, []);
 
   useEffect(() => {
-    nearIo.current?.disconnect();
     playIo.current?.disconnect();
-
-    // Viewport root (not the inner scroller): CEP/CEF often fails to deliver
-    // scroll updates when IntersectionObserver.root is an overflow:auto element.
-    nearIo.current = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          nearMap.current.get(entry.target)?.();
-        }
-      },
-      { root: null, rootMargin: PREVIEW_LOAD_ROOT_MARGIN, threshold: 0 },
-    );
-
     playIo.current = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -335,71 +275,15 @@ function GridViewportProvider({
       },
       { root: null, rootMargin: AUTOPLAY_ROOT_MARGIN, threshold: 0 },
     );
-
-    for (const el of nearMap.current.keys()) nearIo.current.observe(el);
     for (const el of playMap.current.keys()) playIo.current.observe(el);
-
-    flushNear();
-    const rafId = requestAnimationFrame(flushNear);
-
     return () => {
-      cancelAnimationFrame(rafId);
-      nearIo.current?.disconnect();
       playIo.current?.disconnect();
-      nearIo.current = null;
       playIo.current = null;
     };
-  }, [flushNear]);
-
-  useEffect(() => {
-    flushNear();
-  }, [scrollRoot, flushNear]);
-
-  useEffect(() => {
-    if (!scrollRoot) return;
-    let raf = 0;
-    const onScroll = () => {
-      if (raf || nearMap.current.size === 0) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        flushNear();
-      });
-    };
-    scrollRoot.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-      scrollRoot.removeEventListener("scroll", onScroll);
-    };
-  }, [scrollRoot, flushNear]);
+  }, []);
 
   const api = useMemo<GridViewportApi>(
     () => ({
-      observeNear: (el, onNear) => {
-        let done = false;
-        const fire = () => {
-          if (done) return;
-          done = true;
-          nearMap.current.delete(el);
-          nearIo.current?.unobserve(el);
-          onNear();
-        };
-        nearMap.current.set(el, fire);
-        nearIo.current?.observe(el);
-        if (isElementNearRoot(el, scrollRootRef.current, PREVIEW_LOAD_MARGIN_PX)) {
-          fire();
-        } else {
-          requestAnimationFrame(() => {
-            if (!done && isElementNearRoot(el, scrollRootRef.current, PREVIEW_LOAD_MARGIN_PX)) {
-              fire();
-            }
-          });
-        }
-        return () => {
-          done = true;
-          nearMap.current.delete(el);
-          nearIo.current?.unobserve(el);
-        };
-      },
       observePlay: (el, onChange) => {
         playMap.current.set(el, onChange);
         playIo.current?.observe(el);
@@ -474,10 +358,6 @@ function usePreviewCardModel({
 
   const [hovered, setHovered] = useState(false);
   const [inView, setInView] = useState(false);
-  const preloaded = gridIndex < PRELOAD_CAP;
-  const eagerLoad =
-    preloaded || gridIndex < Math.max(1, gridColumns) * EAGER_PREVIEW_ROWS;
-  const [nearView, setNearView] = useState(eagerLoad);
   const [posterFailed, setPosterFailed] = useState(false);
   /** Set only after a successful prepareApply in this session. */
   const [appliedThisSession, setAppliedThisSession] = useState(false);
@@ -520,22 +400,23 @@ function usePreviewCardModel({
   useEffect(() => {
     setHovered(false);
     setInView(false);
-    setNearView(eagerLoad);
     setPosterFailed(false);
     setAppliedThisSession(false);
     if (exclusiveHoverId === item.id) clearExclusiveHover();
     stopSfxPreview(item.id);
-  }, [item.id]); // eagerLoad latches below — don't unload on column-count change
+  }, [item.id]);
 
+  const [poster, setPoster] = useState<{ path: string; url: string | null } | null>(null);
+  const posterPath = isAudio ? null : media.posterPath;
+  const posterUrl = poster?.path === posterPath ? poster.url : null;
   useEffect(() => {
-    if (eagerLoad) setNearView(true);
-  }, [eagerLoad]);
-
-  const posterUrl = usePreviewObjectUrl(isAudio ? null : media.posterPath, {
-    load: nearView || eagerLoad || preloaded,
-    priority: gridIndex,
-    eager: eagerLoad || preloaded,
-  });
+    if (!posterPath) return;
+    setPosterFailed(false);
+    return posterQueue.subscribe(posterPath, (url) => {
+      setPoster({ path: posterPath, url });
+      setPosterFailed(!url);
+    });
+  }, [posterPath]);
 
   useEffect(() => {
     if (posterUrl) setPosterFailed(false);
@@ -560,13 +441,6 @@ function usePreviewCardModel({
   useEffect(() => {
     ensurePanelLeaveListeners(playPreview);
   }, [playPreview]);
-
-  // Shared near-viewport gate — latch once true.
-  useEffect(() => {
-    const el = cardRef.current;
-    if (!el || !viewport) return;
-    return viewport.observeNear(el, () => setNearView(true));
-  }, [viewport, item.id]);
 
   useEffect(() => {
     if (!playPreview) {
@@ -842,7 +716,7 @@ function PreviewMediaLayers(m: CardModel) {
     <>
       {m.waitingPoster && (
         <div
-          className="absolute inset-0 z-[2] animate-pulse bg-secondary/80"
+          className="absolute inset-0 z-[2] bg-secondary/80"
           aria-hidden
         />
       )}
@@ -1107,45 +981,13 @@ function SectionTitle({
   title,
   count,
   sticky,
+  stuck,
 }: {
   title: string;
   count: number;
   sticky: boolean;
+  stuck: boolean;
 }) {
-  const titleRef = useRef<HTMLHeadingElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const [stuck, setStuck] = useState(false);
-
-  useEffect(() => {
-    if (!sticky) return;
-    const titleEl = titleRef.current;
-    const sentinel = sentinelRef.current;
-    if (!titleEl || !sentinel) return;
-    const scroller = closestScrollParent(titleEl);
-    if (!scroller) return;
-
-    let raf = 0;
-    const update = () => {
-      raf = 0;
-      const sentinelTop = sentinel.getBoundingClientRect().top;
-      const rootTop = scroller.getBoundingClientRect().top;
-      setStuck(sentinelTop <= rootTop + 0.5);
-    };
-    const onScroll = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(update);
-    };
-
-    update();
-    scroller.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-      scroller.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-    };
-  }, [sticky, title, count]);
-
   if (!sticky) {
     return (
       <h3 className="mb-1.5 px-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground">
@@ -1159,13 +1001,8 @@ function SectionTitle({
 
   return (
     <>
-      <div
-        ref={sentinelRef}
-        className="gal-footage-section__stick-sentinel"
-        aria-hidden
-      />
+      <div className="gal-footage-section__stick-sentinel" aria-hidden />
       <h3
-        ref={titleRef}
         className={cn(
           "gal-footage-section__title",
           stuck && "is-stuck",
@@ -1175,73 +1012,6 @@ function SectionTitle({
         <span className="gal-footage-section__title-count">{count}</span>
       </h3>
     </>
-  );
-}
-
-function GridSkeleton({
-  sections,
-  columns,
-  accessUi = "overlay",
-  stickySectionTitles = false,
-}: {
-  sections: PackContentSection[];
-  columns: number;
-  accessUi?: FootageAccessUi;
-  stickySectionTitles?: boolean;
-}) {
-  const cols = Math.max(1, columns);
-  const radius = accessUi === "chips" ? CARD_RADIUS_CHIPS : CARD_RADIUS_OVERLAY;
-  const maxCells = cols * SKELETON_CELLS_PER_SECTION_ROWS;
-
-  return (
-    <div
-      className="relative w-full"
-      style={{ display: "flex", flexDirection: "column", gap: SECTION_GAP_PX }}
-      aria-busy="true"
-      aria-label="Loading"
-    >
-      {sections.map((section) => {
-        if (section.items.length === 0) return null;
-        const aspectCss =
-          resolvePreviewAspectRatio(section.items[0]?.group) || "16 / 9";
-        const cells = Math.min(section.items.length, maxCells);
-
-        return (
-          <section
-            key={section.id}
-            data-section-id={section.id}
-            className={stickySectionTitles ? "gal-footage-section" : "w-full"}
-          >
-            {section.title ? (
-              <SectionTitle
-                title={section.title}
-                count={section.items.length}
-                sticky={stickySectionTitles}
-              />
-            ) : null}
-            <div
-              className="grid items-start"
-              style={{
-                gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-                gap: GRID_GAP_PX,
-              }}
-            >
-              {Array.from({ length: cells }, (_, i) => (
-                <div
-                  key={i}
-                  className="footage-preview-card animate-pulse bg-secondary/70"
-                  style={{
-                    aspectRatio: aspectCss,
-                    borderRadius: radius,
-                    animationDelay: `${(i % cols) * 40}ms`,
-                  }}
-                />
-              ))}
-            </div>
-          </section>
-        );
-      })}
-    </div>
   );
 }
 
@@ -1262,7 +1032,6 @@ export function FootageGrid({
   subscribeUrl,
   emptyMessage = "No matches",
   stickySectionTitles = false,
-  rootId = "",
   onReadyChange,
 }: {
   sections: PackContentSection[];
@@ -1288,7 +1057,7 @@ export function FootageGrid({
   emptyMessage?: string;
   /** Stick section titles to the top of the scroll container while browsing. */
   stickySectionTitles?: boolean;
-  /** Root category id — preload key; subgroup changes must not remount. */
+  /** Root category id retained for caller compatibility. */
   rootId?: string;
   /** Fires when the live grid (not skeleton) is shown / hidden. */
   onReadyChange?: (ready: boolean) => void;
@@ -1306,90 +1075,116 @@ export function FootageGrid({
 
   const rootRef = useRef<HTMLDivElement>(null);
   const [scrollRoot, setScrollRoot] = useState<Element | null>(null);
+  const [view, setView] = useState({ scrollTop: 0, viewportH: 480, width: 320 });
+  const rangeKeyRef = useRef("");
 
   const itemCount = useMemo(
     () => sections.reduce((sum, s) => sum + s.items.length, 0),
     [sections],
   );
 
-  /** Unit of preload: root category. Subgroup nav must not remount. */
-  const preloadKey = useMemo(
-    () => posterWarmupIdentity(rootId || "all", assetsPath, assetsBaseUrl || ""),
-    [assetsPath, assetsBaseUrl, rootId],
+  const metrics = useMemo(
+    () => ({
+      columns: Math.max(1, gridColumns),
+      width: Math.max(1, view.width),
+      gap: GRID_GAP_PX,
+      sectionGap: SECTION_GAP_PX,
+      titleHeight: stickySectionTitles
+        ? STICKY_TITLE_HEIGHT_PX
+        : PLAIN_TITLE_HEIGHT_PX,
+      gridPadX: stickySectionTitles ? GAL_GRID_PAD_X_PX : 0,
+    }),
+    [gridColumns, view.width, stickySectionTitles],
   );
 
-  const posterPathsForPreload = useMemo(
-    () =>
-      collectPosterPathsForPreload(sections, {
-        assetsPath,
-        assetsBaseUrl,
-        assetsHost,
-        settings,
-      }),
-    [sections, assetsPath, assetsBaseUrl, assetsHost, settings],
+  const layout = useMemo(
+    () => layoutGridSections(sections, metrics),
+    [sections, metrics],
   );
 
-  const [gridReady, setGridReady] = useState(() => peekPosterWarmup(preloadKey));
-  const releasePreloadRef = useRef<(() => void) | null>(null);
-  const completedPreloadKeyRef = useRef<string | null>(null);
-  const posterPathsRef = useRef(posterPathsForPreload);
-  posterPathsRef.current = posterPathsForPreload;
+  const windows = useMemo(
+    () => windowGridSections(layout, view.scrollTop, view.viewportH, WINDOW_BUFFER_PX),
+    [layout, view.scrollTop, view.viewportH],
+  );
 
+  const sectionById = useMemo(() => {
+    const map = new Map<string, PackContentSection>();
+    for (const section of sections) map.set(section.id, section);
+    return map;
+  }, [sections]);
+
+  // Readiness describes mounted content, never completion of poster downloads.
   useEffect(() => {
-    if (itemCount === 0) {
-      completedPreloadKeyRef.current = null;
-      setGridReady(false);
-      return;
-    }
-
-    if (completedPreloadKeyRef.current === preloadKey) {
-      setGridReady(true);
-      return;
-    }
-
-    // Boot warmup keeps its own retains. Taking them would revoke blobs on
-    // Strict Mode remount / tab switch and force a second load + gray cards.
-    if (peekPosterWarmup(preloadKey)) {
-      completedPreloadKeyRef.current = preloadKey;
-      setGridReady(true);
-      return;
-    }
-
-    setGridReady(false);
-    const paths = posterPathsRef.current;
-    const signal = { cancelled: false };
-
-    void preloadPosters(paths, () => {}, signal).then((cleanup) => {
-      if (signal.cancelled) {
-        cleanup();
-        return;
-      }
-      releasePreloadRef.current?.();
-      releasePreloadRef.current = cleanup;
-      completedPreloadKeyRef.current = preloadKey;
-      setGridReady(true);
-    });
-
-    return () => {
-      signal.cancelled = true;
-    };
-  }, [preloadKey, itemCount]);
-
-  useEffect(() => {
-    return () => {
-      releasePreloadRef.current?.();
-      releasePreloadRef.current = null;
-      completedPreloadKeyRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    onReadyChange?.(gridReady && itemCount > 0);
-  }, [gridReady, itemCount, onReadyChange]);
+    onReadyChange?.(itemCount > 0);
+  }, [itemCount, onReadyChange]);
 
   useLayoutEffect(() => {
-    setScrollRoot(closestScrollParent(rootRef.current));
-  }, [sections, gridReady]);
+    const node = rootRef.current;
+    const scroller = closestScrollParent(node);
+    setScrollRoot(scroller);
+    if (!scroller) return;
+    rangeKeyRef.current = "";
+    setView({
+      scrollTop: scroller.scrollTop,
+      viewportH: scroller.clientHeight,
+      width: Math.max(1, node?.clientWidth || scroller.clientWidth),
+    });
+  }, [sections, gridColumns, stickySectionTitles]);
+
+  useEffect(() => {
+    const scroller = scrollRoot;
+    const root = rootRef.current;
+    if (!scroller) return;
+
+    let raf = 0;
+    const read = () => {
+      raf = 0;
+      const width = Math.max(1, root?.clientWidth || scroller.clientWidth);
+      const viewportH = scroller.clientHeight;
+      const scrollTop = scroller.scrollTop;
+      const nextLayout = layoutGridSections(sections, {
+        columns: Math.max(1, gridColumns),
+        width,
+        gap: GRID_GAP_PX,
+        sectionGap: SECTION_GAP_PX,
+        titleHeight: stickySectionTitles
+          ? STICKY_TITLE_HEIGHT_PX
+          : PLAIN_TITLE_HEIGHT_PX,
+        gridPadX: stickySectionTitles ? GAL_GRID_PAD_X_PX : 0,
+      });
+      const nextWindows = windowGridSections(
+        nextLayout,
+        scrollTop,
+        viewportH,
+        WINDOW_BUFFER_PX,
+      );
+      const key = `${Math.round(width)}x${Math.round(viewportH)}:${windowRangeKey(nextWindows)}`;
+      if (key === rangeKeyRef.current) return;
+      rangeKeyRef.current = key;
+      setView({ scrollTop, viewportH, width });
+    };
+
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(read);
+    };
+
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(onScroll);
+      ro.observe(scroller);
+      if (root) ro.observe(root);
+    }
+    read();
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      scroller.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      ro?.disconnect();
+    };
+  }, [scrollRoot, sections, gridColumns, stickySectionTitles]);
 
   const subscribeHref = (subscribeUrl || BRAND.siteOrigin || "").trim();
 
@@ -1401,44 +1196,56 @@ export function FootageGrid({
     );
   }
 
-  if (!gridReady && !chipsMode) {
-    return (
-      <div ref={rootRef}>
-        <GridSkeleton
-          sections={sections}
-          columns={gridColumns}
-          accessUi={accessUi}
-          stickySectionTitles={stickySectionTitles}
-        />
-      </div>
-    );
-  }
-
   let flatOffset = 0;
+  const cols = Math.max(1, gridColumns);
 
   return (
     <div ref={rootRef}>
-      <GridViewportProvider scrollRoot={scrollRoot}>
+      <GridViewportProvider>
         <div
           className="relative w-full"
           style={{ display: "flex", flexDirection: "column", gap: SECTION_GAP_PX }}
         >
-          {sections.map((section) => {
-            if (section.items.length === 0) return null;
+          {layout.sections.map((sectionLayout, sectionIndex) => {
+            const section = sectionById.get(sectionLayout.id);
+            if (!section) return null;
             const sectionStart = flatOffset;
             flatOffset += section.items.length;
+            const win = windows[sectionIndex];
+            const className = stickySectionTitles ? "gal-footage-section" : "w-full";
+
+            if (!win || win.endRow <= win.startRow) {
+              return (
+                <section
+                  key={section.id}
+                  data-section-id={section.id}
+                  className={className}
+                  style={{ height: sectionLayout.height }}
+                  aria-hidden
+                />
+              );
+            }
+
+            const start = win.startRow * cols;
+            const end = Math.min(section.items.length, win.endRow * cols);
+            const stuck =
+              stickySectionTitles &&
+              view.scrollTop + 0.5 >= sectionLayout.top &&
+              view.scrollTop < sectionLayout.top + sectionLayout.height;
 
             return (
               <section
                 key={section.id}
                 data-section-id={section.id}
-                className={stickySectionTitles ? "gal-footage-section" : "w-full"}
+                className={className}
+                style={{ minHeight: sectionLayout.height }}
               >
                 {section.title ? (
                   <SectionTitle
                     title={section.title}
                     count={section.items.length}
                     sticky={stickySectionTitles}
+                    stuck={stuck}
                   />
                 ) : null}
                 <div
@@ -1446,9 +1253,11 @@ export function FootageGrid({
                   style={{
                     gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`,
                     gap: GRID_GAP_PX,
+                    paddingTop: win.padTop,
+                    paddingBottom: win.padBottom,
                   }}
                 >
-                  {section.items.map((clip, itemIndex) => (
+                  {section.items.slice(start, end).map((clip, itemIndex) => (
                     <Card
                       key={clip.id}
                       item={clip}
@@ -1464,7 +1273,7 @@ export function FootageGrid({
                       preferWebm={preferWebm}
                       useMp4={useMp4}
                       prepareApply={prepareApply}
-                      gridIndex={sectionStart + itemIndex}
+                      gridIndex={sectionStart + start + itemIndex}
                       onRequestSubscribe={requestSubscribe}
                     />
                   ))}
