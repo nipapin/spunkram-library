@@ -55,7 +55,7 @@ Grep gate after UI work: `evalTS(` only under `src/js/sdk/` and `src/js/lib/util
 These words are not interchangeable. Follow `.cursor/rules/push-vs-release.mdc`.
 
 - Push/commit: git only. No version bump, ZXP, tag, CDN.
-- Release: `npm run release:*` (patch/minor/major/beta/all/gal/spunkram).
+- Release: `npm run release:spunkram:{patch|minor|major|beta}` or `release:gal:…` (or `release:all -- --bump=…`).
 
 ## Verify
 

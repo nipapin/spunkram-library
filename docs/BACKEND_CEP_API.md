@@ -479,10 +479,10 @@ After R2 upload the script calls **`POST /api/cep/update/notify`** with `x-motio
 CEP:
 
 ```bash
-npm run release:patch -- --brand=all   # Spunkram + Gal, one version / tag
-npm run release:gal                    # Gal only
-npm run release:beta -- --brand=all    # beta.json per brand
-npm run release:patch                  # Spunkram only (default)
+npm run release:all -- --bump=patch    # Spunkram + Gal, independent versions / tags
+npm run release:gal:patch              # Gal only
+npm run release:all -- --beta          # beta.json per brand
+npm run release:spunkram:patch         # Spunkram only
 ```
 
 ### 5.5 CEP client behaviour

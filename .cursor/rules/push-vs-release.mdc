@@ -22,26 +22,30 @@ Do **not** bump version, build ZXP, tag, or upload to CDN.
 Run the project release script for the requested variant — nothing more elaborate unless asked:
 
 ```bash
-npm run release:patch
-npm run release:minor
-npm run release:major
-npm run release:beta
-npm run release:all          # Spunkram + Gal, independent versions / tags
-npm run release:gal          # Gal only
-npm run release:spunkram     # Spunkram only (default for release / release:patch)
+npm run release:spunkram:patch
+npm run release:spunkram:minor
+npm run release:spunkram:major
+npm run release:spunkram:beta
+npm run release:gal:patch
+npm run release:gal:minor
+npm run release:gal:major
+npm run release:gal:beta
+npm run release:all              # Spunkram + Gal, current versions / tags (no bump)
+npm run release:spunkram         # Spunkram, current version (no bump)
+npm run release:gal              # Gal, current version (no bump)
 ```
 
-Pass brand with patch/minor when needed:
+Both brands with a bump:
 
 ```bash
-npm run release:patch -- --brand=all
-npm run release:patch -- --brand=gal
+npm run release:all -- --bump=patch
+npm run release:all -- --beta
 ```
 
 That script already bumps version (if asked), builds ZXP(s), commits, pushes, tags, and uploads per brand.
 
-- If the user says only «зарелизь минор» → `npm run release:minor` (Spunkram)
-- If they say «релиз для gal и spunkram» → `npm run release:all` (or `release:patch -- --brand=all`)
+- If the user says only «зарелизь минор» → `npm run release:spunkram:minor`
+- If they say «релиз для gal и spunkram» → `npm run release:all -- --bump=patch`
 - If they say «закоммить и запушь» → commit + push only
 - If they say both («запушь и зарелизь») → do commit+push of WIP only if needed, then `npm run release:…` (release may commit again if dirty)
 

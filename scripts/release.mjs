@@ -8,10 +8,10 @@
  *
  * Usage (from CEP repo root):
  *   npm run release
- *   npm run release -- --bump=patch
- *   npm run release -- --brand=gal
- *   npm run release -- --brand=all --bump=patch
- *   npm run release:beta              # 0.4.2 → 0.4.3-beta.1 (beta.json only)
+ *   npm run release:spunkram:patch    # bump + release Spunkram
+ *   npm run release:gal:minor         # bump + release Gal
+ *   npm run release:spunkram:beta     # 0.4.2 → 0.4.3-beta.1 (beta.json only)
+ *   npm run release:all -- --bump=patch
  *   npm run release -- --dry-run
  *   npm run release -- --no-git
  *   npm run release -- --no-upload
