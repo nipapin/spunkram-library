@@ -133,3 +133,18 @@ test("swap page file URL and inline promote", () => {
   assert.match(html, /file:\/\/\/C:\/ext\/gal\/index\.html/);
   assert.match(html, /\.pending-update/);
 });
+
+test("swap page with payload copies then redirects", () => {
+  const html = buildSwapHtml({
+    extRoot: "C:\\ext",
+    destRel: "gal/index.html",
+    payloadRoot: "C:\\tmp\\extracted",
+    workDir: "C:\\tmp\\work",
+    appliedVersion: "0.9.23",
+  });
+  assert.match(html, /C:\\\\tmp\\\\extracted/);
+  assert.match(html, /copyFileSync/);
+  assert.match(html, /0\.9\.23/);
+  assert.match(html, /installed-update\.json/);
+  assert.match(html, /setTimeout\(apply, 400\)/);
+});

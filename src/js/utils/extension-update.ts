@@ -15,7 +15,12 @@ import {
   promotePendingUpdates,
   type ReplaceIo,
 } from "./replace-live-file";
-import { buildSwapHtml, pathToFileUrl, SWAP_PAGE_NAME } from "./update-swap-page";
+import {
+  buildSwapHtml,
+  pathToFileUrl,
+  PENDING_MARKER,
+  SWAP_PAGE_NAME,
+} from "./update-swap-page";
 
 export type ExtensionUpdateProgress = {
   phase: "download" | "extract" | "apply" | "reload";
@@ -28,7 +33,6 @@ export type ApplyExtensionUpdateResult = {
   pendingNatives: string[];
 };
 
-const PENDING_MARKER = "pending-native-update.json";
 
 type PendingMarker = {
   files: string[];
@@ -136,6 +140,37 @@ function panelDestRel(): string {
   return (BRAND.panelMainPath || "./index.html").replace(/^[./\\]+/, "").replace(/\\/g, "/");
 }
 
+function navigateToSwap(
+  extRoot: string,
+  payloadRoot: string,
+  workDir: string,
+  appliedVersion?: string,
+): boolean {
+  try {
+    fs.writeFileSync(
+      path.join(extRoot, SWAP_PAGE_NAME),
+      buildSwapHtml({
+        extRoot,
+        destRel: panelDestRel(),
+        payloadRoot,
+        workDir,
+        appliedVersion,
+      }),
+      "utf8",
+    );
+    const swapUrl = pathToFileUrl(path.join(extRoot, SWAP_PAGE_NAME));
+    setTimeout(() => {
+      if (typeof window !== "undefined" && window.location) {
+        window.location.replace(`${swapUrl}?_cep_upd=${Date.now()}`);
+      }
+    }, 50);
+    return true;
+  } catch (err) {
+    console.warn("[extension-update] swap page failed, copying in-process", err);
+    return false;
+  }
+}
+
 function reloadAfterApply(extRoot: string, pending: string[]): void {
   const destRel = panelDestRel();
   const needsSwap = pending.some((rel) => !pendingNativesOnly([rel]).length);
@@ -143,7 +178,7 @@ function reloadAfterApply(extRoot: string, pending: string[]): void {
     try {
       fs.writeFileSync(
         path.join(extRoot, SWAP_PAGE_NAME),
-        buildSwapHtml(extRoot, destRel),
+        buildSwapHtml({ extRoot, destRel }),
         "utf8",
       );
       const swapUrl = pathToFileUrl(path.join(extRoot, SWAP_PAGE_NAME));
@@ -194,11 +229,9 @@ export function hasPendingNativeUpdate(): boolean {
 }
 
 /**
- * Download a .zxp, unpack over the live extension root (userdata install),
- * then reload the panel. Locked files are renamed away or written as
- * `*.pending-update`; a swap page unloads CEF so HTML/JS can be promoted
- * without restarting Premiere / After Effects. Mapped natives may still
- * need a host restart.
+ * Download a .zxp, then leave the live panel HTML so CEF drops its file
+ * locks. The swap page copies the payload over the extension root.
+ * Mapped natives (Motionflow.dll) may still need a host restart.
  */
 export async function applyExtensionUpdate(
   zxpUrl: string,
@@ -214,6 +247,7 @@ export async function applyExtensionUpdate(
   fs.mkdirSync(workDir, { recursive: true });
   const zxpPath = path.join(workDir, "update.zxp");
   const extractDir = path.join(workDir, "extracted");
+  let handedOff = false;
 
   try {
     onProgress?.({
@@ -250,6 +284,12 @@ export async function applyExtensionUpdate(
     onProgress?.({ phase: "apply", bytesReceived: 0, totalBytes: null });
     cleanupUpdateBackups(io, extRoot);
 
+    onProgress?.({ phase: "reload", bytesReceived: 0, totalBytes: null });
+    if (navigateToSwap(extRoot, payloadRoot, workDir, appliedVersion)) {
+      handedOff = true;
+      return { pendingNatives: [] };
+    }
+
     const prior = readPendingMarker(extRoot);
     const pending: string[] = [...(prior?.files ?? [])];
     copyDirOverwrite(payloadRoot, extRoot, extRoot, pending);
@@ -260,15 +300,16 @@ export async function applyExtensionUpdate(
     }
 
     const natives = pendingNativesOnly(pending);
-    onProgress?.({ phase: "reload", bytesReceived: 0, totalBytes: null });
     reloadAfterApply(extRoot, pending);
 
     return { pendingNatives: natives };
   } finally {
-    try {
-      rimrafSafe(workDir);
-    } catch {
-      /* temp cleanup best-effort */
+    if (!handedOff) {
+      try {
+        rimrafSafe(workDir);
+      } catch {
+        /* temp cleanup best-effort */
+      }
     }
   }
 }

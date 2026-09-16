@@ -127,6 +127,9 @@ function mapTechnicalMessage(text: string, codes: string[]): string | null {
     return "Not enough disk space. Free some space and try again.";
   }
   if (codes.includes("EACCES") || codes.includes("EPERM") || /\bEACCES\b|\bEPERM\b/.test(text)) {
+    if (/copyfile|unlink|rename|Cannot replace locked file|,\s*open ['"]/i.test(text)) {
+      return "Couldn't replace a file while After Effects / Premiere is using it. Fully quit the host app, then try again.";
+    }
     return "Couldn't save the file (it may be in use). Wait a moment and try again.";
   }
   if (codes.includes("ENOENT") || /\bENOENT\b/.test(text)) {
