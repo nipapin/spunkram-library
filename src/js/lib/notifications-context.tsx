@@ -61,7 +61,7 @@ function titleForEvent(ev: CepPackEvent): string {
 }
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
-  const { signedIn, authReady, refreshMarket, market } = useAuth();
+  const { signedIn, authReady, refreshMarket, market, auth } = useAuth();
   const { showStatus } = usePanelUI();
   const [items, setItems] = useState<AppNotification[]>([]);
   const extensionHandlers = useRef(new Set<(version: string) => void>());
@@ -149,7 +149,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       off();
       cepWs.stop();
     };
-  }, [signedIn, authReady, handleWsEvent]);
+  }, [signedIn, authReady, handleWsEvent, auth.token]);
 
   useEffect(() => {
     return onSessionExpired(() => {

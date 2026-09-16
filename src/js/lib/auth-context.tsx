@@ -10,14 +10,16 @@ import {
 } from "react";
 import { authErrorMessage } from "@/lib/api/market-api";
 import { friendlyErrorMessage } from "@/utils/user-error";
-import { onSessionExpired } from "@/lib/api/session";
+import { onSessionExpired, onSessionReload } from "@/lib/api/session";
 import { cepWs } from "@/lib/cep-ws";
 import {
   listAccountSessions,
+  onSharedAuthFileChange,
   readMotionflowAuth,
   readPrefSettings,
   removeAccountSession,
   setActiveAccount,
+  sharedAuthFingerprint,
   upsertAccountSession,
   writeMotionflowAuth,
   writePrefSettings,
@@ -243,6 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const devicePickResolverRef = useRef<((deviceId: string | null) => void) | null>(
     null,
   );
+  const sharedAuthFpRef = useRef(sharedAuthFingerprint());
 
   const refreshSavedAccounts = useCallback(() => {
     setSavedAccounts(listAccountSessions());
@@ -279,6 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSubscription(status);
       syncAiIdentity(next);
       refreshSavedAccounts();
+      sharedAuthFpRef.current = sharedAuthFingerprint();
     },
     [refreshSavedAccounts],
   );
@@ -297,10 +301,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMarket(null);
     setMarketLoaded(false);
     refreshSavedAccounts();
+    sharedAuthFpRef.current = sharedAuthFingerprint();
   }, [refreshSavedAccounts]);
 
   useEffect(() => {
     return onSessionExpired(() => {
+      sharedAuthFpRef.current = sharedAuthFingerprint();
       clearSessionLocal();
       refreshSavedAccounts();
     });
@@ -317,6 +323,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await fetchMe(token, { host: hostType });
       if (!data) {
         if (error === "UNAUTHORIZED") {
+          const disk = readMotionflowAuth();
+          if (disk.token && disk.token !== token) {
+            return refreshProfile(disk.token, {
+              removeAccountIdOnUnauthorized: disk.id,
+            });
+          }
           if (opts?.removeAccountIdOnUnauthorized) {
             const vault = removeAccountSession(opts.removeAccountIdOnUnauthorized);
             refreshSavedAccounts();
@@ -413,6 +425,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [market, marketLoaded],
   );
 
+  const adoptSharedAuthFromDisk = useCallback(() => {
+    const fp = sharedAuthFingerprint();
+    if (fp === sharedAuthFpRef.current) return;
+    sharedAuthFpRef.current = fp;
+    refreshSavedAccounts();
+    const stored = readMotionflowAuth();
+    if (stored.token) {
+      syncAiIdentity(stored);
+      setAuth(stored);
+      void refreshProfile(stored.token, {
+        removeAccountIdOnUnauthorized: stored.id,
+      }).then((result) => {
+        if (result.ok) void refreshMarket(true);
+      });
+      return;
+    }
+    try {
+      cepWs.stop();
+    } catch {
+      /* ignore */
+    }
+    setSubscriptionUrls({});
+    setAuth({});
+    syncAiIdentity({});
+    setSubscription(toAuthStatus());
+    setMarket(null);
+    setMarketLoaded(false);
+  }, [refreshMarket, refreshProfile, refreshSavedAccounts]);
+
+  useEffect(() => onSessionReload(adoptSharedAuthFromDisk), [adoptSharedAuthFromDisk]);
+
+  useEffect(
+    () => onSharedAuthFileChange(adoptSharedAuthFromDisk),
+    [adoptSharedAuthFromDisk],
+  );
+
   const finishDeviceLogin = useCallback(
     async (token: string, user: { id: string; email: string; name?: string }) => {
       const nextAuth: MotionflowAuth = {
@@ -427,6 +475,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: nextAuth.name,
         token: nextAuth.token!,
       });
+      sharedAuthFpRef.current = sharedAuthFingerprint();
       setAuth(nextAuth);
       syncAiIdentity(nextAuth);
       refreshSavedAccounts();
@@ -713,6 +762,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         refreshSavedAccounts();
         const stored = readMotionflowAuth();
+        sharedAuthFpRef.current = sharedAuthFingerprint();
         if (stored.token) {
           syncAiIdentity(stored);
           const hydrate = refreshProfile(stored.token, {

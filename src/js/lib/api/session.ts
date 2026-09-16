@@ -8,11 +8,14 @@ import {
   writeMotionflowAuth,
 } from "@/lib/api/preferences";
 import { clearUserIdentity } from "@/api/user";
+import { shouldKeepSharedSession } from "@/lib/api/shared-auth-session";
 
 export function getSessionToken(): string | null {
   const t = readMotionflowAuth().token?.trim();
   return t && t.startsWith("mfcep_") ? t : null;
 }
+
+let lastSentSessionToken: string | null = null;
 
 export function requireSessionToken(): string {
   const t = getSessionToken();
@@ -29,6 +32,7 @@ export function sessionAuthHeaders(
     ...(extra || {}),
   };
   const token = getSessionToken();
+  lastSentSessionToken = token;
   if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
 }
@@ -38,11 +42,28 @@ export function hasSession(): boolean {
 }
 
 type SessionExpiredListener = () => void;
-const listeners = new Set<SessionExpiredListener>();
+const expiredListeners = new Set<SessionExpiredListener>();
+const reloadListeners = new Set<SessionExpiredListener>();
 
 export function onSessionExpired(listener: SessionExpiredListener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  expiredListeners.add(listener);
+  return () => expiredListeners.delete(listener);
+}
+
+/** Other host wrote a newer token to the shared vault — reload instead of signing out. */
+export function onSessionReload(listener: SessionExpiredListener): () => void {
+  reloadListeners.add(listener);
+  return () => reloadListeners.delete(listener);
+}
+
+function notify(listeners: Set<SessionExpiredListener>): void {
+  for (const listener of listeners) {
+    try {
+      listener();
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 /** Wipe local session and notify UI (login screen). Safe to call repeatedly. */
@@ -70,19 +91,35 @@ export function clearSession(reason = "UNAUTHORIZED"): void {
   } catch {
     /* ignore */
   }
-  for (const l of listeners) {
-    try {
-      l();
-    } catch {
-      /* ignore */
-    }
-  }
+  notify(expiredListeners);
   if (typeof console !== "undefined") {
     console.warn("[session] cleared:", reason);
   }
 }
 
-/** Call when any CEP API returns 401 or WS closes with 4401. */
-export function handleUnauthorized(reason = "UNAUTHORIZED"): void {
+/**
+ * Call when any CEP API returns 401 or WS closes with 4401.
+ * If `failedToken` is stale and the shared file already has a newer token
+ * (the other Adobe host just signed in), keep the vault and reload.
+ */
+export function handleUnauthorized(
+  reason = "UNAUTHORIZED",
+  failedToken?: string | null,
+): void {
+  let diskToken: string | null = null;
+  try {
+    diskToken = readMotionflowAuth().token ?? null;
+  } catch {
+    diskToken = null;
+  }
+  if (
+    shouldKeepSharedSession({
+      failedToken: failedToken ?? lastSentSessionToken,
+      diskToken,
+    })
+  ) {
+    notify(reloadListeners);
+    return;
+  }
   clearSession(reason);
 }

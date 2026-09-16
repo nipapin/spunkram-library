@@ -1,5 +1,9 @@
 import { fs, os, path } from "@/lib/cep/node";
 import { BRAND } from "@brands";
+import {
+  authVaultFingerprint,
+  type SharedAuthSnapshot,
+} from "@/lib/api/shared-auth-session";
 
 export type PrefSettings = {
   portablePackageInstallation: number;
@@ -410,4 +414,89 @@ export function removeAccountSession(id: string): AccountVault {
 
 export function asBool(value: number | boolean | null | undefined): boolean {
   return value === true || value === 1;
+}
+
+export function readSharedAuthSnapshot(): SharedAuthSnapshot {
+  const auth = readMotionflowAuth();
+  const vault = readAccountVault();
+  return {
+    token: auth.token,
+    id: auth.id,
+    activeId: vault.activeId,
+    accounts: vault.accounts.map((account) => ({
+      id: account.id,
+      token: account.token,
+    })),
+  };
+}
+
+export function sharedAuthFingerprint(): string {
+  return authVaultFingerprint(readSharedAuthSnapshot());
+}
+
+/**
+ * AE and Premiere both persist to the same preferences.json.
+ * Watch + poll so the other host picks up login/logout without a second sign-in.
+ */
+export function onSharedAuthFileChange(listener: () => void): () => void {
+  let debounce: ReturnType<typeof setTimeout> | null = null;
+  const fire = () => {
+    if (debounce) clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      debounce = null;
+      try {
+        listener();
+      } catch {
+        /* ignore */
+      }
+    }, 150);
+  };
+
+  let watcher: { close: () => void } | null = null;
+  const filePath = resolvePreferencesPath();
+  if (cepFsAvailable() && filePath && typeof fs.watch === "function") {
+    try {
+      watcher = fs.watch(filePath, fire);
+    } catch {
+      try {
+        const dir = path.dirname(filePath);
+        watcher = fs.watch(dir, (_event, filename) => {
+          if (!filename || String(filename).toLowerCase().includes("preferences")) {
+            fire();
+          }
+        });
+      } catch {
+        watcher = null;
+      }
+    }
+  }
+
+  const poll = setInterval(fire, 2000);
+  const onVisible = () => {
+    if (typeof document === "undefined" || document.visibilityState === "visible") {
+      fire();
+    }
+  };
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisible);
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener("focus", fire);
+  }
+
+  return () => {
+    if (debounce) clearTimeout(debounce);
+    clearInterval(poll);
+    try {
+      watcher?.close();
+    } catch {
+      /* ignore */
+    }
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", onVisible);
+    }
+    if (typeof window !== "undefined") {
+      window.removeEventListener("focus", fire);
+    }
+  };
 }

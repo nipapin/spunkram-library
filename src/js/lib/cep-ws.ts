@@ -4,6 +4,7 @@
  */
 import { API_BASE, apiUrl } from "@/api/config";
 import { getSessionToken, handleUnauthorized } from "@/lib/api/session";
+import { shouldKeepSharedSession } from "@/lib/api/shared-auth-session";
 import { currentHostAppId } from "@/lib/utils/apply-item";
 
 export type CepPackEventType = "pack.created" | "pack.updated" | "pack.deleted";
@@ -125,6 +126,15 @@ class CepWsClient {
       const ws = new WebSocket(wsUrl());
       this.ws = ws;
 
+      const adoptRotatedToken = (): boolean => {
+        const disk = getSessionToken();
+        if (!shouldKeepSharedSession({ failedToken: token, diskToken: disk })) {
+          return false;
+        }
+        handleUnauthorized("TOKEN_ROTATED", token);
+        return true;
+      };
+
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: "auth", token }));
       };
@@ -161,8 +171,14 @@ class CepWsClient {
           return;
         }
         if (type === "device.revoked") {
+          if (adoptRotatedToken()) {
+            this.started = true;
+            this.intentionalClose = false;
+            this.scheduleReconnect();
+            return;
+          }
           this.emit(msg as unknown as CepDeviceRevokedEvent);
-          handleUnauthorized("DEVICE_REVOKED");
+          handleUnauthorized("DEVICE_REVOKED", token);
           this.stop();
           return;
         }
@@ -173,8 +189,15 @@ class CepWsClient {
         this.pingTimer = null;
         this.ws = null;
         if (ev.code === 4401) {
+          if (adoptRotatedToken()) {
+            this.started = true;
+            this.intentionalClose = false;
+            this.scheduleReconnect();
+            return;
+          }
           handleUnauthorized(
             ev.reason === "REVOKED" ? "DEVICE_REVOKED" : "WS_UNAUTHORIZED",
+            token,
           );
           return;
         }
