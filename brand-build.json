@@ -1,6 +1,6 @@
 {
   "spunkram": {
-    "version": "0.9.23",
+    "version": "0.9.24",
     "port": 4000,
     "servePort": 5000,
     "startingDebugPort": 8860
