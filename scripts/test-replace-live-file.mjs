@@ -141,10 +141,13 @@ test("swap page with payload copies then redirects", () => {
     payloadRoot: "C:\\tmp\\extracted",
     workDir: "C:\\tmp\\work",
     appliedVersion: "0.9.23",
+    appliedStampPath: "C:\\Users\\x\\AppData\\Roaming\\Premiere Gal\\Gal Toolkit MAX\\applied-extension-version.json",
   });
   assert.match(html, /C:\\\\tmp\\\\extracted/);
   assert.match(html, /copyFileSync/);
   assert.match(html, /0\.9\.23/);
   assert.match(html, /installed-update\.json/);
+  assert.match(html, /applied-extension-version\.json/);
+  assert.match(html, /mkdirSync/);
   assert.match(html, /setTimeout\(apply, 400\)/);
 });

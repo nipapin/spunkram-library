@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useNotifications } from "@/lib/notifications-context";
 import { usePanelUI } from "@/lib/panel-ui-context";
@@ -9,7 +9,15 @@ import {
   hasPendingNativeUpdate,
 } from "@/utils/extension-update";
 import { pendingNativesOnly } from "@/utils/replace-live-file";
-import { getEffectiveLocalVersion } from "@/utils/extension-version";
+import {
+  getEffectiveLocalVersion,
+  readCrossHostAppliedVersion,
+  reloadPanelHard,
+} from "@/utils/extension-version";
+import {
+  CROSS_HOST_UPDATE_POLL_MS,
+  shouldReloadExtensionForAppliedUpdate,
+} from "@/utils/cross-host-update";
 import { friendlyErrorMessage } from "@/utils/user-error";
 import { version as BUILD_VERSION } from "../../shared/shared";
 
@@ -19,6 +27,10 @@ import { version as BUILD_VERSION } from "../../shared/shared";
  *
  * Local version is max(build embed, CSXS manifest, apply stamp) so CEF-cached
  * JS cannot leave the UpdateBanner stuck after a successful install.
+ *
+ * When AE and Premiere are both open, the host that finishes apply writes a
+ * Roaming handshake. The other host polls that file and reloads the panel
+ * (not the host app) so the Update banner cannot stay on already-applied code.
  */
 export function useExtensionUpdate() {
   const { authReady, signedIn } = useAuth();
@@ -94,6 +106,31 @@ export function useExtensionUpdate() {
       setHasPendingNatives(hasPendingNativeUpdate());
     }
   }, [showStatus]);
+
+  // Other host applied this ZXP: reload the panel HTML, not Premiere / After Effects.
+  const reloadingPanelRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const tick = () => {
+      if (reloadingPanelRef.current) return;
+      const applied = readCrossHostAppliedVersion();
+      if (
+        !shouldReloadExtensionForAppliedUpdate({
+          runningVersion: BUILD_VERSION,
+          appliedVersion: applied,
+          targetVersion: updateVersion,
+          applying: updateBusy,
+        })
+      ) {
+        return;
+      }
+      reloadingPanelRef.current = true;
+      reloadPanelHard();
+    };
+    tick();
+    const id = window.setInterval(tick, CROSS_HOST_UPDATE_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [updateBusy, updateVersion]);
 
   // Re-check after sign-in so beta testers get beta.json (Bearer required).
   useEffect(() => {

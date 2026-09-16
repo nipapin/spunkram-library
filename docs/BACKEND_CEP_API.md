@@ -131,9 +131,9 @@ Gal Toolkit MAX (`client: gal-cep`): `verification_url` = `https://premieregal.m
 Успех: `{ "status": "complete", "token": "…", "user": { "id", "email", "name?" } }`.  
 Token обязан позволять серверу узнать `client` (claim или lookup).
 
-**Лимит устройств (по умолчанию 3, `CEP_DEVICE_LIMIT`):** если у аккаунта уже max активных устройств и пара MAC+`client` не совпала, poll возвращает:
+**Лимит устройств (по умолчанию 3, `CEP_DEVICE_LIMIT`):** если у аккаунта уже max активных устройств и входящая панель **не** совпала с занятым слотом, poll возвращает:
 
-Повторный логин **того же `client`** на той же машине (MAC) ротирует токен этого устройства и не занимает слот. `gal-cep` и `spunkram-cep` на одном MAC — разные устройства, сессии независимы.
+Повторный логин **того же `client`** на той же машине (MAC, сравнение по 12 hex) или, при полном лимите, того же OS username уже в списке — ротирует токен этого слота, confirm возвращает `complete` (успех в браузере, без баннера «выберите кого высадить»). Баннер `device_limit` только для нового occupant, которого нет в списке. `gal-cep` и `spunkram-cep` на одном MAC — разные устройства, сессии независимы.
 
 ```json
 {
@@ -152,7 +152,7 @@ Token обязан позволять серверу узнать `client` (clai
 }
 ```
 
-Browser confirm при approve может вернуть `{ "ok": true, "status": "device_limit" }` — панель показывает picker и вызывает replace-device.
+Browser confirm при approve: `{ "ok": true, "status": "complete" }` если слот уже этой панели (MAC или, на лимите, OS username из списка); `{ "ok": true, "status": "device_limit" }` только если входит кто-то, кого в списке нет — тогда панель показывает picker и вызывает replace-device.
 
 ### 1.3b `POST /api/cep/auth/replace-device`
 
@@ -493,6 +493,7 @@ Shared hook: `src/js/lib/use-extension-update.ts` (Gal `GalApp` + Spunkram `main
 2. Compare remote to **effective local** = max(build embed, `CSXS/manifest.xml` `ExtensionBundleVersion`, apply stamp on disk / panel-store) — avoids sticky UpdateBanner when CEF caches old JS
 3. If remote is newer → banner (beta labeled for testers)
 4. User clicks Update → download ZXP → unpack over `csi.getSystemPath("extension")` → write `installed-update.json` → hard reload with cache-bust query
+5. After a **successful** apply, also write `%APPDATA%/{panelCompany}/{panelProduct}/applied-extension-version.json` (Roaming userdata — not the extension folder). If AE and Premiere are both open, the other host polls this file every 2s and **reloads the CEP panel** (`reloadPanelHard`) when the stamp matches the pending update version. It does **not** quit or restart After Effects / Premiere.
 
 ### 5.6 Captions catalog version (`Base/manifest.json`)
 

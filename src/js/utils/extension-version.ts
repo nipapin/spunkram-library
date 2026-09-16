@@ -4,15 +4,14 @@ import { csi } from "@/lib/utils/bolt";
 import * as panelStore from "@/lib/userdata-store";
 import { BRAND, storageKey } from "@brands";
 import { version as BUILD_VERSION } from "../../shared/shared";
+import {
+  APPLIED_VERSION_STAMP_FILE,
+  type AppliedVersionStamp,
+  parseAppliedVersionStamp,
+} from "./cross-host-update";
+import { INSTALLED_UPDATE_FILE } from "./update-swap-page";
 
-/** Written into the extension root on successful ZXP apply (Node FS — not CEF cache). */
-const INSTALLED_UPDATE_FILE = "installed-update.json";
 const APPLIED_STORE_KEY = storageKey("appliedExtensionUpdate");
-
-type InstalledUpdateStamp = {
-  version: string;
-  appliedAt?: string;
-};
 
 function extRoot(): string {
   try {
@@ -48,20 +47,54 @@ export function readInstalledBundleVersion(): string | null {
   return null;
 }
 
-function readDiskUpdateStamp(): string | null {
-  const root = extRoot();
-  if (!root || typeof fs?.existsSync !== "function") return null;
-  const file = path.join(root, INSTALLED_UPDATE_FILE);
+function readStampFile(file: string): string | null {
+  if (!file || typeof fs?.existsSync !== "function") return null;
   try {
     if (!fs.existsSync(file)) return null;
     const raw = JSON.parse(
       fs.readFileSync(file, { encoding: "utf8" }).toString(),
-    ) as InstalledUpdateStamp;
-    const v = typeof raw?.version === "string" ? raw.version.trim() : "";
-    return v ? v.replace(/^v/i, "") : null;
+    ) as AppliedVersionStamp;
+    return parseAppliedVersionStamp(raw);
   } catch {
     return null;
   }
+}
+
+function readDiskUpdateStamp(): string | null {
+  const root = extRoot();
+  if (!root) return null;
+  return readStampFile(path.join(root, INSTALLED_UPDATE_FILE));
+}
+
+/** AppData/Roaming handshake — shared by AE and Premiere, outside the extension folder. */
+export function getAppliedVersionStampPath(): string {
+  const dir = panelStore.getPanelUserDataDir();
+  return dir ? path.join(dir, APPLIED_VERSION_STAMP_FILE) : "";
+}
+
+function readRoamingAppliedStamp(): string | null {
+  return readStampFile(getAppliedVersionStampPath());
+}
+
+function writeRoamingAppliedStamp(version: string, appliedAt: string): void {
+  const file = getAppliedVersionStampPath();
+  if (!file || typeof fs?.writeFileSync !== "function") return;
+  try {
+    const dir = path.dirname(file);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const payload: AppliedVersionStamp = { version, appliedAt };
+    fs.writeFileSync(file, JSON.stringify(payload, null, 2), "utf8");
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Fresh disk read of the version another host successfully applied.
+ * Prefers the Roaming handshake (written only after apply finished).
+ */
+export function readCrossHostAppliedVersion(): string | null {
+  return readRoamingAppliedStamp() || readDiskUpdateStamp();
 }
 
 function readStoreAppliedVersion(): string | null {
@@ -95,6 +128,8 @@ export function getEffectiveLocalVersion(
 export function markExtensionUpdateApplied(version: string): void {
   const clean = version.trim().replace(/^v/i, "");
   if (!clean) return;
+  const appliedAt = new Date().toISOString();
+  const payload: AppliedVersionStamp = { version: clean, appliedAt };
 
   try {
     panelStore.setItem(APPLIED_STORE_KEY, clean);
@@ -102,20 +137,18 @@ export function markExtensionUpdateApplied(version: string): void {
     /* ignore */
   }
 
+  writeRoamingAppliedStamp(clean, appliedAt);
+
   const root = extRoot();
   if (!root || typeof fs?.writeFileSync !== "function") return;
   try {
-    const payload: InstalledUpdateStamp = {
-      version: clean,
-      appliedAt: new Date().toISOString(),
-    };
     fs.writeFileSync(
       path.join(root, INSTALLED_UPDATE_FILE),
       JSON.stringify(payload, null, 2),
       "utf8",
     );
   } catch {
-    /* ignore — panel store still helps */
+    /* ignore — roaming stamp still wakes the other host */
   }
 }
 

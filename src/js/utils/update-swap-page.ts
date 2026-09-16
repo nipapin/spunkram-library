@@ -12,6 +12,8 @@ export type SwapApplyOpts = {
   /** Temp dir to delete after copy (download + extract). */
   workDir?: string;
   appliedVersion?: string;
+  /** AppData/Roaming handshake for the other host's panel reload (not host restart). */
+  appliedStampPath?: string;
 };
 
 /** CEP `getSystemPath("extension")` is a filesystem path; CEF needs file://. */
@@ -53,6 +55,7 @@ export function buildSwapHtml(
   const payloadJson = JSON.stringify(opts.payloadRoot || "");
   const workJson = JSON.stringify(opts.workDir || "");
   const versionJson = JSON.stringify(opts.appliedVersion || "");
+  const appliedStampJson = JSON.stringify(opts.appliedStampPath || "");
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -73,6 +76,7 @@ export function buildSwapHtml(
   var payload = ${payloadJson};
   var workDir = ${workJson};
   var version = ${versionJson};
+  var appliedStampPath = ${appliedStampJson};
   function go() {
     try {
       var u = dest + (dest.indexOf("?") >= 0 ? "&" : "?") + "_cep_upd=" + Date.now();
@@ -224,9 +228,17 @@ export function buildSwapHtml(
         }
       } catch (e) {}
       if (version) {
+        var stampBody = JSON.stringify({ version: version, appliedAt: new Date().toISOString() }, null, 2);
         try {
-          fs.writeFileSync(path.join(root, STAMP), JSON.stringify({ version: version, appliedAt: new Date().toISOString() }, null, 2), "utf8");
+          fs.writeFileSync(path.join(root, STAMP), stampBody, "utf8");
         } catch (e) {}
+        if (appliedStampPath) {
+          try {
+            var stampDir = path.dirname(appliedStampPath);
+            if (!exists(stampDir)) fs.mkdirSync(stampDir, { recursive: true });
+            fs.writeFileSync(appliedStampPath, stampBody, "utf8");
+          } catch (e2) {}
+        }
       }
       if (workDir) rm(workDir);
       go();

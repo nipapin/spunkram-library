@@ -56,4 +56,4 @@ Then close `4401` / `REVOKED`. Clear vault session and show login immediately.
 
 ## Device limit login
 
-Default max **3** devices. Poll `POST /api/cep/auth/token` may return `status: "device_limit"` + `devices[]`. Finish with `POST /api/cep/auth/replace-device` `{ code, device_code, revoke_device_id }`.
+Default max **3** devices. Re-login of a seat already in the list completes without a picker. Poll `POST /api/cep/auth/token` returns `status: "device_limit"` + `devices[]` only for a new occupant. Finish with `POST /api/cep/auth/replace-device` `{ code, device_code, revoke_device_id }`.

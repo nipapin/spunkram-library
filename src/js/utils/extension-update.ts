@@ -3,6 +3,7 @@ import { csi } from "../lib/utils/bolt";
 import { extractZipToFolder } from "../lib/utils/pack-zip";
 import { downloadToFile, type DownloadProgress } from "./download-file";
 import {
+  getAppliedVersionStampPath,
   markExtensionUpdateApplied,
   reloadPanelHard,
 } from "./extension-version";
@@ -155,6 +156,7 @@ function navigateToSwap(
         payloadRoot,
         workDir,
         appliedVersion,
+        appliedStampPath: getAppliedVersionStampPath(),
       }),
       "utf8",
     );
