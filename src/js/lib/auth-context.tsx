@@ -10,11 +10,12 @@ import {
 } from "react";
 import { authErrorMessage } from "@/lib/api/market-api";
 import { friendlyErrorMessage } from "@/utils/user-error";
-import { onSessionExpired, onSessionReload } from "@/lib/api/session";
+import { handleUnauthorized, onSessionExpired, onSessionReload } from "@/lib/api/session";
 import { cepWs } from "@/lib/cep-ws";
 import {
   listAccountSessions,
   onSharedAuthFileChange,
+  readActiveMotionflowAuth,
   readMotionflowAuth,
   readPrefSettings,
   removeAccountSession,
@@ -218,7 +219,7 @@ async function releaseLocalDeviceSlots(opts: {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefsState] = useState<PrefSettings>(() => readPrefSettings());
   const [auth, setAuth] = useState<MotionflowAuth>(() => {
-    const stored = readMotionflowAuth();
+    const stored = readActiveMotionflowAuth();
     syncAiIdentity(stored);
     return stored;
   });
@@ -287,7 +288,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refreshSavedAccounts],
   );
 
-  const clearSessionLocal = useCallback(() => {
+  const forgetSessionInMemory = useCallback(() => {
     try {
       cepWs.stop();
     } catch {
@@ -295,7 +296,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setSubscriptionUrls({});
     setAuth({});
-    writeMotionflowAuth({});
     syncAiIdentity({});
     setSubscription(toAuthStatus());
     setMarket(null);
@@ -304,18 +304,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sharedAuthFpRef.current = sharedAuthFingerprint();
   }, [refreshSavedAccounts]);
 
-  useEffect(() => {
-    return onSessionExpired(() => {
-      sharedAuthFpRef.current = sharedAuthFingerprint();
-      clearSessionLocal();
-      refreshSavedAccounts();
-    });
-  }, [clearSessionLocal, refreshSavedAccounts]);
+  const clearSessionLocal = useCallback(() => {
+    forgetSessionInMemory();
+    writeMotionflowAuth({});
+  }, [forgetSessionInMemory]);
 
   const refreshProfile = useCallback(
     async (
       token: string,
-      opts?: { removeAccountIdOnUnauthorized?: string },
+      _opts?: { removeAccountIdOnUnauthorized?: string },
     ): Promise<AuthActionResult> => {
       const host = currentHostAppId();
       const hostType =
@@ -323,31 +320,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await fetchMe(token, { host: hostType });
       if (!data) {
         if (error === "UNAUTHORIZED") {
-          const disk = readMotionflowAuth();
+          const disk = readActiveMotionflowAuth();
           if (disk.token && disk.token !== token) {
             return refreshProfile(disk.token, {
               removeAccountIdOnUnauthorized: disk.id,
             });
           }
-          if (opts?.removeAccountIdOnUnauthorized) {
-            const vault = removeAccountSession(opts.removeAccountIdOnUnauthorized);
-            refreshSavedAccounts();
-            if (vault.activeId) {
-              const next = vault.accounts.find((a) => a.id === vault.activeId);
-              if (next) {
-                const activated = setActiveAccount(next.id);
-                if (activated) {
-                  syncAiIdentity(authFromSession(activated));
-                  setAuth(authFromSession(activated));
-                  const recovered = await refreshProfile(activated.token, {
-                    removeAccountIdOnUnauthorized: activated.id,
-                  });
-                  return recovered;
-                }
-              }
-            }
+          handleUnauthorized("UNAUTHORIZED", token);
+          const after = readActiveMotionflowAuth();
+          if (after.token && after.token !== token) {
+            return refreshProfile(after.token, {
+              removeAccountIdOnUnauthorized: after.id,
+            });
           }
-          clearSessionLocal();
+          if (after.token) {
+            return {
+              ok: false as const,
+              message: "Session expired — please sign in again",
+            };
+          }
+          forgetSessionInMemory();
           setSubscription(
             toAuthStatus(undefined, [], [], {
               error: "Session expired — please sign in again",
@@ -386,7 +378,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void reportInstalledPacks();
       return { ok: true as const };
     },
-    [applySession, clearSessionLocal, refreshSavedAccounts],
+    [applySession, forgetSessionInMemory],
   );
 
   const refreshMarket = useCallback(
@@ -430,7 +422,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (fp === sharedAuthFpRef.current) return;
     sharedAuthFpRef.current = fp;
     refreshSavedAccounts();
-    const stored = readMotionflowAuth();
+    const stored = readActiveMotionflowAuth();
     if (stored.token) {
       syncAiIdentity(stored);
       setAuth(stored);
@@ -441,18 +433,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    try {
-      cepWs.stop();
-    } catch {
-      /* ignore */
-    }
-    setSubscriptionUrls({});
-    setAuth({});
-    syncAiIdentity({});
-    setSubscription(toAuthStatus());
-    setMarket(null);
-    setMarketLoaded(false);
-  }, [refreshMarket, refreshProfile, refreshSavedAccounts]);
+    forgetSessionInMemory();
+  }, [forgetSessionInMemory, refreshMarket, refreshProfile, refreshSavedAccounts]);
 
   useEffect(() => onSessionReload(adoptSharedAuthFromDisk), [adoptSharedAuthFromDisk]);
 
@@ -460,6 +442,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => onSharedAuthFileChange(adoptSharedAuthFromDisk),
     [adoptSharedAuthFromDisk],
   );
+
+  useEffect(() => {
+    return onSessionExpired(() => {
+      const stored = readActiveMotionflowAuth();
+      if (stored.token) {
+        adoptSharedAuthFromDisk();
+        return;
+      }
+      forgetSessionInMemory();
+    });
+  }, [adoptSharedAuthFromDisk, forgetSessionInMemory]);
 
   const finishDeviceLogin = useCallback(
     async (token: string, user: { id: string; email: string; name?: string }) => {
@@ -737,7 +730,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const recheck = useCallback(async () => {
-    const current = readMotionflowAuth();
+    const current = readActiveMotionflowAuth();
     if (!current.token) return { ok: false, message: "Not signed in" };
     return refreshProfile(current.token, {
       removeAccountIdOnUnauthorized: current.id,
@@ -761,7 +754,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         refreshSavedAccounts();
-        const stored = readMotionflowAuth();
+        const stored = readActiveMotionflowAuth();
         sharedAuthFpRef.current = sharedAuthFingerprint();
         if (stored.token) {
           syncAiIdentity(stored);

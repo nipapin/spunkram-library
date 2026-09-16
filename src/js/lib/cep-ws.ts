@@ -177,9 +177,7 @@ class CepWsClient {
             this.scheduleReconnect();
             return;
           }
-          this.emit(msg as unknown as CepDeviceRevokedEvent);
           handleUnauthorized("DEVICE_REVOKED", token);
-          this.stop();
           return;
         }
       };

@@ -1,6 +1,7 @@
 import { fs, os, path } from "@/lib/cep/node";
 import { BRAND } from "@brands";
 import {
+  activeAuthFromParts,
   authVaultFingerprint,
   type SharedAuthSnapshot,
 } from "@/lib/api/shared-auth-session";
@@ -119,26 +120,48 @@ export function resolvePreferencesPath(): string {
   return "";
 }
 
+function emptyPreferencesFile(): PreferencesFile {
+  return {
+    packages: [],
+    PrefSettings: { ...DEFAULT_PREF_SETTINGS },
+    motionflowAuth: {},
+    motionflowAccounts: [],
+  };
+}
+
+/** Last successful parse — a sibling host's partial write must not look like logout. */
+let lastGoodPreferences: PreferencesFile | null = null;
+
+function atomicWriteFile(filePath: string, contents: string): void {
+  const tmp = `${filePath}.tmp`;
+  fs.writeFileSync(tmp, contents, { encoding: "utf8" });
+  try {
+    fs.renameSync(tmp, filePath);
+  } catch {
+    fs.writeFileSync(filePath, contents, { encoding: "utf8" });
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export function loadPreferencesFile(): PreferencesFile {
   const prefPath = resolvePreferencesPath();
   if (!prefPath || !cepFsAvailable() || !fs.existsSync(prefPath)) {
-    return {
-      packages: [],
-      PrefSettings: { ...DEFAULT_PREF_SETTINGS },
-      motionflowAuth: {},
-      motionflowAccounts: [],
-    };
+    return lastGoodPreferences ?? emptyPreferencesFile();
   }
   try {
     const raw = fs.readFileSync(prefPath, { encoding: "utf8" }).toString();
-    return JSON.parse(raw) as PreferencesFile;
+    if (!raw.trim()) {
+      return lastGoodPreferences ?? emptyPreferencesFile();
+    }
+    const parsed = JSON.parse(raw) as PreferencesFile;
+    lastGoodPreferences = parsed;
+    return parsed;
   } catch {
-    return {
-      packages: [],
-      PrefSettings: { ...DEFAULT_PREF_SETTINGS },
-      motionflowAuth: {},
-      motionflowAccounts: [],
-    };
+    return lastGoodPreferences ?? emptyPreferencesFile();
   }
 }
 
@@ -150,7 +173,8 @@ export function savePreferencesFile(data: PreferencesFile): boolean {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(prefPath, JSON.stringify(data, null, 2), { encoding: "utf8" });
+    atomicWriteFile(prefPath, JSON.stringify(data, null, 2));
+    lastGoodPreferences = data;
     return true;
   } catch {
     return false;
@@ -168,6 +192,7 @@ export function clearPreferencesFile(): boolean {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
+    lastGoodPreferences = emptyPreferencesFile();
     fs.writeFileSync(prefPath, "", { encoding: "utf8" });
     return true;
   } catch {
@@ -204,6 +229,11 @@ export function writePrefSettings(settings: PrefSettings): boolean {
 export function readMotionflowAuth(): MotionflowAuth {
   const file = loadPreferencesFile();
   return file.motionflowAuth ?? {};
+}
+
+/** Current session: `motionflowAuth`, or the active vault account if that field was cleared. */
+export function readActiveMotionflowAuth(): MotionflowAuth {
+  return activeAuthFromParts(readMotionflowAuth(), readAccountVault());
 }
 
 export function writeMotionflowAuth(auth: MotionflowAuth): boolean {
@@ -435,7 +465,7 @@ export function sharedAuthFingerprint(): string {
 }
 
 /**
- * AE and Premiere both persist to the same preferences.json.
+ * AE and Premiere both persist to the same preferences.json for this brand.
  * Watch + poll so the other host picks up login/logout without a second sign-in.
  */
 export function onSharedAuthFileChange(listener: () => void): () => void {

@@ -3,19 +3,24 @@
  * Opaque `mfcep_…` from device login — never invent secondary credentials.
  */
 import {
-  readMotionflowAuth,
+  readActiveMotionflowAuth,
   removeAccountSession,
   writeMotionflowAuth,
 } from "@/lib/api/preferences";
 import { clearUserIdentity } from "@/api/user";
-import { shouldKeepSharedSession } from "@/lib/api/shared-auth-session";
+import { shouldWipeSharedVault } from "@/lib/api/shared-auth-session";
+
+/** Wait for the sibling host to persist a rotated token after `device.revoked`. */
+export const UNAUTHORIZED_WIPE_CONFIRM_MS = 800;
 
 export function getSessionToken(): string | null {
-  const t = readMotionflowAuth().token?.trim();
+  const t = readActiveMotionflowAuth().token?.trim();
   return t && t.startsWith("mfcep_") ? t : null;
 }
 
 let lastSentSessionToken: string | null = null;
+let pendingWipeTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingWipeFailed = "";
 
 export function requireSessionToken(): string {
   const t = getSessionToken();
@@ -32,8 +37,10 @@ export function sessionAuthHeaders(
     ...(extra || {}),
   };
   const token = getSessionToken();
-  lastSentSessionToken = token;
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    lastSentSessionToken = token;
+    headers.Authorization = `Bearer ${token}`;
+  }
   return headers;
 }
 
@@ -66,14 +73,39 @@ function notify(listeners: Set<SessionExpiredListener>): void {
   }
 }
 
-/** Wipe local session and notify UI (login screen). Safe to call repeatedly. */
-export function clearSession(reason = "UNAUTHORIZED"): void {
-  let accountId: string | undefined;
+function readDiskToken(): string | null {
   try {
-    accountId = readMotionflowAuth().id;
+    return readActiveMotionflowAuth().token ?? null;
   } catch {
-    /* ignore */
+    return null;
   }
+}
+
+function keepSharedVault(): void {
+  notify(reloadListeners);
+}
+
+/**
+ * Wipe local session and notify UI (login screen). Safe to call repeatedly.
+ * Aborts if the shared file already holds a different live token.
+ */
+export function clearSession(
+  reason = "UNAUTHORIZED",
+  failedToken?: string | null,
+): void {
+  const failed = failedToken ?? lastSentSessionToken;
+  const disk = readActiveMotionflowAuth();
+  if (
+    !shouldWipeSharedVault({
+      failedToken: failed,
+      diskToken: disk.token,
+    })
+  ) {
+    keepSharedVault();
+    return;
+  }
+
+  const accountId = disk.id;
   try {
     writeMotionflowAuth({});
   } catch {
@@ -97,29 +129,54 @@ export function clearSession(reason = "UNAUTHORIZED"): void {
   }
 }
 
+function confirmUnauthorizedWipe(reason: string, failedToken: string | null): void {
+  pendingWipeTimer = null;
+  pendingWipeFailed = "";
+  if (
+    !shouldWipeSharedVault({
+      failedToken,
+      diskToken: readDiskToken(),
+    })
+  ) {
+    keepSharedVault();
+    return;
+  }
+  clearSession(reason, failedToken);
+}
+
 /**
  * Call when any CEP API returns 401 or WS closes with 4401.
  * If `failedToken` is stale and the shared file already has a newer token
  * (the other Adobe host just signed in), keep the vault and reload.
+ *
+ * Server publishes `device.revoked` before the signing-in host writes the new
+ * token, so a matching disk token waits briefly before wipe.
  */
 export function handleUnauthorized(
   reason = "UNAUTHORIZED",
   failedToken?: string | null,
 ): void {
-  let diskToken: string | null = null;
-  try {
-    diskToken = readMotionflowAuth().token ?? null;
-  } catch {
-    diskToken = null;
-  }
+  const failed = (failedToken ?? lastSentSessionToken) || null;
   if (
-    shouldKeepSharedSession({
-      failedToken: failedToken ?? lastSentSessionToken,
-      diskToken,
+    !shouldWipeSharedVault({
+      failedToken: failed,
+      diskToken: readDiskToken(),
     })
   ) {
-    notify(reloadListeners);
+    keepSharedVault();
     return;
   }
-  clearSession(reason);
+
+  if (typeof setTimeout !== "function") {
+    confirmUnauthorizedWipe(reason, failed);
+    return;
+  }
+
+  const failedKey = failed || "";
+  if (pendingWipeTimer && pendingWipeFailed === failedKey) return;
+  if (pendingWipeTimer) clearTimeout(pendingWipeTimer);
+  pendingWipeFailed = failedKey;
+  pendingWipeTimer = setTimeout(() => {
+    confirmUnauthorizedWipe(reason, failed);
+  }, UNAUTHORIZED_WIPE_CONFIRM_MS);
 }
