@@ -9,6 +9,7 @@
   flex: 1;
   min-height: 0;
   margin: 8px 10px 10px;
+  padding-top: 12px;
   border-radius: var(--radius-xxl);
   overflow: hidden;
   display: flex;
@@ -18,8 +19,8 @@
 .captions-tab__list {
   flex: 1;
   min-height: 0;
-  // Only vertical padding — horizontal aligns segment cards with `.tabs` width
-  padding: 12px 0;
+  // Bottom only — top inset lives on `.captions-tab__panel` so it stays put while scrolling
+  padding: 0 0 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -128,83 +129,4 @@
   font-weight: 600;
   color: var(--text-dim);
   letter-spacing: .07em;
-}
-
-.captions-tab__resegment {
-  flex-shrink: 0;
-  margin: 0 0 4px;
-  padding: 11px 12px;
-}
-
-.captions-tab__resegment-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  cursor: pointer;
-}
-
-.captions-tab__resegment--open .captions-tab__resegment-head {
-  margin-bottom: 9px;
-}
-
-.captions-tab__resegment-head .captions-tab__section-label {
-  margin: 0;
-}
-
-.captions-tab__resegment-chevron {
-  color: var(--text-dim);
-  transition: transform .15s;
-  transform: scaleY(-1);
-}
-
-.captions-tab__resegment-chevron--open {
-  transform: scaleY(1);
-}
-
-.captions-tab__resegment-modes {
-  margin-bottom: 11px;
-}
-
-.captions-tab__resegment-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 9px;
-}
-
-.captions-tab__resegment-row:last-child {
-  margin-bottom: 0;
-}
-
-.captions-tab__resegment-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-  width: 118px;
-}
-
-.captions-tab__resegment-row .range {
-  flex: 1;
-}
-
-.captions-tab__resegment-value {
-  font-size: 12px;
-  color: var(--text-body);
-  width: 22px;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-.captions-tab__resegment-update.btn.btn--primary {
-  margin-top: 10px;
-  height: 30px;
-  min-height: 30px;
-  max-height: 30px;
-  box-sizing: border-box;
-  padding: 0 12px;
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1;
-  border-radius: 999px;
 }

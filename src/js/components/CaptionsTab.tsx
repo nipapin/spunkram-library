@@ -1,8 +1,7 @@
-import { ArrowLeft, AudioWaveform, ChevronUp, Download } from "lucide-react";
+import { ArrowLeft, AudioWaveform, Download } from "lucide-react";
 import { useState } from "react";
 import { useConfiguration } from "../../context/ConfigurationWrapper";
-import { rangeFillStyle } from "../utils/rangeFillStyle";
-import type { AppliedSegmentConfig, Caption, GroupingMode } from "../utils/transcribe";
+import type { AppliedSegmentConfig, Caption } from "../utils/transcribe";
 import "./CaptionsTab.scss";
 import { EditableCaption } from "./EditableCaption";
 import { LanguageRow } from "./LanguageRow";
@@ -37,11 +36,6 @@ interface CaptionsTabProps {
 
 type SubTab = "transcribe" | "style";
 
-const SEG_MODES: { value: GroupingMode; label: string }[] = [
-  { value: "words", label: "Words" },
-  { value: "custom", label: "Custom" },
-];
-
 export const CaptionsTab = ({
   captions,
   meta,
@@ -66,31 +60,7 @@ export const CaptionsTab = ({
   resegmenting,
 }: CaptionsTabProps) => {
   const [subTab, setSubTab] = useState<SubTab>("transcribe");
-  const [resegmentOpen, setResegmentOpen] = useState(false);
-  const {
-    mode,
-    lines,
-    characters,
-    updateMode,
-    updateLines,
-    updateCharacters,
-    srcLang,
-    translateTo,
-    updateSrcLang,
-    updateTranslateTo,
-  } = useConfiguration();
-
-  // Sentence mode is hidden from the mode picker but still works for existing data.
-  // Don't auto-migrate: split/merge operations require sentence-level backing data.
-
-  // текущие настройки уже применены к хосту — кнопка Update не имеет смысла.
-  // Для custom сравниваем ещё и lines/characters, не только mode (иначе смена
-  // слайдеров внутри custom не считалась бы изменением)
-  const isResegmentApplied =
-    !!appliedResegmentConfig &&
-    appliedResegmentConfig.mode === mode &&
-    (mode !== "custom" ||
-      (appliedResegmentConfig.lines === lines && appliedResegmentConfig.characters === characters));
+  const { srcLang, translateTo, updateSrcLang, updateTranslateTo } = useConfiguration();
 
   // лендинг — явный screen из App (не деривируем из captions.length), чтобы
   // Back мог вернуть сюда без сброса данных
@@ -165,114 +135,37 @@ export const CaptionsTab = ({
 
       <div className="captions-tab__panel">
         {subTab === "style" ? (
-          <StyleTab />
+          <StyleTab
+            onUpdateResegment={onUpdateResegment}
+            appliedResegmentConfig={appliedResegmentConfig}
+            resegmenting={resegmenting}
+          />
         ) : (
-          <>
-            <div className="captions-tab__list">
-              <div className="captions-tab__transcript-head">
-                <span className="captions-tab__section-label">
-                  TRANSCRIPT · {captions.length} SEGMENT{captions.length === 1 ? "" : "S"}
-                </span>
-              </div>
-              {captions.map((caption, index) => (
-                <EditableCaption
-                  key={index}
-                  index={index}
-                  caption={caption}
-                  fontSize={fontSize}
-                  offset={meta.offset}
-                  sentenceCount={sentenceCount}
-                  captionCount={captions.length}
-                  highlighted={index === highlightIndex}
-                  onSave={(c, text) => onSaveCaption(c, index, text)}
-                  onSeek={(c) => onSeek(c, index)}
-                  onSplit={onSplit}
-                  onMerge={onMerge}
-                  onMoveWord={onMoveWord}
-                  onSplitWords={onSplitWords}
-                />
-              ))}
+          <div className="captions-tab__list">
+            <div className="captions-tab__transcript-head">
+              <span className="captions-tab__section-label">
+                TRANSCRIPT · {captions.length} SEGMENT{captions.length === 1 ? "" : "S"}
+              </span>
             </div>
-
-            <div
-              className={`card captions-tab__resegment ${resegmentOpen ? "captions-tab__resegment--open" : ""}`}
-            >
-              <div
-                className="captions-tab__resegment-head"
-                onClick={() => setResegmentOpen((v) => !v)}
-                aria-expanded={resegmentOpen}
-              >
-                <span className="captions-tab__section-label">RE-SEGMENT</span>
-                <ChevronUp
-                  size={14}
-                  className={`captions-tab__resegment-chevron ${resegmentOpen ? "captions-tab__resegment-chevron--open" : ""}`}
-                />
-              </div>
-              {resegmentOpen && (
-                <>
-                  <div className="btn-group captions-tab__resegment-modes">
-                    {SEG_MODES.map((m) => (
-                      <button
-                        key={m.value}
-                        type="button"
-                        className={`btn-group__item ${mode === m.value ? "btn-group__item--active-fill" : ""}`}
-                        onClick={() => updateMode(m.value)}
-                      >
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
-                  {mode === "custom" && (
-                    <>
-                      <div className="captions-tab__resegment-row">
-                        <span className="captions-tab__resegment-label">Lines / caption</span>
-                        <input
-                          type="range"
-                          className="range"
-                          min={1}
-                          max={4}
-                          value={lines}
-                          onChange={(e) => updateLines(Number(e.target.value))}
-                          style={rangeFillStyle(lines, 1, 4)}
-                        />
-                        <span className="captions-tab__resegment-value">{lines}</span>
-                      </div>
-                      <div className="captions-tab__resegment-row">
-                        <span className="captions-tab__resegment-label">Characters / line</span>
-                        <input
-                          type="range"
-                          className="range"
-                          min={4}
-                          max={40}
-                          value={characters}
-                          onChange={(e) => updateCharacters(Number(e.target.value))}
-                          style={rangeFillStyle(characters, 4, 40)}
-                        />
-                        <span className="captions-tab__resegment-value">{characters}</span>
-                      </div>
-                    </>
-                  )}
-                  {!isResegmentApplied && (
-                    <button
-                      type="button"
-                      className="btn btn--primary btn--full captions-tab__resegment-update"
-                      onClick={onUpdateResegment}
-                      disabled={resegmenting}
-                    >
-                      {resegmenting ? (
-                        <>
-                          <span className="spinner" />
-                          Updating…
-                        </>
-                      ) : (
-                        "Update"
-                      )}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          </>
+            {captions.map((caption, index) => (
+              <EditableCaption
+                key={index}
+                index={index}
+                caption={caption}
+                fontSize={fontSize}
+                offset={meta.offset}
+                sentenceCount={sentenceCount}
+                captionCount={captions.length}
+                highlighted={index === highlightIndex}
+                onSave={(c, text) => onSaveCaption(c, index, text)}
+                onSeek={(c) => onSeek(c, index)}
+                onSplit={onSplit}
+                onMerge={onMerge}
+                onMoveWord={onMoveWord}
+                onSplitWords={onSplitWords}
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>

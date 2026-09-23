@@ -1,5 +1,18 @@
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { applyPackItemToHost } from "@/lib/utils/apply-item";
+import {
+  beginApplyOnDropOutside,
+  beginHostFileDrag,
+  beginPlaceholderDrag,
+  cepHostFileDragEnabled,
+  finishHostDrag,
+} from "@/lib/utils/cep-file-drag";
+import {
+  adoptTimelinePlaceholder,
+  ensureDragPlaceholderFile,
+  releaseDragAnchor,
+} from "@/lib/utils/drag-placeholder";
+import { planPackItemDrag } from "@/lib/utils/pack-drag";
 import { openLinkInBrowser } from "@/lib/utils/bolt";
 import { packItemIsAudio, resolveItemAudioFile } from "@/lib/utils/pack-apply-paths";
 import "./footage-grid.scss";
@@ -49,6 +62,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
@@ -363,6 +377,7 @@ function usePreviewCardModel({
   const [appliedThisSession, setAppliedThisSession] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const suppressDragRef = useRef(false);
 
   const media = useMemo(() => {
     if (assetsBaseUrl) {
@@ -385,6 +400,7 @@ function usePreviewCardModel({
   const isGifMotion = motion?.kind === "gif";
   const aspectRatio = resolvePreviewAspectRatio(item.group);
   const isApplying = applyingItemId === item.id;
+  const canDrag = cepHostFileDragEnabled && !locked && !isApplying;
   const isNew = showNewBadges && !!item.group.is_new_mark;
   const isPremium = !!item.group.premium;
   const cardRadius = chipsMode ? CARD_RADIUS_CHIPS : CARD_RADIUS_OVERLAY;
@@ -599,9 +615,76 @@ function usePreviewCardModel({
 
   function handleImportPointerDown(e: PointerEvent) {
     if (e.button !== 0) return;
+    suppressDragRef.current = true;
     e.stopPropagation();
     e.preventDefault();
     void applyToHost();
+  }
+
+  function handleCardPointerDown(e: PointerEvent<HTMLDivElement>) {
+    const target = e.target;
+    suppressDragRef.current =
+      target instanceof Element && Boolean(target.closest("button"));
+  }
+
+  function handleDragStart(e: DragEvent<HTMLDivElement>) {
+    if (!canDrag || suppressDragRef.current) {
+      suppressDragRef.current = false;
+      e.preventDefault();
+      return;
+    }
+    const plan = planPackItemDrag(item, packFilePath, settings ?? null);
+    if (plan.kind === "file") {
+      if (!beginHostFileDrag(e, plan.file)) e.preventDefault();
+      return;
+    }
+    if (plan.kind === "placeholder") {
+      const stub = ensureDragPlaceholderFile();
+      if (!stub || !beginPlaceholderDrag(e, stub)) {
+        e.preventDefault();
+        showStatus(
+          "Could not start the timeline drop. Double-click to apply at the playhead.",
+          "info",
+          5000,
+        );
+      }
+      return;
+    }
+    if (plan.kind === "apply" || (plan.kind === "missing" && prepareApply)) {
+      beginApplyOnDropOutside(e);
+      return;
+    }
+    e.preventDefault();
+    showStatus(
+      plan.kind === "blocked"
+        ? plan.message
+        : "Item file is missing from the pack on disk.",
+      "info",
+      5000,
+    );
+  }
+
+  async function applyAtDrop() {
+    try {
+      const adopted = await adoptTimelinePlaceholder();
+      if (!adopted.ok) {
+        showStatus(adopted.message, "info", 6000);
+        return;
+      }
+      await applyToHost();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showStatus(msg || "Could not place the item.", "error", 8000);
+    } finally {
+      void releaseDragAnchor();
+    }
+  }
+
+  function handleDragEnd(e: DragEvent<HTMLDivElement>) {
+    suppressDragRef.current = false;
+    const outcome = finishHostDrag(e);
+    if (outcome === "placeholder") void applyAtDrop();
+    else if (outcome === "apply") void applyToHost();
   }
 
   function handleDoubleClick() {
@@ -668,6 +751,10 @@ function usePreviewCardModel({
     handleDoubleClick,
     handleKeyDown,
     handleCardClick,
+    handleCardPointerDown,
+    handleDragStart,
+    handleDragEnd,
+    canDrag,
     handleFocus,
     handleBlur,
     onRequestSubscribe,
@@ -756,6 +843,7 @@ function PreviewMediaLayers(m: CardModel) {
           loop
           playsInline
           preload="metadata"
+          draggable={false}
           className="pointer-events-none absolute inset-0 z-[1] size-full object-cover"
         />
       )}
@@ -934,8 +1022,14 @@ function PreviewCardShell({
           ? undefined
           : m.locked
             ? `${m.item.name} (premium — sign in to apply)`
-            : m.item.name
+            : m.canDrag
+              ? `${m.item.name}. Drag onto the timeline.`
+              : m.item.name
       }
+      draggable={m.canDrag}
+      onPointerDown={m.handleCardPointerDown}
+      onDragStart={m.handleDragStart}
+      onDragEnd={m.handleDragEnd}
       onPointerEnter={m.handlePointerEnter}
       onPointerLeave={m.handlePointerLeave}
       onFocus={m.handleFocus}
@@ -943,7 +1037,10 @@ function PreviewCardShell({
       onKeyDown={m.handleKeyDown}
       onClick={m.handleCardClick}
       onDoubleClick={m.handleDoubleClick}
-      className="footage-preview-card group relative w-full overflow-hidden border border-white/5 bg-secondary/40 outline-none ring-primary/60 transition focus-visible:ring-2"
+      className={cn(
+        "footage-preview-card group relative w-full overflow-hidden border border-white/5 bg-secondary/40 outline-none ring-primary/60 transition focus-visible:ring-2",
+        m.canDrag && "is-draggable",
+      )}
       style={{
         borderRadius: m.cardRadius,
         aspectRatio: m.aspectRatio,

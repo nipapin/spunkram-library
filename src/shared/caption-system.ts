@@ -3,8 +3,8 @@
  * CEP writes v4 lookup + offset batches into captions_batch_01..15.
  * Captions_Raw_Data / Captions_Data are computed by AE expressions — do not fill.
  *
- * Styles UI is the `groups` tree in controls.json.
- * Segment Type / Line Count / Chars Per Line stay CEP-written, not Styles.
+ * Styles UI is the `groups` tree in controls.json, plus the Re-segment group.
+ * Segment Type / Line Count / Chars Per Line stay CEP-written, not preset controls.
  * Segment Type is 0-based by name: Words=0, Custom=1 (Premiere MGT).
  * Lines / caption → Line Count; Characters / line → Chars Per Line.
  */

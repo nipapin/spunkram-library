@@ -11,7 +11,6 @@ import "../../themes/brands-runtime.scss";
 import { initBrandTheme } from "../../lib/utils/brandTheme";
 import { App } from "./main";
 import { ConfigurationWrapper } from "../../../context/ConfigurationWrapper";
-import { getFontCatalog } from "../../lib/utils/system-fonts";
 import { preloadVoiceoverPreviews } from "../../api/voiceover";
 
 initBrandTheme();
@@ -28,7 +27,6 @@ ReactDOM.createRoot(document.getElementById("app") as HTMLElement).render(
 
 const afterFirstPaint = () => {
   initBolt();
-  void getFontCatalog();
   void preloadVoiceoverPreviews();
 };
 

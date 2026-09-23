@@ -3,9 +3,27 @@ import { createPortal } from "react-dom";
 import { useProgressContext } from "../context/ProgressContext";
 
 export default function ProgressBar() {
-  const { progress, pending, setPending, error, clearError } = useProgressContext();
+  const { progress, pending, setPending, error, clearError, notice, setNotice } =
+    useProgressContext();
 
-  if (!pending && !error) return null;
+  if (!pending && !error && !notice) return null;
+
+  if (!pending && notice && !error) {
+    return createPortal(
+      <div className="pointer-events-none fixed bottom-3 left-1/2 z-[1100] flex w-[min(100%-1.25rem,360px)] -translate-x-1/2 items-start gap-2 rounded-xl border border-primary/40 bg-card/95 px-3 py-2.5 text-[12px] font-medium leading-snug shadow-xl backdrop-blur-md text-foreground">
+        <span className="min-w-0 flex-1 pt-px">{notice}</span>
+        <button
+          type="button"
+          aria-label="Dismiss"
+          className="pointer-events-auto mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md text-white/45 transition-colors hover:bg-white/10 hover:text-white"
+          onClick={() => setNotice(null)}
+        >
+          <X className="size-3.5" strokeWidth={2.5} />
+        </button>
+      </div>,
+      document.body,
+    );
+  }
 
   if (error) {
     return createPortal(

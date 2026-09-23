@@ -1,7 +1,14 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { fs, os, path } from "../../lib/cep/node";
 import { Motionflow } from "@/sdk";
-import { resolveFootageDownloadDirSilent } from "@/lib/utils/stock-paths";
+import { beginApplyOnDropOutside, beginHostFileDrag, beginPlaceholderDrag, finishHostDrag } from "@/lib/utils/cep-file-drag";
+import { adoptTimelinePlaceholder, ensureDragPlaceholderFile, releaseDragAnchor } from "@/lib/utils/drag-placeholder";
+import { cepHostAppId } from "@/lib/utils/bolt";
+import {
+  peekExistingFootageFile,
+  rememberFootageDownloadDir,
+  resolveFootageDownloadDirSilent,
+} from "@/lib/utils/stock-paths";
 import { useFiltersContext } from "../context/FiltersContext";
 import { useProgressContext } from "../context/ProgressContext";
 import { incrementUsage } from "../utils/trial-usage";
@@ -91,45 +98,47 @@ async function fetchToFile(
   fs.writeFileSync(filePath, Buffer.from(merged));
 }
 
+async function ensureFootageOnDisk(
+  item: MediaItem,
+  onProgress: (pct: number) => void,
+): Promise<{ filePath: string; duration: number }> {
+  const source = resolveSourceUrl(item);
+  if (!source?.url) throw new Error("This item has no download URL.");
+
+  const downloadDir = (await resolveFootageDownloadDirSilent()) || os.tmpdir();
+  if (!downloadDir) throw new Error("Could not resolve a download folder.");
+  rememberFootageDownloadDir(downloadDir);
+
+  const filePath = path.join(downloadDir, item.name);
+  if (!fs.existsSync(filePath)) {
+    await fetchToFile(source.url, filePath, onProgress);
+  }
+  if (!fs.existsSync(filePath)) {
+    throw new Error("Download completed but file is missing.");
+  }
+  return { filePath, duration: source.duration };
+}
+
 export function useImportMedia() {
-  const { setProgress, setPending, setError } = useProgressContext();
+  const { setProgress, setPending, setError, setNotice, pending } = useProgressContext();
   const { destination } = useFiltersContext();
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
 
   const importMedia = useCallback(
-    async (item: MediaItem) => {
+    async (item: MediaItem, destOverride?: "project" | "timeline") => {
       try {
-        const source = resolveSourceUrl(item);
-        if (!source?.url) {
-          setError("This item has no download URL.");
-          return;
-        }
-
+        setNotice(null);
         setPending(true);
         setProgress(0);
 
-        const downloadDir =
-          (await resolveFootageDownloadDirSilent()) || os.tmpdir();
-        if (!downloadDir) {
-          setError("Could not resolve a download folder.");
-          return;
-        }
-        const filePath = path.join(downloadDir, item.name);
-
-        if (!fs.existsSync(filePath)) {
-          await fetchToFile(source.url, filePath, setProgress);
-        }
-
-        if (!fs.existsSync(filePath)) {
-          setError("Download completed but file is missing.");
-          return;
-        }
-
+        const { filePath, duration } = await ensureFootageOnDisk(item, setProgress);
         setProgress(95);
 
         const dest: "project" | "timeline" =
-          destination === "timeline" ? "timeline" : "project";
+          destOverride ?? (destination === "timeline" ? "timeline" : "project");
 
-        const outcome = await Motionflow.importMedia(filePath, dest, source.duration);
+        const outcome = await Motionflow.importMedia(filePath, dest, duration);
         console.log("[mf] importMedia", Motionflow.host, dest, outcome);
         if (!outcome.ok) {
           setError(mapImportError(outcome.error));
@@ -145,8 +154,68 @@ export function useImportMedia() {
         setProgress(0);
       }
     },
-    [setPending, setProgress, setError, destination],
+    [setPending, setProgress, setError, setNotice, destination],
   );
 
-  return { importMedia };
+  const placeFootageFromStub = useCallback(
+    async (item: MediaItem) => {
+      try {
+        const adopted = await adoptTimelinePlaceholder();
+        if (!adopted.ok) {
+          setNotice(adopted.message);
+          return;
+        }
+        await importMedia(item, "timeline");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setError(mapImportError(message));
+      } finally {
+        void releaseDragAnchor();
+      }
+    },
+    [importMedia, setError, setNotice],
+  );
+
+  const beginFootageDrag = useCallback(
+    (item: MediaItem, event: { dataTransfer: DataTransfer | null; preventDefault: () => void }) => {
+      if (item.type !== "video" && item.type !== "image") {
+        event.preventDefault();
+        return;
+      }
+      if (pendingRef.current) {
+        event.preventDefault();
+        return;
+      }
+      const existing = peekExistingFootageFile(item.name);
+      if (existing && cepHostAppId() === "PPRO") {
+        if (!beginHostFileDrag(event, existing)) event.preventDefault();
+        return;
+      }
+      if (existing) {
+        beginApplyOnDropOutside(event);
+        return;
+      }
+      if (cepHostAppId() === "PPRO") {
+        const stub = ensureDragPlaceholderFile();
+        if (!stub || !beginPlaceholderDrag(event, stub)) event.preventDefault();
+        return;
+      }
+      beginApplyOnDropOutside(event);
+    },
+    [],
+  );
+
+  const endFootageDrag = useCallback(
+    (
+      item: MediaItem,
+      event: { dataTransfer: DataTransfer | null; clientX: number; clientY: number },
+    ) => {
+      const outcome = finishHostDrag(event);
+      if (outcome === "placeholder") void placeFootageFromStub(item);
+      else if (outcome === "apply") void importMedia(item, "timeline");
+    },
+    [importMedia, placeFootageFromStub],
+  );
+
+  return { importMedia, beginFootageDrag, endFootageDrag };
 }

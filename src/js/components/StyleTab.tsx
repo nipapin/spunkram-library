@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { LayoutGrid } from "lucide-react";
 import { useConfiguration, isPresetDirty, isPresetValuesDirty } from "../../context/ConfigurationWrapper";
 import type { StylePreset } from "../styles";
+import type { AppliedSegmentConfig } from "../utils/transcribe";
 import { useStyleUndo } from "../hooks/useStyleUndo";
 import { PresetFields } from "./PresetFields";
 import { ChangePresetDialog } from "./ChangePresetDialog";
+import { ResegmentGroup } from "./ResegmentGroup";
 import { friendlyErrorMessage } from "../utils/user-error";
 import "./StyleTab.scss";
 
@@ -19,7 +21,17 @@ const EMPTY_PRESET: StylePreset = {
   origin: { name: "", values: {} },
 };
 
-export const StyleTab = () => {
+interface StyleTabProps {
+  onUpdateResegment: () => void;
+  appliedResegmentConfig: AppliedSegmentConfig | null;
+  resegmenting: boolean;
+}
+
+export const StyleTab = ({
+  onUpdateResegment,
+  appliedResegmentConfig,
+  resegmenting,
+}: StyleTabProps) => {
   const {
     presets,
     selectedPresetId,
@@ -95,28 +107,48 @@ export const StyleTab = () => {
     />
   ) : null;
 
+  const resegment = (
+    <ResegmentGroup
+      appliedConfig={appliedResegmentConfig}
+      resegmenting={resegmenting}
+      onUpdate={onUpdateResegment}
+    />
+  );
+
+  const frame = (children: ReactNode) => (
+    <div className={`style-tab thin-scroll${busy ? " style-tab--busy" : ""}`} tabIndex={-1}>
+      {busyOverlay}
+      {children}
+    </div>
+  );
+
   if (stylesStatus === "loading" || stylesStatus === "idle") {
-    return (
-      <div className="style-tab style-tab--empty thin-scroll">
-        <span className="spinner" />
-        Loading styles…
-      </div>
+    return frame(
+      <>
+        {resegment}
+        <div className="style-tab__fill">
+          <span className="spinner" />
+          Loading styles…
+        </div>
+      </>,
     );
   }
 
   if (!selected) {
-    return (
-      <div className="style-tab style-tab--empty thin-scroll">
-        <p>No style selected.</p>
-        <p className="style-tab__hint">Choose a caption style on the main screen.</p>
-      </div>
+    return frame(
+      <>
+        {resegment}
+        <div className="style-tab__fill">
+          <p>No style selected.</p>
+          <p className="style-tab__hint">Choose a caption style on the main screen.</p>
+        </div>
+      </>,
     );
   }
 
   if (hasControls && definition) {
-    return (
-      <div className={`style-tab thin-scroll${busy ? " style-tab--busy" : ""}`} tabIndex={-1}>
-        {busyOverlay}
+    return frame(
+      <>
         <div className="style-tab__editing-head">
           <span className="style-tab__section-label">EDITING · {selected.name}</span>
           {selected.updateAvailable && <span className="style-tab__update-pill">Update available</span>}
@@ -133,6 +165,7 @@ export const StyleTab = () => {
           onChange={onChange}
           dirty={dirty}
           nameEditable={valuesDirty}
+          leading={resegment}
           onReset={() =>
             onChange({
               name: selected.origin.name,
@@ -152,32 +185,37 @@ export const StyleTab = () => {
             })
           }
         />
-      </div>
+      </>,
     );
   }
 
   if (loadingDefinition) {
-    return (
-      <div className="style-tab style-tab--empty thin-scroll">
-        <span className="spinner" />
-        Loading style controls…
-      </div>
+    return frame(
+      <>
+        {resegment}
+        <div className="style-tab__fill">
+          <span className="spinner" />
+          Loading style controls…
+        </div>
+      </>,
     );
   }
 
-  return (
-    <div className={`style-tab style-tab--empty thin-scroll${busy ? " style-tab--busy" : ""}`}>
-      {busyOverlay}
-      <p>{selected.name}</p>
-      <p className="style-tab__hint">
-        {definitionError ||
-          "Style controls aren’t available for this caption (missing controls.json)."}
-      </p>
-      {changePreset}
-      {picker}
-      {acquireStatus === "error" && (
-        <p className="style-tab__hint">Couldn’t apply this style to the selected caption.</p>
-      )}
-    </div>
+  return frame(
+    <>
+      {resegment}
+      <div className="style-tab__fill">
+        <p>{selected.name}</p>
+        <p className="style-tab__hint">
+          {definitionError ||
+            "Style controls aren’t available for this caption (missing controls.json)."}
+        </p>
+        {changePreset}
+        {picker}
+        {acquireStatus === "error" && (
+          <p className="style-tab__hint">Couldn’t apply this style to the selected caption.</p>
+        )}
+      </div>
+    </>,
   );
 };

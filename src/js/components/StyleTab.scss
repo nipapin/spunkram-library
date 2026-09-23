@@ -2,8 +2,8 @@
   position: relative;
   flex: 1;
   min-height: 0;
-  // Match `.tabs` width: panel already has horizontal margin
-  padding: 12px 0;
+  // Bottom only — top inset lives on `.captions-tab__panel` so groups don't stick while scrolling
+  padding: 0 0 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -50,7 +50,11 @@
   gap: 6px;
 }
 
-.style-tab--empty {
+.style-tab__fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
@@ -59,7 +63,7 @@
   gap: 10px;
 }
 
-.style-tab--empty p {
+.style-tab__fill p {
   margin: 0;
 }
 

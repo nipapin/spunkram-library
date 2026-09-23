@@ -15,7 +15,7 @@ export default function Gallery() {
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const { orientation } = useFiltersContext();
   const { media, page, setPage, totalPages, loading } = useMediaContext();
-  const { importMedia } = useImportMedia();
+  const { importMedia, beginFootageDrag, endFootageDrag } = useImportMedia();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -78,6 +78,8 @@ export default function Gallery() {
                 onDownload={() => handleImport(item)}
                 onImportUrl={importMedia}
                 onView={() => setSelectedMedia(item)}
+                onHostDragStart={(event) => beginFootageDrag(item, event)}
+                onHostDragEnd={(event) => endFootageDrag(item, event)}
               />
             ))}
           </div>
@@ -97,6 +99,8 @@ export default function Gallery() {
                 onDownload={() => handleImport(item)}
                 onImportUrl={importMedia}
                 onView={() => setSelectedMedia(item)}
+                onHostDragStart={(event) => beginFootageDrag(item, event)}
+                onHostDragEnd={(event) => endFootageDrag(item, event)}
               />
             ))}
           </div>

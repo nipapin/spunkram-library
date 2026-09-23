@@ -8,6 +8,8 @@ type ProgressContextType = {
   error: string | null;
   setError: (error: string | null) => void;
   clearError: () => void;
+  notice: string | null;
+  setNotice: (notice: string | null) => void;
 };
 
 /** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
@@ -26,12 +28,25 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
   const [progress, setProgress] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setErrorState] = useState<string | null>(null);
+  const [notice, setNoticeState] = useState<string | null>(null);
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearNoticeTimer = () => {
+    if (noticeTimerRef.current) {
+      clearTimeout(noticeTimerRef.current);
+      noticeTimerRef.current = null;
+    }
+  };
 
   const setError = useCallback((err: string | null) => {
     if (errorTimerRef.current) {
       clearTimeout(errorTimerRef.current);
       errorTimerRef.current = null;
+    }
+    if (err) {
+      clearNoticeTimer();
+      setNoticeState(null);
     }
     setErrorState(err);
     if (err) {
@@ -50,6 +65,24 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
     setErrorState(null);
   }, []);
 
+  const setNotice = useCallback((text: string | null) => {
+    clearNoticeTimer();
+    if (text) {
+      if (errorTimerRef.current) {
+        clearTimeout(errorTimerRef.current);
+        errorTimerRef.current = null;
+      }
+      setErrorState(null);
+    }
+    setNoticeState(text);
+    if (text) {
+      noticeTimerRef.current = setTimeout(() => {
+        setNoticeState(null);
+        noticeTimerRef.current = null;
+      }, 5000);
+    }
+  }, []);
+
   return (
     <ProgressContext.Provider
       value={{
@@ -60,6 +93,8 @@ export const ProgressProvider = ({ children }: { children: React.ReactNode }) =>
         error,
         setError,
         clearError,
+        notice,
+        setNotice,
       }}
     >
       {children}

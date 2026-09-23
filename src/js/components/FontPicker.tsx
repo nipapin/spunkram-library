@@ -33,14 +33,22 @@ const FontMenu = ({
 
   useEffect(() => {
     if (!open || !anchor) return;
-    const rect = anchor.getBoundingClientRect();
-    const menuHeight = menuRef.current?.offsetHeight ?? 280;
-    let top = rect.bottom + 4;
-    if (top + menuHeight > window.innerHeight - 8) {
-      top = Math.max(8, rect.top - menuHeight - 4);
-    }
-    setPos({ top, left: rect.left, width: Math.max(width, rect.width) });
-  }, [open, anchor, width, children]);
+    const place = () => {
+      const rect = anchor.getBoundingClientRect();
+      const menuHeight = menuRef.current?.offsetHeight || 280;
+      let top = rect.bottom + 4;
+      if (top + menuHeight > window.innerHeight - 8) {
+        top = Math.max(8, rect.top - menuHeight - 4);
+      }
+      const next = { top, left: rect.left, width: Math.max(width, rect.width) };
+      setPos((prev) =>
+        prev.top === next.top && prev.left === next.left && prev.width === next.width ? prev : next,
+      );
+    };
+    place();
+    const frame = requestAnimationFrame(place);
+    return () => cancelAnimationFrame(frame);
+  }, [open, anchor, width]);
 
   useEffect(() => {
     if (!open) return;
@@ -82,6 +90,7 @@ export const FontPicker = ({
   onChange: (next: string) => void;
 }) => {
   const [catalog, setCatalog] = useState<FontCatalog | null>(null);
+  const [loadingFonts, setLoadingFonts] = useState(false);
   const [open, setOpen] = useState<MenuKind>(null);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -91,18 +100,28 @@ export const FontPicker = ({
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!open) return;
     let cancelled = false;
-    getFontCatalog().then((next) => {
-      if (!cancelled) setCatalog(next);
-    });
+    setLoadingFonts(true);
     const unsub = subscribeFontCatalog((next) => {
-      if (!cancelled) setCatalog(next);
+      if (cancelled) return;
+      setCatalog(next);
+      setLoadingFonts(false);
     });
+    getFontCatalog()
+      .then((next) => {
+        if (cancelled) return;
+        setCatalog(next);
+        setLoadingFonts(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadingFonts(false);
+      });
     return () => {
       cancelled = true;
       unsub();
     };
-  }, []);
+  }, [open]);
 
   useEffect(() => {
     if (open !== "family") return;
@@ -197,14 +216,13 @@ export const FontPicker = ({
     <div className="font-picker">
       <div
         ref={familyWrap}
-        className={`font-picker__field ${familyOpen ? "font-picker__field--open" : ""} ${!catalog ? "font-picker__field--disabled" : ""}`}
+        className={`font-picker__field ${familyOpen ? "font-picker__field--open" : ""}`}
       >
         <Search size={12} className="font-picker__search-icon" />
         <input
           ref={familyInput}
           className="font-picker__input"
-          disabled={!catalog}
-          value={catalog ? inputValue : "Loading…"}
+          value={inputValue}
           placeholder={current.family || "Search fonts"}
           aria-label="Font family"
           aria-autocomplete="list"
@@ -223,7 +241,6 @@ export const FontPicker = ({
           type="button"
           className="font-picker__chevron"
           tabIndex={-1}
-          disabled={!catalog}
           aria-label="Toggle font list"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => setOpen((v) => (v === "family" ? null : "family"))}
@@ -236,7 +253,7 @@ export const FontPicker = ({
         ref={styleBtn}
         type="button"
         className={`font-picker__btn font-picker__btn--style ${open === "style" ? "font-picker__btn--open" : ""}`}
-        disabled={!catalog || !styleOptions.length}
+        disabled={!styleOptions.length}
         aria-haspopup="listbox"
         aria-expanded={open === "style"}
         aria-label="Font style"
@@ -248,7 +265,9 @@ export const FontPicker = ({
 
       <FontMenu open={familyOpen} anchor={familyWrap.current} width={240} onClose={() => setOpen(null)}>
         <div ref={listRef} className="font-picker__list">
-          {filteredFamilies.length ? (
+          {loadingFonts && !catalog ? (
+            <div className="font-picker__empty">Loading fonts…</div>
+          ) : filteredFamilies.length ? (
             filteredFamilies.map((family, i) => (
               <button
                 key={family}

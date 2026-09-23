@@ -7,3 +7,15 @@
   outline: 2px solid #c31f93;
   outline-offset: 0;
 }
+
+[data-brand="spunkram"] .footage-preview-card.is-draggable {
+  cursor: grab;
+}
+
+[data-brand="spunkram"] .footage-preview-card.is-draggable:active {
+  cursor: grabbing;
+}
+
+[data-brand="spunkram"] .footage-preview-card.is-draggable button {
+  cursor: pointer;
+}

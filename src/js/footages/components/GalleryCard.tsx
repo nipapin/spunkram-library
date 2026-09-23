@@ -1,6 +1,7 @@
 import { MoreVertical } from "lucide-react";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type DragEvent, type PointerEvent } from "react";
 import { Blurhash } from "react-blurhash";
+import { cepHostFileDragEnabled } from "@/lib/utils/cep-file-drag";
 import { cn } from "@/lib/utils";
 import { MediaItem } from "../types";
 import { formatDuration } from "../utils/math";
@@ -19,6 +20,8 @@ interface GalleryCardProps {
   onDownload: (e: React.MouseEvent) => void;
   onImportUrl: (item: MediaItem) => void;
   onView: (e: React.MouseEvent) => void;
+  onHostDragStart?: (event: DragEvent<HTMLDivElement>) => void;
+  onHostDragEnd?: (event: DragEvent<HTMLDivElement>) => void;
 }
 
 function GalleryCard({
@@ -26,6 +29,8 @@ function GalleryCard({
   onDownload,
   onImportUrl,
   onView,
+  onHostDragStart,
+  onHostDragEnd,
   aspect = "1/1",
   masonry = false,
 }: GalleryCardProps) {
@@ -38,6 +43,9 @@ function GalleryCard({
   const imgRef = useRef<HTMLImageElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const retryCount = useRef(0);
+  const suppressDragRef = useRef(false);
+  const suppressClickRef = useRef(false);
+  const canDrag = cepHostFileDragEnabled && Boolean(onHostDragStart);
   const open = Boolean(anchorEl);
   const isVideo = item.type === "video";
 
@@ -95,16 +103,44 @@ function GalleryCard({
 
   return (
     <div
+      style={{ aspectRatio: masonry ? naturalAspect : aspect }}
+      draggable={canDrag}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
+        const target = event.target;
+        suppressDragRef.current =
+          target instanceof Element && Boolean(target.closest("button"));
+      }}
+      onDragStart={(event) => {
+        if (!canDrag || suppressDragRef.current) {
+          suppressDragRef.current = false;
+          event.preventDefault();
+          return;
+        }
+        suppressClickRef.current = true;
+        onHostDragStart?.(event);
+      }}
+      onDragEnd={(event) => {
+        suppressDragRef.current = false;
+        onHostDragEnd?.(event);
+      }}
+      onClick={(event) => {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        onView(event);
+      }}
       className={cn(
         "gallery-card relative cursor-pointer overflow-hidden rounded-md",
+        canDrag && "cursor-grab active:cursor-grabbing",
         masonry
           ? "mb-2 inline-block w-full break-inside-avoid"
           : "min-w-0",
       )}
-      style={{ aspectRatio: masonry ? naturalAspect : aspect }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onClick={onView}
     >
       {!imageLoaded && item.blurHash && (
         <div className="absolute inset-0">
@@ -123,6 +159,7 @@ function GalleryCard({
         src={item.thumbnail}
         alt={item.alt}
         loading="lazy"
+        draggable={false}
         onError={handleImageError}
         className="block size-full object-cover"
       />
@@ -133,6 +170,7 @@ function GalleryCard({
           muted
           loop
           playsInline
+          draggable={false}
           className={cn(
             "pointer-events-none absolute inset-0 size-full object-cover transition-opacity duration-200",
             hovered ? "opacity-100" : "opacity-0",
@@ -168,7 +206,7 @@ function GalleryCard({
             onDownload(e);
           }}
           className={cn(
-            "w-full rounded-xl border border-white/10 bg-card/90 px-2 py-1",
+            "w-full cursor-pointer rounded-xl border border-white/10 bg-card/90 px-2 py-1",
             "text-[11px] font-light text-foreground",
             "hover:border-primary/40 hover:bg-primary/20 active:scale-[0.97]",
             (hovered || open) && "backdrop-blur-md",
@@ -197,6 +235,8 @@ export default memo(GalleryCard, (prev, next) => {
     prev.aspect === next.aspect &&
     prev.masonry === next.masonry &&
     prev.onDownload === next.onDownload &&
-    prev.onImportUrl === next.onImportUrl
+    prev.onImportUrl === next.onImportUrl &&
+    prev.onHostDragStart === next.onHostDragStart &&
+    prev.onHostDragEnd === next.onHostDragEnd
   );
 });

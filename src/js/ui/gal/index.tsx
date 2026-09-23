@@ -10,8 +10,6 @@ import "../../themes/brands-runtime.scss";
 import { initBrandTheme } from "../../lib/utils/brandTheme";
 import { GalApp } from "./GalApp";
 import { ConfigurationWrapper } from "../../../context/ConfigurationWrapper";
-import { getFontCatalog } from "../../lib/utils/system-fonts";
-
 initBrandTheme();
 enableSpectrum();
 installGlobalHandlers();
@@ -26,7 +24,6 @@ ReactDOM.createRoot(document.getElementById("app") as HTMLElement).render(
 
 const afterFirstPaint = () => {
   initBolt();
-  void getFontCatalog();
 };
 
 if (typeof requestAnimationFrame === "function") {

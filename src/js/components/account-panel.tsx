@@ -28,6 +28,21 @@ function accountInitial(account: Pick<MotionflowAccountSession, "name" | "email"
   return source.charAt(0).toUpperCase() || "?";
 }
 
+/** Server plan titles include the product name (`Spunkram Library Editor`). */
+function planTitle(plan?: string): string {
+  const raw = (plan || "").trim();
+  if (!raw) return "Editor";
+  const brand = BRAND.displayName.trim();
+  if (!brand) return raw;
+  const pattern = new RegExp(brand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig");
+  const rest = raw
+    .replace(pattern, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s:—–\-|]+|[\s:—–\-|]+$/g, "")
+    .trim();
+  return rest || "Editor";
+}
+
 function Sheen() {
   return <span className="account-spunkram__sheen" aria-hidden />;
 }
@@ -271,7 +286,7 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
   const planName = subscription.error
     ? "Unavailable"
     : subscription.subscribed
-      ? subscription.plan || "Editor"
+      ? planTitle(subscription.plan)
       : "Free";
   const planStatus = subscription.error
     ? "Error"

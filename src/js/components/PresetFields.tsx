@@ -7,6 +7,7 @@ import {
   fontIdFromValue,
   getControlValue,
   isColorArray,
+  isFontControl,
   isPointValue,
   uiName,
   type ClientControl,
@@ -49,6 +50,8 @@ interface PresetFieldsProps {
   nameEditable?: boolean;
   onSaveAsNew?: () => void;
   onReset?: () => void;
+  /** Rendered before mogrt groups — first card in the stack. */
+  leading?: ReactNode;
 }
 
 const menuOptionLabel = (entry: { strDB: { localeString: string; str: string }[] }, locale = "en_US") =>
@@ -88,9 +91,6 @@ const Collapse = ({
     </div>
   );
 };
-
-const isFontControl = (control: ClientControl, label: string) =>
-  control.type === ControlType.FontMenu || !!control.fonteditinfo || label === "Caption Font";
 
 const ControlField = ({
   control,
@@ -183,20 +183,12 @@ const ControlField = ({
     );
   }
 
-  if (control.type === ControlType.FontMenu || isFontControl(control, label)) {
+  if (isFontControl(control)) {
     const id = fontIdFromValue(raw) || localizedText(raw);
     return (
       <div className="preset-fields__param preset-fields__param--font">
         <span className="preset-fields__param-label">{label}</span>
-        <FontPicker
-          value={id}
-          onChange={(next) =>
-            onValue(
-              control.id,
-              control.type === ControlType.FontMenu ? next : withLocalizedText(raw, next),
-            )
-          }
-        />
+        <FontPicker value={id} onChange={(next) => onValue(control.id, next)} />
       </div>
     );
   }
@@ -279,6 +271,7 @@ export const PresetFields = ({
   nameEditable,
   onSaveAsNew,
   onReset,
+  leading,
 }: PresetFieldsProps) => {
   const tree = useMemo(() => (definition ? buildUiTree(definition) : []), [definition]);
 
@@ -323,6 +316,7 @@ export const PresetFields = ({
       </div>
 
       <div className="preset-fields__params">
+        {leading}
         {renderNodes(tree, 0, p.values, setValue)}
       </div>
     </div>

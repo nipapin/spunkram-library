@@ -57,29 +57,75 @@ export async function ensureAssetsPathChosen(): Promise<
   return { ok: true, path: folder };
 }
 
-/**
- * Download dir for Import — never opens a native folder picker.
- * A picker behind After Effects looks like a dead click (Network stays empty).
- * Falls back to the OS temp directory, same as spunkram-assets.
- */
-export async function resolveFootageDownloadDirSilent(): Promise<string> {
+/** Last dir resolved for a footage download, including the project folder. */
+let rememberedFootageDir = "";
+
+export function rememberFootageDownloadDir(dir: string): void {
+  const trimmed = dir.trim();
+  if (trimmed) rememberedFootageDir = trimmed;
+}
+
+function syncFootageDir(): string {
   try {
     const prefs = readPrefSettings();
-    if (asBool(prefs.useCurrentProjectLocation)) {
-      const projectDir = await Motionflow.getProjectFolderPath();
-      if (projectDir.ok && projectDir.data) return projectDir.data;
-    }
+    if (asBool(prefs.useCurrentProjectLocation)) return rememberedFootageDir;
     const existing = (prefs.customStockLocation || "").trim();
     if (existing) return existing;
   } catch {
-    // fall through to temp
+    // fall through
   }
+  if (rememberedFootageDir) return rememberedFootageDir;
   try {
     if (typeof os?.tmpdir === "function") return os.tmpdir();
   } catch {
     // ignore
   }
   return "";
+}
+
+/** Absolute path when this footage file is already on disk. */
+export function peekExistingFootageFile(fileName: string): string | null {
+  if (!fileName || typeof path?.join !== "function") return null;
+  const dir = syncFootageDir();
+  if (!dir) return null;
+  const filePath = path.join(dir, fileName);
+  try {
+    if (typeof fs?.existsSync === "function" && fs.existsSync(filePath)) return filePath;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Download dir for Import — never opens a native folder picker.
+ * A picker behind After Effects looks like a dead click (Network stays empty).
+ * Falls back to the OS temp directory, same as spunkram-assets.
+ */
+export async function resolveFootageDownloadDirSilent(): Promise<string> {
+  let dir = "";
+  try {
+    const prefs = readPrefSettings();
+    if (asBool(prefs.useCurrentProjectLocation)) {
+      const projectDir = await Motionflow.getProjectFolderPath();
+      if (projectDir.ok && projectDir.data) dir = projectDir.data;
+    }
+    if (!dir) {
+      const existing = (prefs.customStockLocation || "").trim();
+      if (existing) dir = existing;
+    }
+  } catch {
+    // fall through to temp
+  }
+  if (!dir) {
+    try {
+      if (typeof os?.tmpdir === "function") dir = os.tmpdir();
+    } catch {
+      // ignore
+    }
+  }
+  if (dir) rememberFootageDownloadDir(dir);
+  return dir;
 }
 
 export async function resolveFootageDownloadDir(): Promise<
