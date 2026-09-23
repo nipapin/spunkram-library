@@ -28,10 +28,11 @@ export type PrefSettings = {
   /** Gal Toolkit: 0 = Inter, 1 = system fonts (reload required). */
   useSystemFonts: number | boolean;
   /**
-   * Admin-only local plan override for CEP testing (`free` | `toolkit` | `max`).
+   * Admin-only local plan override for CEP testing.
+   * Gal: `free` | `toolkit` | `max`. Spunkram: `free` | `purchased` | `subscribed`.
    * Empty = use server `/me`. Ignored unless the signed-in email is a release admin.
    */
-  adminDevPlan: "" | "free" | "toolkit" | "max";
+  adminDevPlan: "" | "free" | "toolkit" | "max" | "purchased" | "subscribed";
   autofillValues: { email: string };
 };
 

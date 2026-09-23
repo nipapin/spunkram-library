@@ -309,6 +309,10 @@ export async function applyPackItemToHost(
       itemName: item.name,
       binName: BRAND.assetsBin,
       durationSeconds: durationSecondsForItem(item),
+      blendMode:
+        typeof customArgs.layer_blendmode === "string" && customArgs.layer_blendmode.trim()
+          ? customArgs.layer_blendmode.trim()
+          : undefined,
       composer: composerPayload,
     });
 

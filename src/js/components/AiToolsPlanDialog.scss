@@ -1,0 +1,94 @@
+.ai-plan-gate {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 10px 12px 20px;
+}
+
+.ai-plan-dialog__back {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 999px;
+  background: rgba(14, 12, 26, 0.5);
+  color: var(--text-primary, #fff);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-plan-dialog__back:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ai-plan-dialog {
+  width: 100%;
+  max-width: 300px;
+  padding: 18px 16px 14px;
+  border-radius: var(--radius-xl, 16px);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  background: var(--bg-panel, #17181c);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  margin: auto;
+}
+
+.ai-plan-dialog__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: var(--text-primary, #fff);
+}
+
+.ai-plan-dialog__message {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+}
+
+button.ai-plan-dialog__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 40px;
+  margin: 16px 0 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  background-color: #5a2ad4;
+  background-image: var(
+    --accent-gradient,
+    linear-gradient(145deg, #3d1c8f 0%, #5a2ad4 38%, #6b38f0 58%, #9b7eff 88%, #c4b5fd 100%)
+  );
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.28),
+    0 12px 28px -12px rgba(110, 60, 255, 0.9);
+}
+
+button.ai-plan-dialog__cta:hover {
+  background-image: var(
+    --accent-gradient-hover,
+    linear-gradient(145deg, #4a22ad 0%, #6b38f0 35%, #7c4dff 65%, #b9a3ff 92%, #e8e0ff 100%)
+  );
+}
+
+button.ai-plan-dialog__cta:focus-visible {
+  outline: 2px solid rgba(155, 126, 255, 0.85);
+  outline-offset: 2px;
+}

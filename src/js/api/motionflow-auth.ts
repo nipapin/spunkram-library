@@ -58,6 +58,7 @@ export const AUTH_ENDPOINTS = {
   store: `${brandPublicBase()}/store`,
   manageSubscription: `${PUBLIC_AUTH_ORIGIN}/profile/subscriptions?${clientQuery()}`,
   contact: `${brandPublicBase()}#contact`,
+  buyExtra: `${brandPublicBase()}/?buy=extra`,
 } as const;
 
 /** Browser confirm page — author site (login modal → Allow/Deny). */
@@ -363,6 +364,17 @@ export function setSubscriptionUrls(urls: {
 export function openMotionflowSubscribe(): void {
   // Always the brand landing — ignore server subscribe_url (legacy /pricing).
   openLinkInBrowser(AUTH_ENDPOINTS.subscribe);
+}
+
+/** Spunkram landing with the extra-credits purchase dialog (`?buy=extra`). */
+export function openMotionflowBuyExtra(): void {
+  openLinkInBrowser(AUTH_ENDPOINTS.buyExtra);
+}
+
+/** Spunkram pricing anchor. Used by the AI Tools Upgrade button. */
+export function openMotionflowPricing(): void {
+  const base = AUTH_ENDPOINTS.subscribe.replace(/\/$/, "");
+  openLinkInBrowser(`${base}#pricing`);
 }
 
 export function openMotionflowStore(): void {

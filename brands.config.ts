@@ -14,8 +14,8 @@ export type BrandAccess = {
    */
   packPurchasesGrantAccess: boolean;
   /**
-   * Default AI caps by tier. `GET /api/cep/me` `entitlements.ai_generations_limit` wins.
-   * `0` = this author does not expose that cap in the panel until the server sends one.
+   * Default AI caps by tier. Subscribed accounts use `/me` `entitlements.ai_generations_limit` when it is set.
+   * Free and purchased (no subscription) stay at `0` — the panel does not grant a free allotment.
    */
   generations: Record<AccessTier, number>;
   /**
@@ -139,8 +139,8 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
     access: {
       tiers: ["free", "purchased", "subscribed"],
       packPurchasesGrantAccess: true,
-      // Mirrors next-app cep-client-registry `spunkram-cep` (Editor AI = 100).
-      generations: { free: 5, purchased: 5, subscribed: 100 },
+      // Subscribed fallback until `/me` sends a cap. Free accounts get no generations.
+      generations: { free: 0, purchased: 0, subscribed: 100 },
       freePackSlots: 1,
     },
   },
@@ -222,12 +222,13 @@ export function resolveAccessTier(
   return "free";
 }
 
-/** Monthly AI cap: `/me` first, otherwise this author's default for the resolved tier. */
+/** Monthly AI cap. Accounts without a subscription get 0, even if `/me` still sends a free allotment. */
 export function resolveGenerationLimit(
   serverLimit?: number | null,
   accessTier: AccessTier = "free",
   brand: BrandConfig = BRAND,
 ): number | null {
+  if (accessTier !== "subscribed") return 0;
   if (typeof serverLimit === "number" && Number.isFinite(serverLimit) && serverLimit > 0) {
     return Math.floor(serverLimit);
   }

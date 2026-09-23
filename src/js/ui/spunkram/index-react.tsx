@@ -11,7 +11,6 @@ import "../../themes/brands-runtime.scss";
 import { initBrandTheme } from "../../lib/utils/brandTheme";
 import { App } from "./main";
 import { ConfigurationWrapper } from "../../../context/ConfigurationWrapper";
-import { preloadVoiceoverPreviews } from "../../api/voiceover";
 
 initBrandTheme();
 enableSpectrum();
@@ -27,7 +26,6 @@ ReactDOM.createRoot(document.getElementById("app") as HTMLElement).render(
 
 const afterFirstPaint = () => {
   initBolt();
-  void preloadVoiceoverPreviews();
 };
 
 if (typeof requestAnimationFrame === "function") {

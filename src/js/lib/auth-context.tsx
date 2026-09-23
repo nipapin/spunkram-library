@@ -47,6 +47,7 @@ import { reportSupportError } from "@/api/support";
 import { reportClientSession, reportInstalledPacks } from "@/api/telemetry";
 import { currentHostAppId } from "@/lib/utils/apply-item";
 import { applyAdminDevPlan } from "@/lib/utils/gal-plan";
+import { applySpunkramAdminDevPlan } from "@/lib/utils/spunkram-plan";
 import { currentPackHost } from "@/lib/utils/pack-host";
 import { waitForNextAuthPoll } from "@/lib/wait-for-auth-poll";
 import { getUserSystemData } from "@/lib/api/usp";
@@ -56,6 +57,7 @@ import {
 } from "@/lib/utils/device-session";
 import { isReleaseAdminEmail } from "@/api/update";
 import {
+  BRAND,
   resolveAccessTier,
   resolveFreePackSlots,
   resolveGenerationLimit,
@@ -779,6 +781,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const effectiveSubscription = useMemo(() => {
     if (!isReleaseAdminEmail(auth.email)) return subscription;
+    if (BRAND.id === "spunkram") {
+      return applySpunkramAdminDevPlan(subscription, prefs.adminDevPlan);
+    }
     return applyAdminDevPlan(subscription, prefs.adminDevPlan, currentPackHost());
   }, [auth.email, prefs.adminDevPlan, subscription]);
 

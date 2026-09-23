@@ -77,12 +77,13 @@ export type GenerationsBalance = {
 };
 
 export function useGenerationsBalance(): GenerationsBalance {
-  const { signedIn, authReady, generationLimit, isFreeUser } = useAuth();
+  const { signedIn, authReady, generationLimit, isFreeUser, subscription } = useAuth();
+  const subscribed = subscription.subscribed;
   const [monthly, setMonthly] = useState(0);
   const [extra, setExtra] = useState(0);
 
   useEffect(() => {
-    if (generationLimit == null) {
+    if (!subscribed || generationLimit == null || generationLimit <= 0) {
       setMonthly(0);
       setExtra(0);
       return;
@@ -90,19 +91,24 @@ export function useGenerationsBalance(): GenerationsBalance {
     const next = loadGenerationsState(generationLimit);
     setMonthly(next.monthly);
     setExtra(next.extra);
-  }, [generationLimit]);
+  }, [generationLimit, subscribed]);
 
   useEffect(() => {
-    if (generationLimit == null) return;
+    if (!subscribed || generationLimit == null || generationLimit <= 0) return;
     saveGenerationsState({
       monthly,
       extra,
       monthKey: currentMonthKey(),
       limit: generationLimit,
     });
-  }, [monthly, extra, generationLimit]);
+  }, [monthly, extra, generationLimit, subscribed]);
 
   const refresh = useCallback(async () => {
+    if (!subscribed) {
+      setMonthly(0);
+      setExtra(0);
+      return;
+    }
     const status = await fetchGenerationsStatus();
     if (!status?.authenticated) return;
     const nextMonthly =
@@ -117,7 +123,7 @@ export function useGenerationsBalance(): GenerationsBalance {
         : null;
     if (nextMonthly !== null) setMonthly(Math.max(0, nextMonthly));
     if (nextExtra !== null) setExtra(Math.max(0, nextExtra));
-  }, []);
+  }, [subscribed]);
 
   useEffect(() => {
     if (!authReady || !signedIn) return;

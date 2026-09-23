@@ -80,7 +80,7 @@ MotionFlow.PPRO.importSequence / importProject / importFootage / importAudio
 MotionFlow.PPRO.undoGroup.start / end / abort
 MotionFlow.PPRO.tools.*
 MotionFlow.PPRO.project.sort / rename / replace / reduce / collect  // Gal Toolkit scripts
-MotionFlow.PPRO.describe / markSilences / addMarkers / captions… / styles…
+MotionFlow.PPRO.describe / markSilences / removeSilences / addMarkers / captions… / styles…
 MotionFlow.PPRO.importMedia / importVoiceoverAudio
 MotionFlow.PPRO.applyPackItem(payload)
 ```

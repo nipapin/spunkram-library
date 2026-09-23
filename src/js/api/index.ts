@@ -39,6 +39,8 @@ export {
   replaceDeviceAuth,
   revokeMotionflowDevice,
   openMotionflowSubscribe,
+  openMotionflowBuyExtra,
+  openMotionflowPricing,
   openMotionflowManageSubscription,
   openMotionflowContact,
   normalizeMePayload,

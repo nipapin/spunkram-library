@@ -3,18 +3,18 @@ import { ArrowLeft, Sparkles } from "lucide-react";
 import { AiToolsList } from "@/components/ai-tools-list";
 import { CaptionsApp } from "@/ui/spunkram/apps/CaptionsApp";
 import { ChaptersApp } from "@/ui/spunkram/apps/ChaptersApp";
-import { VoiceoverApp } from "@/ui/spunkram/apps/VoiceoverApp";
+import { SilenceRemoverApp } from "@/ui/spunkram/apps/SilenceRemoverApp";
 import * as panelStore from "@/lib/userdata-store";
 import "@/ai-tools.scss";
 
-type ActiveTool = "hub" | "captions" | "chapters" | "voiceover";
+type ActiveTool = "hub" | "captions" | "chapters" | "silence";
 
 const TOOL_KEY = "spunkram-library-ai-active-tool";
 
 const loadTool = (): ActiveTool => {
   try {
     const stored = panelStore.getItem(TOOL_KEY);
-    if (stored === "captions" || stored === "chapters" || stored === "voiceover") return stored;
+    if (stored === "captions" || stored === "chapters" || stored === "silence") return stored;
   } catch {
     // ignore
   }
@@ -54,16 +54,16 @@ export function AiToolsPanel({
     if (totalLeft <= 0) return;
     if (id === "captions") setActiveTool("captions");
     else if (id === "chapter" || id === "chapters") setActiveTool("chapters");
-    else if (id === "voiceover") setActiveTool("voiceover");
+    else if (id === "silence") setActiveTool("silence");
   };
 
-  if (activeTool === "captions" || activeTool === "chapters" || activeTool === "voiceover") {
+  if (activeTool === "captions" || activeTool === "chapters" || activeTool === "silence") {
     const title =
       activeTool === "captions"
         ? "Captions"
         : activeTool === "chapters"
           ? "Chapters"
-          : "Voiceover";
+          : "Silence Remover";
     return (
       <div className="ai-tools-scope tool-shell">
         <header className="tool-shell__header">
@@ -87,7 +87,7 @@ export function AiToolsPanel({
           ) : activeTool === "chapters" ? (
             <ChaptersApp generationsLeft={totalLeft} />
           ) : (
-            <VoiceoverApp generationsLeft={totalLeft} />
+            <SilenceRemoverApp generationsLeft={totalLeft} />
           )}
         </div>
       </div>

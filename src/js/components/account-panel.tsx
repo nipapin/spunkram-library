@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowUpRight, Check, Loader2, LogOut, Plus, RefreshCw } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
+  openMotionflowBuyExtra,
   openMotionflowContact,
   openMotionflowSubscribe,
 } from "@/api/motionflow-auth";
@@ -9,7 +10,13 @@ import { fetchGenerationsStatus } from "@/api/credits";
 import { getUserSystemData } from "@/lib/api/usp";
 import { parseDeviceFingerprint } from "@/lib/api/market-api";
 import type { MotionflowAccountSession } from "@/lib/api/preferences";
+import { isReleaseAdminEmail } from "@/api/update";
 import { BRAND } from "@brands";
+import {
+  SPUNKRAM_DEV_PLANS,
+  isSpunkramDevPlan,
+  spunkramDevPlanLabel,
+} from "@/lib/utils/spunkram-plan";
 import "./account-panel.scss";
 
 function formatDate(iso?: string): string | null {
@@ -144,7 +151,9 @@ function creditsFromStatus(
     extra_generations_left?: number;
   },
   generationLimit: number | null,
+  subscribed: boolean,
 ): { monthlyLeft: number; extraLeft: number; used: number } {
+  if (!subscribed) return { monthlyLeft: 0, extraLeft: 0, used: 0 };
   const monthlyLeft =
     typeof status.subscription_generations_left === "number"
       ? status.subscription_generations_left
@@ -173,6 +182,8 @@ function Kicker({ children }: { children: ReactNode }) {
 export function AccountPanel({ onBack }: { onBack: () => void }) {
   const {
     auth,
+    prefs,
+    updatePrefs,
     subscription,
     isFreeUser,
     generationLimit,
@@ -211,9 +222,13 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     let cancelled = false;
+    if (!subscription.subscribed) {
+      setCredits({ monthlyLeft: 0, extraLeft: 0, used: 0 });
+      return;
+    }
     fetchGenerationsStatus().then((status) => {
       if (cancelled || !status) return;
-      setCredits(creditsFromStatus(status, generationLimit));
+      setCredits(creditsFromStatus(status, generationLimit, true));
     });
     return () => {
       cancelled = true;
@@ -225,7 +240,7 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
     setMessage(null);
     const result = await recheck();
     const status = await fetchGenerationsStatus();
-    if (status) setCredits(creditsFromStatus(status, generationLimit));
+    if (status) setCredits(creditsFromStatus(status, generationLimit, subscription.subscribed));
     setBusy(false);
     if (!result.ok) setMessage(result.message || "Recheck failed");
   }
@@ -296,6 +311,8 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
         ? "Free"
         : "Inactive";
   const displayName = auth.name || auth.email || `${BRAND.authorName} user`;
+  const isAdmin = isReleaseAdminEmail(auth.email);
+  const devPlan = isSpunkramDevPlan(prefs.adminDevPlan) ? prefs.adminDevPlan : "";
   const isCancelled = (subscription.status || "").toLowerCase().includes("cancel");
   const monthlyLeft = credits?.monthlyLeft ?? 0;
   const extraLeft = credits?.extraLeft ?? 0;
@@ -443,6 +460,38 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
                     ) : planStatus !== "Active" ? (
                       <p className="account-spunkram__sub">{planStatus}</p>
                     ) : null}
+                    {isAdmin ? (
+                      <div className="account-spunkram__dev-plan">
+                        <div className="account-spunkram__plan-switch" role="group" aria-label="Dev plan">
+                          {SPUNKRAM_DEV_PLANS.map((plan) => (
+                            <button
+                              key={plan}
+                              type="button"
+                              className={
+                                devPlan === plan
+                                  ? "account-spunkram__plan-chip is-active"
+                                  : "account-spunkram__plan-chip"
+                              }
+                              onClick={() => updatePrefs({ adminDevPlan: plan })}
+                            >
+                              {spunkramDevPlanLabel(plan)}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            className={
+                              devPlan
+                                ? "account-spunkram__plan-chip"
+                                : "account-spunkram__plan-chip is-active"
+                            }
+                            onClick={() => updatePrefs({ adminDevPlan: "" })}
+                          >
+                            Live
+                          </button>
+                        </div>
+                        <p className="account-spunkram__dev-hint">Dev test · local only</p>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </section>
@@ -455,7 +504,7 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
                     <button
                       type="button"
                       className="account-btn account-btn--primary account-btn--tiny"
-                      onClick={openMotionflowSubscribe}
+                      onClick={openMotionflowBuyExtra}
                     >
                       <Plus className="size-3" strokeWidth={2.5} />
                       Add extra

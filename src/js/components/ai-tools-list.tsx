@@ -1,10 +1,10 @@
-import { Type, BookOpen, AudioLines, Sparkles, Plus, Infinity as InfinityIcon } from "lucide-react";
+import { Type, BookOpen, Scissors, Sparkles, Plus, Infinity as InfinityIcon } from "lucide-react";
 import { openMotionflowSubscribe } from "@/api/motionflow-auth";
 
 const AI_TOOLS = [
   { id: "captions", label: "Captions", desc: "Auto-generate subtitles", icon: Type, soon: false },
   { id: "chapter", label: "Chapters", desc: "Split into chapters", icon: BookOpen, soon: false },
-  { id: "voiceover", label: "Voiceover", desc: "AI narration with Minimax", icon: AudioLines, soon: false },
+  { id: "silence", label: "Silence Remover", desc: "Cut pauses between words", icon: Scissors, soon: false },
 ] as const;
 
 function Sheen() {

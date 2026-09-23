@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { openMotionflowSubscribe } from "@/api/motionflow-auth";
+import { AiToolsPlanDialog } from "@/components/AiToolsPlanDialog";
 import { useGenerationsBalance } from "@/hooks/use-generations-balance";
 import { MotionFlow } from "@/sdk";
 import { getResolvedHostSync } from "@/lib/utils/host-identity";
@@ -161,11 +162,13 @@ export function GalScriptsPanel() {
   const [activeAi, setActiveAi] = useState<AiToolDef | null>(null);
   const [infoScript, setInfoScript] = useState<GalScriptDef | null>(null);
   const [infoAi, setInfoAi] = useState<AiToolDef | null>(null);
+  const [planGate, setPlanGate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<ScriptMessage | null>(null);
   const aiWarmupStarted = useRef(false);
 
-  const aiEnabled = signedIn && gens.totalLeft > 0;
+  const aiEnabled = signedIn && subscribed && gens.totalLeft > 0;
+  const aiClickable = signedIn && (!subscribed || gens.totalLeft > 0);
 
   useEffect(() => {
     if (!activeAi || aiWarmupStarted.current) return;
@@ -199,17 +202,32 @@ export function GalScriptsPanel() {
   }
 
   function openAiTool(tool: AiToolDef) {
+    if (!signedIn) {
+      onMessage({ tone: "warning", text: "Sign in to use AI Tools." });
+      return;
+    }
+    if (!subscribed) {
+      setMessage(null);
+      setPlanGate(true);
+      return;
+    }
     if (!aiEnabled) {
       onMessage({
         tone: "warning",
-        text: signedIn
-          ? "No AI generations left. Get more to continue."
-          : "Sign in to use AI Tools.",
+        text: "No AI generations left. Get more to continue.",
       });
       return;
     }
     setMessage(null);
     setActiveAi(tool);
+  }
+
+  if (planGate && !subscribed) {
+    return (
+      <div className="gal-scripts">
+        <AiToolsPlanDialog onBack={() => setPlanGate(false)} />
+      </div>
+    );
   }
 
   if (activeAi) {
@@ -361,7 +379,7 @@ export function GalScriptsPanel() {
           <article
             key={tool.id}
             className={
-              aiEnabled
+              aiClickable
                 ? "gal-scripts__card gal-scripts__card--ai"
                 : "gal-scripts__card gal-scripts__card--ai is-disabled"
             }
@@ -398,14 +416,16 @@ export function GalScriptsPanel() {
               <button
                 type="button"
                 className="gal-scripts__action-btn"
-                disabled={!aiEnabled}
+                disabled={!aiClickable}
                 aria-label={`Open ${tool.name}`}
                 title={
-                  aiEnabled
-                    ? "Open"
-                    : signedIn
-                      ? "No generations left"
-                      : "Sign in required"
+                  !signedIn
+                    ? "Sign in required"
+                    : !subscribed
+                      ? "Creator plan required"
+                      : aiEnabled
+                        ? "Open"
+                        : "No generations left"
                 }
                 onClick={() => openAiTool(tool)}
               >

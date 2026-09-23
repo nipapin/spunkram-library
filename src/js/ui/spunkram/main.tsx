@@ -7,6 +7,7 @@ import { FootageGrid } from "@/components/footage-grid";
 import { TutorialsPanel } from "@/components/tutorials-panel";
 import { PanelFooter } from "@/components/panel-footer";
 import { AiToolsPanel } from "@/components/ai-tools-panel";
+import { AiToolsPlanDialog } from "@/components/AiToolsPlanDialog";
 import { MarketPanel } from "@/components/market-panel";
 import { SettingsPanel } from "@/components/settings-panel";
 import { AccountPanel } from "@/components/account-panel";
@@ -24,7 +25,6 @@ import {
 import { PackagesPathGateProvider } from "@/lib/packages-path-gate";
 import { useExtensionUpdate } from "@/lib/use-extension-update";
 import { ensureFfmpeg } from "@/utils/ffmpeg";
-import { preloadVoiceoverPreviews } from "@/api/voiceover";
 import { openMarketUrl, resolvePackEntitlementContextForScan } from "@/api/cep-market";
 import { useGenerationsBalance } from "@/hooks/use-generations-balance";
 import {
@@ -618,12 +618,6 @@ function AppShell() {
     void refreshMarket();
   }, [authReady, signedIn, refreshMarket]);
 
-  // Download voice samples locally so Voiceover playback isn't gated on the network.
-  useEffect(() => {
-    if (!authReady || !signedIn) return;
-    void preloadVoiceoverPreviews();
-  }, [authReady, signedIn]);
-
   // Prefetch ffmpeg after the shell is up so unzip/download cannot freeze Loading.
   useEffect(() => {
     if (!authReady) return;
@@ -773,8 +767,14 @@ function AppShell() {
           />
         </section>
       ) : nav === "ai-tools" ? (
-        <section className="min-h-0 flex-1 overflow-hidden">
-          <AiToolsPanel {...aiToolsProps} />
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {subscription.subscribed ? (
+            <AiToolsPanel {...aiToolsProps} />
+          ) : (
+            <AiToolsPlanDialog
+              onBack={() => setNav(hasInstalledPacks ? "editing" : "market")}
+            />
+          )}
         </section>
       ) : nav === "footages" ? (
         <section className="min-h-0 flex-1 overflow-hidden">
