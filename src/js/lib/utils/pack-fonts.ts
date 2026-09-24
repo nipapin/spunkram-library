@@ -72,14 +72,22 @@ function grabFonts(rootDir: string): string[] {
   return result;
 }
 
+/** True when this filename is already in the OS user fonts folder. */
+export function userFontFileInstalled(fileName: string): boolean {
+  if (!cepFsAvailable() || !fileName) return false;
+  try {
+    return fs.existsSync(path.join(resolveUserFontsDir(), path.basename(fileName)));
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Copy pack fonts into the OS user fonts folder (skip already installed).
- * Safe no-op when Fonts folder is missing.
+ * Copy .ttf/.otf from a folder into the OS user fonts folder (skip already installed).
+ * Same path packages use (`Fonts/` next to the pack file).
  */
-export async function installPackFonts(packFilePath: string): Promise<number> {
-  if (!cepFsAvailable()) return 0;
-  const fontsFolder = resolvePackFontsPath(packFilePath);
-  if (!fontsFolder || !fs.existsSync(fontsFolder)) return 0;
+export async function installFontsFromDirectory(fontsFolder: string): Promise<number> {
+  if (!cepFsAvailable() || !fontsFolder || !fs.existsSync(fontsFolder)) return 0;
 
   const fonts = grabFonts(fontsFolder);
   if (fonts.length === 0) return 0;
@@ -127,4 +135,14 @@ export async function installPackFonts(packFilePath: string): Promise<number> {
     });
   }
   return installed;
+}
+
+/**
+ * Copy pack fonts into the OS user fonts folder (skip already installed).
+ * Safe no-op when Fonts folder is missing.
+ */
+export async function installPackFonts(packFilePath: string): Promise<number> {
+  const fontsFolder = resolvePackFontsPath(packFilePath);
+  if (!fontsFolder) return 0;
+  return installFontsFromDirectory(fontsFolder);
 }

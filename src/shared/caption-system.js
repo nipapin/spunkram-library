@@ -1,0 +1,473 @@
+/**
+ * Essential Graphics / controls.json names — must match uiName (en_US).
+ * CEP writes v4 lookup + offset batches into captions_batch_01..15.
+ * Captions_Raw_Data / Captions_Data are computed by AE expressions — do not fill.
+ *
+ * Styles UI is the `groups` tree in controls.json, plus the Re-segment group.
+ * Segment Type / Line Count / Chars Per Line stay CEP-written, not preset controls.
+ * Segment Type is 0-based by name: Words=0, Custom=1 (Premiere MGT).
+ * Lines / caption → Line Count; Characters / line → Chars Per Line.
+ */
+export const CAPTION_SYSTEM = {
+    group: "Store hidden",
+    storeGroup: "Store hidden",
+    bridgeGroup: "Bridge hidden",
+    legacyGroup: "System hidden",
+    rawData: "Captions_Raw_Data",
+    segmentType: "Segment Type",
+    lineCount: "Line Count",
+    charsPerLine: "Chars Per Line",
+    compositionHeight: "Composition Height",
+};
+/** AE Essential Properties groups that may hold system props (new + legacy). */
+export const CAPTION_SYSTEM_GROUPS = [
+    CAPTION_SYSTEM.storeGroup,
+    CAPTION_SYSTEM.bridgeGroup,
+    CAPTION_SYSTEM.legacyGroup,
+    "System",
+];
+/** Essential Graphics text fields CEP fills. Always all 15, even if empty. */
+export const CAPTION_BATCH_COUNT = 15;
+export const captionBatchLayerName = (i) => {
+    return "captions_batch_" + (i < 10 ? "0" + i : String(i));
+};
+const buildCaptionBatchNames = () => {
+    const names = [];
+    for (let i = 1; i <= CAPTION_BATCH_COUNT; i++) {
+        names.push(captionBatchLayerName(i));
+    }
+    return names;
+};
+export const CAPTION_BATCH_NAMES = buildCaptionBatchNames();
+/**
+ * Segment Type — 0-based value written by display name (`Segment Type`).
+ * Words = 0, Custom = 1. Premiere MGT dropdown index; AE EP is 1-based (host adds 1).
+ */
+export const SEGMENT_TYPE_INDEX = {
+    words: 0,
+    custom: 1,
+};
+/** CEP fills these on create / resegment / live-edit. Not user style. */
+const buildCepWrittenSystemNames = () => {
+    const names = [];
+    for (let i = 0; i < CAPTION_BATCH_NAMES.length; i++) {
+        names.push(CAPTION_BATCH_NAMES[i]);
+    }
+    names.push(CAPTION_SYSTEM.segmentType, CAPTION_SYSTEM.lineCount, CAPTION_SYSTEM.charsPerLine, CAPTION_SYSTEM.compositionHeight);
+    return names;
+};
+export const CEP_WRITTEN_SYSTEM_NAMES = buildCepWrittenSystemNames();
+/**
+ * Разметка сегментов едет в паке служебными строками: пустой текст + отрицательный
+ * wordIndex. Прежние captions.jsx видят такую строку как spacing и пропускают её
+ * (тайминг нулевой, тишину она не удлиняет), поэтому пак читается и старым SDK.
+ */
+export const CAPTION_MARK = {
+    /** нулевая строка пака: разбивка лежит в данных */
+    present: -4,
+    line: -2,
+    segment: -3,
+};
+const breakFromWordIndex = (wordIndex) => {
+    if (wordIndex === CAPTION_MARK.line)
+        return "line";
+    if (wordIndex === CAPTION_MARK.segment)
+        return "segment";
+    return null;
+};
+const MS = 1000;
+const LUT_SECONDS = 1800;
+/** Keep LUT layers few so data batches stay small. */
+const MAX_LUT_SEC = (CAPTION_BATCH_COUNT - 1) * LUT_SECONDS;
+/** One token must not paint the whole timeline if end is wrong / huge. */
+const MAX_OVERLAP_SEC = 5;
+const LUT_HOLD_PAD = 1;
+const INDEXED_LOOKUP_PREFIX = "v4lut~";
+const INDEXED_BATCH_PREFIX = "v4~";
+const BATCH_SEP = "|||";
+const toMs = (seconds) => {
+    const n = Number(seconds);
+    if (!isFinite(n))
+        return 0;
+    return Math.round(n * MS);
+};
+/**
+ * SDK spacing is empty string (`wordIndex: -1`), never `" "`.
+ * Scribe / CEP fallbacks often send `type: "spacing"` with a space character.
+ */
+const packTokenText = (token) => {
+    if (token.type === "spacing")
+        return "";
+    const text = token.text == null ? "" : String(token.text);
+    if (!text.replace(/^\s+|\s+$/g, ""))
+        return "";
+    return text;
+};
+const escapeRowText = (text) => {
+    if (!text)
+        return "";
+    if (text.indexOf("\\") === -1 && text.indexOf("~") === -1 && text.indexOf("@") === -1) {
+        return text;
+    }
+    let out = "";
+    for (let i = 0; i < text.length; i++) {
+        const ch = text.charAt(i);
+        if (ch === "\\")
+            out += "\\0";
+        else if (ch === "~")
+            out += "\\1";
+        else if (ch === "@")
+            out += "\\2";
+        else
+            out += ch;
+    }
+    return out;
+};
+const unescapeRowText = (text) => {
+    if (!text || text.indexOf("\\") === -1)
+        return text || "";
+    let result = "";
+    for (let i = 0; i < text.length; i++) {
+        const ch = text.charAt(i);
+        if (ch !== "\\" || i + 1 >= text.length) {
+            result += ch;
+            continue;
+        }
+        const code = text.charAt(i + 1);
+        i++;
+        if (code === "0")
+            result += "\\";
+        else if (code === "1")
+            result += "~";
+        else if (code === "2")
+            result += "@";
+        else
+            result += code;
+    }
+    return result;
+};
+export const isIndexedPack = (text) => {
+    return !!(text && String(text).indexOf(INDEXED_LOOKUP_PREFIX) === 0);
+};
+/** JSON array → packed `text~start~end~~...`. Legacy only; prefer packToChunkLayers. */
+export const packCaptions = (captions) => {
+    if (!captions || !captions.length)
+        return "";
+    const parts = [];
+    for (let i = 0; i < captions.length; i++) {
+        const c = captions[i];
+        const text = c.text == null ? "" : String(c.text);
+        const start = c.start == null ? 0 : c.start;
+        const end = c.end == null ? 0 : c.end;
+        parts.push([text, start, end].join("~"));
+    }
+    return parts.join("~~");
+};
+/** Split equally by characters into n chunks (mid-token cuts are OK). Legacy only. */
+export const splitEqual = (str, n) => {
+    str = str == null ? "" : String(str);
+    const size = Math.ceil(str.length / n) || 0;
+    const chunks = [];
+    for (let i = 0; i < n; i++) {
+        chunks.push(size ? str.substring(i * size, (i + 1) * size) : "");
+    }
+    return chunks;
+};
+/**
+ * v4 layers for captions_batch_01..15: lookup by second, then data batches
+ * with row offsets. Must match captions.jsx packToChunkLayers.
+ *
+ * Hot path: join instead of +=, clamp overlap span, skip spacing in the
+ * per-second overlap lists, cap timeline so a bad end time cannot allocate
+ * a multi-hour LUT. Wire format is unchanged (v4lut~ / v4~ / lastAt|ids).
+ */
+export const packToChunkLayers = (captions) => {
+    const list = captions || [];
+    const rows = [];
+    const starts = [];
+    const ends = [];
+    const isWord = [];
+    let wcount = 0;
+    let lastSec = 0;
+    let i;
+    const pushRow = (startMs, endMs, wordIndex, text) => {
+        rows.push(startMs + "~" + endMs + "~" + wordIndex + "~" + text);
+        starts.push(startMs);
+        ends.push(endMs);
+        isWord.push(text !== "");
+        let sec = Math.floor(startMs / MS);
+        if (sec > lastSec)
+            lastSec = sec;
+        sec = Math.floor(endMs / MS + LUT_HOLD_PAD);
+        if (sec > lastSec)
+            lastSec = sec;
+    };
+    let marked = false;
+    for (i = 0; i < list.length; i++) {
+        if (list[i].breakAfter) {
+            marked = true;
+            break;
+        }
+    }
+    if (marked)
+        pushRow(0, 0, CAPTION_MARK.present, "");
+    for (i = 0; i < list.length; i++) {
+        const text = packTokenText(list[i]);
+        const startMs = toMs(list[i].start);
+        const endMs = toMs(list[i].end);
+        const word = text !== "";
+        pushRow(startMs, endMs, word ? wcount : -1, escapeRowText(text));
+        if (word)
+            wcount++;
+        const brk = word ? list[i].breakAfter : null;
+        if (brk) {
+            pushRow(endMs, endMs, brk === "segment" ? CAPTION_MARK.segment : CAPTION_MARK.line, "");
+        }
+    }
+    const n = rows.length;
+    if (lastSec < 0)
+        lastSec = 0;
+    if (lastSec > MAX_LUT_SEC - 1)
+        lastSec = MAX_LUT_SEC - 1;
+    const secCount = n ? lastSec + 1 : 0;
+    let lutCount = secCount ? Math.ceil(secCount / LUT_SECONDS) || 1 : 1;
+    if (lutCount < 1)
+        lutCount = 1;
+    if (lutCount > CAPTION_BATCH_COUNT - 1)
+        lutCount = CAPTION_BATCH_COUNT - 1;
+    const dataCount = CAPTION_BATCH_COUNT - lutCount;
+    const overlaps = new Array(secCount);
+    const lastAt = new Array(secCount);
+    for (i = 0; i < secCount; i++) {
+        overlaps[i] = [];
+        lastAt[i] = -1;
+    }
+    let last = -1;
+    let capI = 0;
+    let s;
+    for (s = 0; s < secCount; s++) {
+        const limit = (s + 1) * MS - 1;
+        while (capI < n && starts[capI] <= limit) {
+            last = capI;
+            capI++;
+        }
+        lastAt[s] = last;
+    }
+    for (i = 0; i < n; i++) {
+        if (!isWord[i])
+            continue;
+        let a = Math.floor(starts[i] / MS);
+        let b = Math.floor(ends[i] / MS + LUT_HOLD_PAD);
+        if (a < 0)
+            a = 0;
+        if (a >= secCount)
+            continue;
+        if (b > a + MAX_OVERLAP_SEC)
+            b = a + MAX_OVERLAP_SEC;
+        if (b >= secCount)
+            b = secCount - 1;
+        if (b < a)
+            continue;
+        for (s = a; s <= b; s++)
+            overlaps[s].push(i);
+    }
+    const chunks = [];
+    for (i = 0; i < lutCount; i++) {
+        const from = i * LUT_SECONDS;
+        let to = i === lutCount - 1 ? secCount : from + LUT_SECONDS;
+        if (to > secCount)
+            to = secCount;
+        const lutParts = new Array(Math.max(0, to - from));
+        for (let j = from; j < to; j++) {
+            const ov = overlaps[j];
+            lutParts[j - from] = ov.length
+                ? lastAt[j] + "|" + ov.join(",")
+                : lastAt[j] + "|";
+        }
+        const lutBody = lutParts.join(";");
+        if (i === 0) {
+            chunks.push(INDEXED_LOOKUP_PREFIX + n + "~" + lutCount + ";;;" + lutBody);
+        }
+        else {
+            chunks.push(INDEXED_LOOKUP_PREFIX + n + ";;;" + lutBody);
+        }
+    }
+    const per = Math.ceil(n / dataCount) || 1;
+    for (let bIdx = 0; bIdx < dataCount; bIdx++) {
+        const startIndex = bIdx * per;
+        if (startIndex >= n) {
+            chunks.push("");
+            continue;
+        }
+        let endIndex = startIndex + per;
+        if (endIndex > n)
+            endIndex = n;
+        const slice = rows.slice(startIndex, endIndex);
+        const offsets = new Array(slice.length);
+        let off = 0;
+        for (i = 0; i < slice.length; i++) {
+            offsets[i] = off;
+            off += slice[i].length + (i < slice.length - 1 ? 1 : 0);
+        }
+        chunks.push(INDEXED_BATCH_PREFIX + startIndex + "~" + offsets.join(",") + BATCH_SEP + slice.join("@"));
+    }
+    while (chunks.length < CAPTION_BATCH_COUNT)
+        chunks.push("");
+    return chunks;
+};
+export const parseCaptionsRawJson = (rawJson) => {
+    if (!rawJson)
+        return [];
+    if (typeof rawJson !== "string") {
+        if (typeof rawJson.length === "number") {
+            return rawJson;
+        }
+        return [];
+    }
+    try {
+        const parsed = JSON.parse(String(rawJson));
+        if (parsed && typeof parsed.length === "number")
+            return parsed;
+    }
+    catch (e) {
+        // not JSON
+    }
+    return [];
+};
+export const normalizeCaptionChunks = (chunks) => {
+    const out = [];
+    for (let i = 0; i < CAPTION_BATCH_COUNT; i++) {
+        const c = chunks && i < chunks.length ? chunks[i] : "";
+        out.push(c == null ? "" : String(c));
+    }
+    return out;
+};
+export const captionsRawJsonToChunks = (rawJson) => {
+    return packToChunkLayers(parseCaptionsRawJson(rawJson));
+};
+/** Prefer pre-packed CEP chunks; fall back to packing Scribe JSON on the host. */
+export const resolveCaptionChunks = (chunks, rawJson) => {
+    if (chunks && chunks.length) {
+        const normalized = normalizeCaptionChunks(chunks);
+        let packed = "";
+        for (let i = 0; i < normalized.length; i++)
+            packed += normalized[i];
+        if (packed)
+            return normalized;
+    }
+    return captionsRawJsonToChunks(rawJson);
+};
+const unpackLegacyPacked = (packed) => {
+    const items = String(packed).split("~~");
+    const out = [];
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const last = item.lastIndexOf("~");
+        if (last < 0)
+            continue;
+        const prev = item.lastIndexOf("~", last - 1);
+        if (prev < 0)
+            continue;
+        out.push({
+            text: item.substring(0, prev),
+            start: Number(item.substring(prev + 1, last)),
+            end: Number(item.substring(last + 1)),
+        });
+    }
+    return out;
+};
+const parseV4LookupHeader = (raw) => {
+    if (!isIndexedPack(raw))
+        return null;
+    const sep = raw.indexOf(";;;");
+    if (sep < 0)
+        return null;
+    const header = raw.substring(INDEXED_LOOKUP_PREFIX.length, sep);
+    const tilde = header.indexOf("~");
+    let maxCaption;
+    let lutCount;
+    if (tilde < 0) {
+        maxCaption = parseInt(header, 10);
+        lutCount = 1;
+    }
+    else {
+        maxCaption = parseInt(header.substring(0, tilde), 10);
+        lutCount = parseInt(header.substring(tilde + 1), 10);
+    }
+    if (!isFinite(maxCaption) || maxCaption < 0)
+        maxCaption = 0;
+    if (!isFinite(lutCount) || lutCount < 1)
+        lutCount = 1;
+    if (lutCount > CAPTION_BATCH_COUNT - 1)
+        lutCount = CAPTION_BATCH_COUNT - 1;
+    return { maxCaption: maxCaption, lutCount: lutCount };
+};
+const parseV4Row = (row) => {
+    const t1 = row.indexOf("~");
+    const t2 = t1 >= 0 ? row.indexOf("~", t1 + 1) : -1;
+    const t3 = t2 >= 0 ? row.indexOf("~", t2 + 1) : -1;
+    if (t1 < 0 || t2 < 0 || t3 < 0) {
+        return { text: "", start: 0, end: 0 };
+    }
+    const wordIndex = parseInt(row.substring(t2 + 1, t3), 10);
+    return {
+        start: parseInt(row.substring(0, t1), 10) / MS,
+        end: parseInt(row.substring(t1 + 1, t2), 10) / MS,
+        text: unescapeRowText(row.substring(t3 + 1)),
+        breakAfter: breakFromWordIndex(wordIndex),
+    };
+};
+const unpackIndexedChunks = (chunks) => {
+    const header = parseV4LookupHeader(chunks[0] || "");
+    if (!header)
+        return [];
+    const out = [];
+    const dataCount = CAPTION_BATCH_COUNT - header.lutCount;
+    for (let slot = 0; slot < dataCount; slot++) {
+        const raw = chunks[header.lutCount + slot] || "";
+        if (!raw || raw.indexOf(INDEXED_BATCH_PREFIX) !== 0)
+            continue;
+        const sep = raw.indexOf(BATCH_SEP);
+        if (sep < 0)
+            continue;
+        const payload = raw.substring(sep + BATCH_SEP.length);
+        if (!payload)
+            continue;
+        const rows = payload.split("@");
+        for (let r = 0; r < rows.length; r++) {
+            if (!rows[r])
+                continue;
+            out.push(parseV4Row(rows[r]));
+        }
+    }
+    return out;
+};
+export const unpackCaptionChunks = (chunks) => {
+    const normalized = normalizeCaptionChunks(chunks);
+    if (isIndexedPack(normalized[0]))
+        return unpackIndexedChunks(normalized);
+    let packed = "";
+    for (let i = 0; i < normalized.length; i++)
+        packed += normalized[i];
+    return unpackLegacyPacked(packed);
+};
+/** Decoder: v4 chunks, or legacy packed string (last two `~` fields are start/end). */
+export const unpackCaptions = (packed) => {
+    if (packed == null || packed === "")
+        return [];
+    if (typeof packed !== "string")
+        return unpackCaptionChunks(packed);
+    if (isIndexedPack(packed))
+        return [];
+    return unpackLegacyPacked(packed);
+};
+export const packedCaptionsDisplayText = (packed) => {
+    const caps = unpackCaptions(packed);
+    const words = [];
+    for (let i = 0; i < caps.length; i++) {
+        const t = String(caps[i].text == null ? "" : caps[i].text).replace(/^\s+|\s+$/g, "");
+        if (t)
+            words.push(t);
+    }
+    return words.join(" ");
+};

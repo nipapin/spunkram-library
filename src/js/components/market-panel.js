@@ -1,0 +1,298 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ExternalLink, Loader2, Play, RotateCcw, Trash2, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
+import { openMarketUrl, installedPackMatchesMarketItem, installedPackNeedsUpdate } from "@/api/cep-market";
+import { openYoutube } from "@/lib/api/market-api";
+import { readInstallablePackages } from "@/lib/utils/pack";
+import { uninstallPack } from "@/lib/utils/pack-install";
+import { activePackStorageKey, currentPackHost, LEGACY_ACTIVE_PACK_STORAGE_KEY, } from "@/lib/utils/pack-host";
+import { openMotionflowSubscribe, openMotionflowStore } from "@/api/motionflow-auth";
+import * as panelStore from "@/lib/userdata-store";
+import { useDownloadManager } from "@/lib/download-manager-context";
+import { usePackagesPathGate } from "@/lib/packages-path-gate";
+import { friendlyErrorMessage } from "@/utils/user-error";
+const ACCENT_PILL = "pill-brand";
+function hostPrimaryType() {
+    return currentPackHost();
+}
+function readActivePackPathForHost(host) {
+    if (!host)
+        return undefined;
+    try {
+        const scoped = panelStore.getItem(activePackStorageKey(host));
+        if (scoped)
+            return scoped;
+        const legacy = panelStore.getItem(LEGACY_ACTIVE_PACK_STORAGE_KEY);
+        if (!legacy)
+            return undefined;
+        if (!readInstallablePackages(host).some((p) => p.path === legacy))
+            return undefined;
+        panelStore.setItem(activePackStorageKey(host), legacy);
+        return legacy;
+    }
+    catch {
+        return undefined;
+    }
+}
+function priceLabel(item) {
+    if (item.owned)
+        return { label: "Owned" };
+    const price = item.custom_price;
+    const free = !price || price === 0;
+    if (free || item.action === "get_free")
+        return { label: "Free" };
+    return { label: "In subscription" };
+}
+function uiActionForItem(item, opts) {
+    if (opts.installed && opts.needsUpdate) {
+        return { label: "Update", type: "update" };
+    }
+    if (opts.installed && opts.active) {
+        return { label: "Active", type: "active", disabled: true };
+    }
+    if (opts.installed) {
+        return { label: "Switch", type: "switch" };
+    }
+    const serverAction = (item.action || "").toLowerCase();
+    if (serverAction === "install" || serverAction === "get_free" || item.owned) {
+        return {
+            label: serverAction === "get_free" ? "Get Free" : "Install",
+            type: "install",
+        };
+    }
+    if (serverAction === "buy") {
+        return { label: "Buy", type: "buy" };
+    }
+    if (item.owned)
+        return { label: "Install", type: "install" };
+    return { label: "Buy", type: "buy" };
+}
+function findInstalledMeta(item, installed) {
+    return installed.find((p) => installedPackMatchesMarketItem(p, item));
+}
+function pathsEqual(a, b) {
+    if (!a || !b)
+        return false;
+    const norm = (p) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    return norm(a) === norm(b);
+}
+function jobStatusLabel(job) {
+    switch (job.status) {
+        case "queued":
+            return "Queued";
+        case "downloading":
+            return `Downloading ${job.progress}%`;
+        case "installing":
+            return "Installing…";
+        case "done":
+            return "Installed";
+        case "error":
+            return friendlyErrorMessage(job.error || "Failed");
+        case "cancelled":
+            return "Cancelled";
+        default:
+            return job.status;
+    }
+}
+function jobWipeProgress(job) {
+    if (job.status === "queued")
+        return 0;
+    if (job.status === "installing")
+        return Math.max(95, job.progress || 0);
+    return Math.max(0, Math.min(100, job.progress || 0));
+}
+/** Circular ring with cancel (Epic-style) — progress 0–100. */
+function CancelProgressButton({ progress, label, onCancel, }) {
+    const size = 22;
+    const stroke = 2;
+    const r = (size - stroke) / 2;
+    const c = 2 * Math.PI * r;
+    const pct = Math.max(0, Math.min(100, progress));
+    const offset = c - (pct / 100) * c;
+    return (_jsxs("button", { type: "button", "aria-label": `Cancel — ${label}`, title: label, onClick: onCancel, className: "relative flex size-[22px] shrink-0 items-center justify-center rounded-full text-foreground transition-colors hover:text-destructive", children: [_jsxs("svg", { className: "absolute inset-0 -rotate-90", width: size, height: size, "aria-hidden": true, children: [_jsx("circle", { cx: size / 2, cy: size / 2, r: r, fill: "none", stroke: "currentColor", strokeWidth: stroke, className: "text-white/20" }), _jsx("circle", { cx: size / 2, cy: size / 2, r: r, fill: "none", stroke: "currentColor", strokeWidth: stroke, strokeDasharray: c, strokeDashoffset: offset, strokeLinecap: "round", className: "text-primary transition-[stroke-dashoffset] duration-200" })] }), _jsx(X, { className: "relative z-10 size-2.5" })] }));
+}
+function MarketCard({ item, subscribeUrl, installedMeta, activePackPath, job, onSwitchPack, onRemovePack, onInstall, onCancelJob, onRetryJob, }) {
+    const installed = Boolean(installedMeta);
+    const active = Boolean(installedMeta && pathsEqual(installedMeta.path, activePackPath));
+    const needsUpdate = Boolean(installedMeta && installedPackNeedsUpdate(installedMeta, item));
+    const { label: price } = priceLabel(item);
+    const action = uiActionForItem(item, { installed, active, needsUpdate });
+    const imageSrc = `${item.image_url}${item.image_url.includes("?") ? "&" : "?"}v=${item.version || "1"}`;
+    const showSubHint = action.type === "buy";
+    const detailsUrl = item.details_url?.trim() || "";
+    const jobBusy = job && (job.status === "queued" || job.status === "downloading" || job.status === "installing");
+    const jobFailed = job && (job.status === "error" || job.status === "cancelled");
+    const wipePct = jobBusy && job ? jobWipeProgress(job) : 0;
+    const colorRevealRight = 100 - wipePct;
+    const showInstallWipe = Boolean(jobBusy) && (action.type === "install" || action.type === "update");
+    function runAction(type) {
+        if (type === "switch" && installedMeta) {
+            onSwitchPack(installedMeta);
+            return;
+        }
+        if (type === "active")
+            return;
+        if (type === "install" || type === "update") {
+            onInstall(item);
+            return;
+        }
+        if (type === "buy") {
+            if (item.buy_url)
+                openMarketUrl(item.buy_url);
+            else if (subscribeUrl)
+                openMarketUrl(subscribeUrl);
+            else
+                openMotionflowSubscribe();
+        }
+    }
+    function onImageError(e) {
+        e.currentTarget.style.opacity = "0.2";
+    }
+    return (_jsxs("article", { className: cn("group glass-card overflow-hidden rounded-[16px] transition-colors hover:border-[#7c4dff]/40", active && "ring-1 ring-primary/50", installed && !active && "ring-1 ring-primary/20"), children: [_jsxs("div", { className: "relative aspect-video overflow-hidden bg-secondary/40", children: [_jsx("img", { src: imageSrc, alt: "", className: cn("size-full object-cover transition-[filter] duration-200", jobBusy && "grayscale"), onError: onImageError }), jobBusy && (_jsx("img", { src: imageSrc, alt: "", "aria-hidden": true, className: "pointer-events-none absolute inset-0 size-full object-cover transition-[clip-path] duration-200 ease-out", style: { clipPath: `inset(0 ${colorRevealRight}% 0 0)` }, onError: onImageError })), _jsx("div", { className: "absolute left-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur", children: price }), item.version && (_jsxs("div", { className: "absolute right-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] text-white/90 backdrop-blur", children: ["v", item.version] })), installed && !active ? (_jsx("div", { className: "absolute bottom-1.5 left-1.5 rounded-md bg-primary/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary-foreground", children: "installed" })) : null, item.video_id && !jobBusy && (_jsx("button", { type: "button", "aria-label": "Play preview", onClick: () => openYoutube(String(item.video_id)), className: "absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all group-hover:bg-black/35 group-hover:opacity-100", children: _jsx("span", { className: "flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/40", children: _jsx(Play, { className: "size-4 fill-current" }) }) }))] }), _jsxs("div", { className: "space-y-2 p-2.5", children: [_jsxs("div", { className: "flex items-center justify-between gap-2", children: [_jsx("h3", { className: cn("min-w-0 flex-1 truncate text-xs font-medium text-foreground", jobBusy && "grayscale"), title: item.name, children: item.name }), jobBusy && job && (_jsx(CancelProgressButton, { progress: wipePct, label: jobStatusLabel(job), onCancel: () => onCancelJob(job.id) })), jobFailed && job && (_jsx("button", { type: "button", "aria-label": job.hasCache ? "Retry install" : "Re-download", title: job.hasCache ? "Retry install from cached zip" : "Re-download", onClick: () => onRetryJob(job.id), className: "flex size-[22px] shrink-0 items-center justify-center rounded-full border border-white/10 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground", children: _jsx(RotateCcw, { className: "size-2.5" }) }))] }), jobFailed && job && (_jsx("p", { className: "truncate text-[10px] text-destructive", title: job.error ? friendlyErrorMessage(job.error) : undefined, children: jobStatusLabel(job) })), showSubHint && _jsx("p", { className: "text-[10px] leading-snug text-muted-foreground", children: "Available free with Spunkram subscription" }), _jsxs("div", { className: "flex gap-1", children: [_jsxs("button", { type: "button", disabled: action.disabled || Boolean(jobBusy), onClick: () => runAction(action.type), className: cn("relative flex flex-1 items-center justify-center overflow-hidden rounded-full px-2 py-1.5 text-[10px] font-semibold transition-colors", showInstallWipe
+                                    ? "border-0 bg-secondary/70 text-white"
+                                    : action.type === "active"
+                                        ? "cursor-not-allowed border border-white/10 bg-secondary/70 text-muted-foreground"
+                                        : action.disabled
+                                            ? "cursor-not-allowed border border-white/10 bg-secondary/50 text-muted-foreground"
+                                            : ACCENT_PILL), children: [showInstallWipe && (_jsx("span", { "aria-hidden": true, className: "pointer-events-none absolute inset-y-0 left-0 rounded-none pill-brand transition-[width] duration-200", style: { width: `${wipePct}%` } })), _jsx("span", { className: "relative z-10", children: showInstallWipe
+                                            ? job
+                                                ? jobStatusLabel(job)
+                                                : action.type === "update"
+                                                    ? "Updating…"
+                                                    : "Installing…"
+                                            : action.label })] }), _jsx("button", { type: "button", onClick: () => openMarketUrl(detailsUrl), className: "flex items-center justify-center gap-1 rounded-full border border-white/10 bg-secondary/50 px-2 py-1.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground", children: "Details" }), installedMeta && (_jsx("button", { type: "button", "aria-label": `Remove ${item.name}`, onClick: (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    onRemovePack(installedMeta, item.id);
+                                }, className: "flex size-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-secondary/50 text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive", children: _jsx(Trash2, { className: "size-3" }) }))] })] })] }));
+}
+export function MarketPanel({ onPacksChanged, onSelectPack, activePackPath, }) {
+    const { market, marketLoading, marketError, refreshMarket, subscription } = useAuth();
+    const { enqueue, jobs, cancel, retry, dismissPackJobs } = useDownloadManager();
+    const { ensurePackagesPath } = usePackagesPathGate();
+    const [packTick, setPackTick] = useState(0);
+    const [installError, setInstallError] = useState(null);
+    const onPacksChangedRef = useRef(onPacksChanged);
+    onPacksChangedRef.current = onPacksChanged;
+    const handledDoneJobIdsRef = useRef(new Set());
+    const hostType = useMemo(() => hostPrimaryType(), []);
+    const hostLabel = hostType === "AE" ? "After Effects" : hostType === "PR" ? "Premiere Pro" : "this host";
+    const subscriptionActive = Boolean(market?.subscription_active) || subscription.subscribed;
+    const subscribeUrl = market?.subscribe_url;
+    async function gatePackagesPath() {
+        const ok = await ensurePackagesPath();
+        if (!ok) {
+            setInstallError("Choose a packages folder to install packs.");
+            return false;
+        }
+        return true;
+    }
+    function handleRetryJob(jobId) {
+        setInstallError(null);
+        void (async () => {
+            if (!(await gatePackagesPath()))
+                return;
+            retry(jobId);
+        })();
+    }
+    function handleRemove(meta, marketPackId) {
+        uninstallPack(meta);
+        dismissPackJobs(marketPackId);
+        if (meta.marketId != null && String(meta.marketId) !== String(marketPackId)) {
+            dismissPackJobs(meta.marketId);
+        }
+        // Clear host active pack if this was the open one.
+        if (hostType) {
+            try {
+                const key = activePackStorageKey(hostType);
+                const active = panelStore.getItem(key);
+                if (active && pathsEqual(active, meta.path)) {
+                    panelStore.removeItem(key);
+                }
+            }
+            catch {
+                // ignore
+            }
+        }
+        setPackTick((t) => t + 1);
+        onPacksChanged?.();
+    }
+    function handleSwitch(meta) {
+        onSelectPack?.(meta);
+    }
+    function handleInstall(item) {
+        setInstallError(null);
+        void (async () => {
+            if (!(await gatePackagesPath()))
+                return;
+            enqueue(item, {
+                useWhenReady: true,
+                onReady: (meta) => {
+                    setPackTick((t) => t + 1);
+                    onPacksChanged?.();
+                    onSelectPack?.(meta);
+                },
+            });
+        })();
+    }
+    const jobsByPackId = useMemo(() => {
+        const map = new Map();
+        for (const j of jobs) {
+            const id = String(j.pack.id);
+            const prev = map.get(id);
+            if (!prev) {
+                map.set(id, j);
+                continue;
+            }
+            const prevBusy = prev.status === "queued" || prev.status === "downloading" || prev.status === "installing";
+            const nextBusy = j.status === "queued" || j.status === "downloading" || j.status === "installing";
+            if (nextBusy || (!prevBusy && j.status !== "done")) {
+                map.set(id, j);
+            }
+        }
+        return map;
+    }, [jobs]);
+    // Refresh installed list once per newly completed job (done jobs stay in `jobs`).
+    useEffect(() => {
+        let sawNewDone = false;
+        for (const j of jobs) {
+            if (j.status !== "done" || handledDoneJobIdsRef.current.has(j.id))
+                continue;
+            handledDoneJobIdsRef.current.add(j.id);
+            sawNewDone = true;
+        }
+        if (!sawNewDone)
+            return;
+        setPackTick((t) => t + 1);
+        onPacksChangedRef.current?.();
+    }, [jobs]);
+    useEffect(() => {
+        void refreshMarket();
+        // Mount-only: refreshMarket identity changes after catalog load.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    const packages = market?.Packages ?? [];
+    const filtered = useMemo(() => {
+        if (!hostType)
+            return packages;
+        return packages.filter((p) => p.primary_type === hostType);
+    }, [packages, hostType]);
+    const installedList = useMemo(() => {
+        void packTick;
+        return readInstallablePackages();
+    }, [packTick, market]);
+    const resolvedActivePath = useMemo(() => {
+        if (activePackPath)
+            return activePackPath;
+        return readActivePackPathForHost(hostType);
+    }, [activePackPath, packTick, hostType]);
+    return (_jsxs("div", { className: "flex h-full min-h-0 flex-col", children: [!subscriptionActive && (_jsxs("div", { className: "mx-2.5 mt-2.5 flex items-center gap-2 rounded-[16px] border border-[#7c4dff]/30 bg-[#7c4dff]/10 px-2.5 py-2 text-[11px] text-foreground", children: [_jsxs("span", { className: "flex-1", children: ["Packs are available free with a Spunkram subscription from ", _jsx("strong", { children: "$9.9/month" })] }), _jsx("button", { type: "button", onClick: openMotionflowSubscribe, className: cn("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold", ACCENT_PILL), children: "Subscribe" })] })), installError && (_jsx("div", { className: "mx-2.5 mt-2 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-[11px] text-destructive", children: installError })), _jsx("div", { className: "min-h-0 flex-1 overflow-y-auto p-2.5", children: marketLoading && !market ? (_jsxs("div", { className: "flex h-full min-h-40 flex-col items-center justify-center gap-2 text-muted-foreground", children: [_jsx(Loader2, { className: "size-5 animate-spin text-primary" }), _jsx("p", { className: "text-xs font-medium text-foreground", children: "Please wait" }), _jsx("p", { className: "text-[10px]", children: "Loading in progress..." })] })) : marketError ? (_jsxs("div", { className: "flex h-full min-h-40 flex-col items-center justify-center gap-2 text-center", children: [_jsx("p", { className: "text-xs text-destructive", children: marketError }), _jsx("button", { type: "button", onClick: () => void refreshMarket(true), className: cn("rounded-full px-3 py-1.5 text-xs font-medium", ACCENT_PILL), children: "Retry" })] })) : filtered.length === 0 ? (_jsxs("div", { className: "flex h-full min-h-40 items-center justify-center text-xs text-muted-foreground", children: ["No packages for ", hostLabel] })) : (_jsx("div", { className: "grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2", children: filtered.map((item) => {
+                        const job = jobsByPackId.get(String(item.id));
+                        // Installed state comes only from disk/prefs — never from a stale
+                        // done job.meta (that made Remove look like a no-op).
+                        const meta = findInstalledMeta(item, installedList);
+                        return (_jsx(MarketCard, { item: item, subscribeUrl: subscribeUrl, installedMeta: meta, activePackPath: resolvedActivePath, job: job, onSwitchPack: handleSwitch, onRemovePack: handleRemove, onInstall: handleInstall, onCancelJob: cancel, onRetryJob: handleRetryJob }, String(item.id)));
+                    }) })) }), _jsx("div", { className: "shrink-0 px-2.5 pb-2.5 pt-1", children: _jsxs("button", { type: "button", onClick: () => openMotionflowStore(), className: "flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 text-xs font-medium text-foreground transition-colors hover:border-[#7c4dff]/40 hover:bg-[rgb(14,12,26)]", children: [_jsx(ExternalLink, { className: "size-3.5" }), "Web store"] }) })] }));
+}

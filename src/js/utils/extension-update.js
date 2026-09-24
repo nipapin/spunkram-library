@@ -1,0 +1,250 @@
+import { fs, os, path } from "../lib/cep/node";
+import { csi } from "../lib/utils/bolt";
+import { extractZipToFolder } from "../lib/utils/pack-zip";
+import { downloadToFile } from "./download-file";
+import { getAppliedVersionStampPath, markExtensionUpdateApplied, reloadPanelHard, } from "./extension-version";
+import { BRAND } from "@brands";
+import { isUpdateBackupName, NATIVE_BACKUP_DIR } from "./update-backup-path";
+import { cleanupUpdateBackups, copyFileOverwrite, pendingNativesOnly, promotePendingUpdates, } from "./replace-live-file";
+import { buildSwapHtml, pathToFileUrl, PENDING_MARKER, SWAP_PAGE_NAME, } from "./update-swap-page";
+const io = { fs, path };
+function rimrafSafe(target) {
+    if (!fs.existsSync(target))
+        return;
+    try {
+        fs.rmSync(target, { recursive: true, force: true });
+    }
+    catch {
+        try {
+            const st = fs.statSync(target);
+            if (st.isDirectory()) {
+                for (const name of fs.readdirSync(target)) {
+                    rimrafSafe(path.join(target, name));
+                }
+                fs.rmdirSync(target);
+            }
+            else {
+                fs.unlinkSync(target);
+            }
+        }
+        catch {
+            /* ignore */
+        }
+    }
+}
+function unlinkBestEffort(target) {
+    try {
+        if (fs.existsSync(target))
+            fs.unlinkSync(target);
+    }
+    catch {
+        /* ignore */
+    }
+}
+function readPendingMarker(extRoot) {
+    const markerPath = path.join(extRoot, PENDING_MARKER);
+    if (!fs.existsSync(markerPath))
+        return null;
+    try {
+        const raw = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+        if (!raw || !Array.isArray(raw.files))
+            return null;
+        return raw;
+    }
+    catch {
+        return null;
+    }
+}
+function writePendingMarker(extRoot, files) {
+    const markerPath = path.join(extRoot, PENDING_MARKER);
+    if (files.length === 0) {
+        unlinkBestEffort(markerPath);
+        return;
+    }
+    const payload = {
+        files: [...new Set(files)],
+        updatedAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(markerPath, JSON.stringify(payload, null, 2), "utf8");
+}
+function copyDirOverwrite(src, dest, extRoot, pending) {
+    if (!fs.existsSync(dest))
+        fs.mkdirSync(dest, { recursive: true });
+    for (const name of fs.readdirSync(src)) {
+        if (name === NATIVE_BACKUP_DIR || isUpdateBackupName(name))
+            continue;
+        if (name === SWAP_PAGE_NAME || name === PENDING_MARKER)
+            continue;
+        const from = path.join(src, name);
+        const to = path.join(dest, name);
+        const st = fs.statSync(from);
+        if (st.isDirectory()) {
+            copyDirOverwrite(from, to, extRoot, pending);
+        }
+        else {
+            const deferred = copyFileOverwrite(io, from, to, extRoot);
+            if (deferred)
+                pending.push(deferred);
+        }
+    }
+}
+function extractArchive(archivePath, destDir) {
+    rimrafSafe(destDir);
+    fs.mkdirSync(destDir, { recursive: true });
+    const zipPath = archivePath.toLowerCase().endsWith(".zip")
+        ? archivePath
+        : `${archivePath}.zip`;
+    if (zipPath !== archivePath) {
+        fs.copyFileSync(archivePath, zipPath);
+    }
+    try {
+        extractZipToFolder(zipPath, destDir);
+    }
+    finally {
+        if (zipPath !== archivePath) {
+            unlinkBestEffort(zipPath);
+        }
+    }
+}
+function panelDestRel() {
+    return (BRAND.panelMainPath || "./index.html").replace(/^[./\\]+/, "").replace(/\\/g, "/");
+}
+function navigateToSwap(extRoot, payloadRoot, workDir, appliedVersion) {
+    try {
+        fs.writeFileSync(path.join(extRoot, SWAP_PAGE_NAME), buildSwapHtml({
+            extRoot,
+            destRel: panelDestRel(),
+            payloadRoot,
+            workDir,
+            appliedVersion,
+            appliedStampPath: getAppliedVersionStampPath(),
+        }), "utf8");
+        const swapUrl = pathToFileUrl(path.join(extRoot, SWAP_PAGE_NAME));
+        setTimeout(() => {
+            if (typeof window !== "undefined" && window.location) {
+                window.location.replace(`${swapUrl}?_cep_upd=${Date.now()}`);
+            }
+        }, 50);
+        return true;
+    }
+    catch (err) {
+        console.warn("[extension-update] swap page failed, copying in-process", err);
+        return false;
+    }
+}
+function reloadAfterApply(extRoot, pending) {
+    const destRel = panelDestRel();
+    const needsSwap = pending.some((rel) => !pendingNativesOnly([rel]).length);
+    if (needsSwap) {
+        try {
+            fs.writeFileSync(path.join(extRoot, SWAP_PAGE_NAME), buildSwapHtml({ extRoot, destRel }), "utf8");
+            const swapUrl = pathToFileUrl(path.join(extRoot, SWAP_PAGE_NAME));
+            setTimeout(() => {
+                if (typeof window !== "undefined" && window.location) {
+                    window.location.replace(`${swapUrl}?_cep_upd=${Date.now()}`);
+                }
+            }, 250);
+            return;
+        }
+        catch (err) {
+            console.warn("[extension-update] swap page failed, falling back to reload", err);
+        }
+    }
+    setTimeout(() => {
+        reloadPanelHard();
+    }, 250);
+}
+/**
+ * Try to promote `*.pending-update` files written while CEF / Premiere held a lock.
+ * Safe to call on every panel boot. Panel HTML/JS usually promote after the swap
+ * page unloads the old document; natives may remain until host restart.
+ */
+export function finalizePendingNativeUpdate() {
+    const extRoot = csi.getSystemPath("extension");
+    if (!extRoot || !fs.existsSync(extRoot)) {
+        return { remaining: [], applied: [] };
+    }
+    const marker = readPendingMarker(extRoot);
+    const { remaining, applied } = promotePendingUpdates(io, extRoot, marker?.files ?? []);
+    writePendingMarker(extRoot, remaining);
+    return { remaining, applied };
+}
+export function hasPendingNativeUpdate() {
+    const extRoot = csi.getSystemPath("extension");
+    if (!extRoot)
+        return false;
+    const marker = readPendingMarker(extRoot);
+    return Boolean(marker && pendingNativesOnly(marker.files).length > 0);
+}
+/**
+ * Download a .zxp, then leave the live panel HTML so CEF drops its file
+ * locks. The swap page copies the payload over the extension root.
+ * Mapped natives (Motionflow.dll) may still need a host restart.
+ */
+export async function applyExtensionUpdate(zxpUrl, onProgress, appliedVersion) {
+    const extRoot = csi.getSystemPath("extension");
+    if (!extRoot || !fs.existsSync(extRoot)) {
+        throw new Error("Extension path unavailable");
+    }
+    const workDir = path.join(os.tmpdir(), `${BRAND.id}-update-${Date.now()}`);
+    fs.mkdirSync(workDir, { recursive: true });
+    const zxpPath = path.join(workDir, "update.zxp");
+    const extractDir = path.join(workDir, "extracted");
+    let handedOff = false;
+    try {
+        onProgress?.({
+            phase: "download",
+            bytesReceived: 0,
+            totalBytes: null,
+        });
+        await downloadToFile(zxpUrl, zxpPath, {
+            timeoutMs: 15 * 60 * 1000,
+            onProgress: (p) => onProgress?.({
+                phase: "download",
+                bytesReceived: p.bytesReceived,
+                totalBytes: p.totalBytes,
+            }),
+        });
+        onProgress?.({ phase: "extract", bytesReceived: 0, totalBytes: null });
+        extractArchive(zxpPath, extractDir);
+        let payloadRoot = extractDir;
+        const top = fs.readdirSync(extractDir).filter((n) => n !== "__MACOSX");
+        if (top.length === 1) {
+            const only = path.join(extractDir, top[0]);
+            if (fs.statSync(only).isDirectory()) {
+                const hasManifest = fs.existsSync(path.join(only, "CSXS")) ||
+                    fs.existsSync(path.join(only, "csxs")) ||
+                    fs.existsSync(path.join(only, "manifest.xml"));
+                if (hasManifest)
+                    payloadRoot = only;
+            }
+        }
+        onProgress?.({ phase: "apply", bytesReceived: 0, totalBytes: null });
+        cleanupUpdateBackups(io, extRoot);
+        onProgress?.({ phase: "reload", bytesReceived: 0, totalBytes: null });
+        if (navigateToSwap(extRoot, payloadRoot, workDir, appliedVersion)) {
+            handedOff = true;
+            return { pendingNatives: [] };
+        }
+        const prior = readPendingMarker(extRoot);
+        const pending = [...(prior?.files ?? [])];
+        copyDirOverwrite(payloadRoot, extRoot, extRoot, pending);
+        writePendingMarker(extRoot, pending);
+        if (appliedVersion) {
+            markExtensionUpdateApplied(appliedVersion);
+        }
+        const natives = pendingNativesOnly(pending);
+        reloadAfterApply(extRoot, pending);
+        return { pendingNatives: natives };
+    }
+    finally {
+        if (!handedOff) {
+            try {
+                rimrafSafe(workDir);
+            }
+            catch {
+                /* temp cleanup best-effort */
+            }
+        }
+    }
+}

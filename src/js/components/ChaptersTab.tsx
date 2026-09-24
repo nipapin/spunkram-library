@@ -6,7 +6,9 @@ import { GeneratedTextSection } from "./GeneratedTextSection";
 import { LanguageRow } from "./LanguageRow";
 import type { DescribeProgress } from "./ProgressDialog";
 import "./ChaptersTab.scss";
+import { ChapterStylePicker } from "./ChapterStylePicker";
 import { TitleSuggestions } from "./TitleSuggestions";
+import type { ChapterStyleId } from "../data/chapter-styles";
 import { copyToClipboard } from "../utils/clipboard";
 import { formatChaptersForYoutube, MIN_YOUTUBE_CHAPTERS, type Chapter } from "../utils/chapters";
 
@@ -21,6 +23,8 @@ interface ChaptersTabProps {
   screen: "landing" | "results";
   progress: DescribeProgress | null;
   onGenerate: () => void;
+  style: ChapterStyleId;
+  onStyleChange: (style: ChapterStyleId) => void;
   /** e.g. Generate ( 2 ) */
   generateLabel?: string;
   onBack: () => void;
@@ -77,6 +81,8 @@ export const ChaptersTab = ({
   screen,
   progress,
   onGenerate,
+  style,
+  onStyleChange,
   generateLabel = "Generate",
   onBack,
   canRegenerate = true,
@@ -212,6 +218,7 @@ export const ChaptersTab = ({
         </div>
 
         <div className="chapters-tab__landing-footer">
+          <ChapterStylePicker value={style} onChange={onStyleChange} disabled={!!progress} />
           <LanguageRow
             srcLang={chaptersSrcLang}
             translateTo={chaptersTranslateTo}
@@ -251,6 +258,11 @@ export const ChaptersTab = ({
       </div>
 
       <div className="chapters-tab__results-body thin-scroll">
+        <ChapterStylePicker
+          value={style}
+          onChange={onStyleChange}
+          disabled={regeneratingTitles || regeneratingDescription || regeneratingTags}
+        />
         <TitleSuggestions
           titles={titles}
           regenerating={regeneratingTitles}

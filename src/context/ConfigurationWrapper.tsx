@@ -20,6 +20,7 @@ import {
   type StylePreset,
   type StylesSyncStatus,
 } from "../js/styles";
+import { ensureCaptionFontsInstalled } from "../js/styles/caption-fonts";
 import { friendlyErrorMessage } from "../js/utils/user-error";
 import {
   catalogApplyValues,
@@ -402,6 +403,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
       if (hasHostFile) {
         applyPreparedAssets(localPaths);
         await ensureDefinitionLoaded(styleId);
+        await ensureCaptionFontsInstalled(styleId).catch(() => 0);
         return;
       }
 
@@ -414,6 +416,7 @@ export const ConfigurationWrapper = ({ children }: { children: ReactNode }) => {
         previewImageUrl: fromCatalog?.previewImageUrl,
         previewVideoUrl: fromCatalog?.previewVideoUrl,
       });
+      await ensureCaptionFontsInstalled(styleId).catch(() => 0);
       setDefinitions((prev) => ({ ...prev, [styleId]: definition }));
       setPresets((prev) => {
         const prevItem = prev.find((p) => p.id === styleId);

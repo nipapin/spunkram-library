@@ -50,6 +50,8 @@ export const TELEMETRY_ACTIVE_PACKS_ENDPOINT = "/api/cep/telemetry/active-packs"
 export const CAPTIONS_ENDPOINTS = {
   /** GET — дерево категорий → captions (публичный) */
   catalog: "/api/captions",
+  /** GET — `{Pack}/Fonts` on the public captions bucket. Query: brand, pack. */
+  fonts: "/api/captions/fonts",
   /**
    * POST — скачать `{Pack}.mogrt` / `{Pack}.aep`
    * Body: { id: packName, file?: "mogrt" | "aep" }

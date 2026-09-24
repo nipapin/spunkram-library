@@ -1,0 +1,49 @@
+/**
+ * Shared market / auth helpers.
+ */
+import { openLinkInBrowser } from "@/lib/utils/bolt";
+export function authErrorMessage(code) {
+    switch (code) {
+        case "WRONG_WITH_PARAMS":
+            return "Something wrong with parameters";
+        case "NO_SUCCESS_LOAD":
+            return "Unable to load server response";
+        case "UNKNOWN_CLIENT":
+            return "This extension isn’t registered for sign-in yet.";
+        case "NO_CREDENTIALS":
+            return "No credentials found";
+        case "SERVER_ERROR":
+            return "Something is wrong on the server";
+        case "NO_CONNECTION":
+            return "Fix connection and try again";
+        case "TIMEOUT":
+            return "Too long no response, try later";
+        case "INVALID_AUTH":
+            return "Invalid email or token";
+        case "MISSING_PARAMS":
+            return "Missing parameters";
+        case "LIMIT_USED_PC":
+            return "Device limit exceeded for this subscription";
+        case "WRONG_MAC_ADDR":
+            return "MAC address doesn't match — please relog";
+        case "DEPRECATED_CODE":
+            return "Validity of the code has expired";
+        case "UNAUTHORIZED":
+            return "Please sign in again";
+        default:
+            return code ? String(code) : "Unknown error";
+    }
+}
+export function openYoutube(videoId) {
+    if (!videoId)
+        return;
+    openLinkInBrowser(`https://www.youtube.com/watch?v=${videoId}`);
+}
+export function parseDeviceFingerprint(raw) {
+    try {
+        return JSON.parse(raw);
+    }
+    catch {
+        return {};
+    }
+}

@@ -151,9 +151,11 @@ export const StyleTab = ({
       <>
         <div className="style-tab__editing-head">
           <span className="style-tab__section-label">EDITING · {selected.name}</span>
-          {selected.updateAvailable && <span className="style-tab__update-pill">Update available</span>}
+          <span className="style-tab__editing-actions">
+            {selected.updateAvailable && <span className="style-tab__update-pill">Update available</span>}
+            {changePreset}
+          </span>
         </div>
-        {changePreset}
         {picker}
         {acquireStatus === "error" && (
           <p className="style-tab__hint">Couldn’t apply this style to the selected caption.</p>

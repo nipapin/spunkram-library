@@ -41,10 +41,12 @@ import * as panelStore from "../../../lib/userdata-store";
 import { usePanelUI } from "../../../lib/panel-ui-context";
 import "./ChaptersApp.scss";
 import { useConfiguration } from "../../../../context/ConfigurationWrapper";
+import { isChapterStyleId, type ChapterStyleId } from "../../../data/chapter-styles";
 
 const TRANSCRIPTION_KEY = "aitools-cep-chapters-transcription";
 const RESULT_KEY = "aitools-cep-chapters-result";
 const HISTORY_KEY = storageKey("chaptersHistory");
+const STYLE_KEY = storageKey("chaptersStyle");
 const HISTORY_MAX = 20;
 
 function reportChapterApiError(action: string, e: unknown) {
@@ -190,6 +192,21 @@ export const ChaptersApp = ({
   const [addingMarkers, setAddingMarkers] = useState(false);
   // landing | results  ÿâíûé ýêðàí, ÷òîáû Back íå ñáðàñûâàë äàííûå
   const [screen, setScreen] = useState<"landing" | "results">("landing");
+  const [style, setStyle] = useState<ChapterStyleId>(() => {
+    const stored = panelStore.getItem(STYLE_KEY);
+    return isChapterStyleId(stored) ? stored : "viral";
+  });
+  const styleRef = useRef(style);
+  styleRef.current = style;
+
+  const updateStyle = (next: ChapterStyleId) => {
+    setStyle(next);
+    try {
+      panelStore.setItem(STYLE_KEY, next);
+    } catch {
+      // CEP / private mode may block storage
+    }
+  };
 
   const showError = (err: unknown) => {
     const msg = friendlyErrorMessage(err);
@@ -348,6 +365,7 @@ export const ChaptersApp = ({
           chaptersReceipt: transcriptionResult.chaptersReceipt,
           durationSeconds: res.durationSeconds > 0 ? res.durationSeconds : undefined,
         },
+        styleRef.current,
       );
       throwIfCancelled(signal);
 
@@ -443,6 +461,7 @@ export const ChaptersApp = ({
           chunks,
           undefined,
           chaptersLanguage(transcriptionLanguageCode(transcriptionRef.current)),
+          styleRef.current,
         ),
       apply: (titles) => persistResult({ ...result, titles }),
     });
@@ -472,6 +491,7 @@ export const ChaptersApp = ({
           chunks,
           undefined,
           chaptersLanguage(transcriptionLanguageCode(transcriptionRef.current)),
+          styleRef.current,
         ),
       apply: (description) => persistResult({ ...result, description }),
     });
@@ -486,6 +506,7 @@ export const ChaptersApp = ({
           chunks,
           undefined,
           chaptersLanguage(transcriptionLanguageCode(transcriptionRef.current)),
+          styleRef.current,
         ),
       apply: (tags) => persistResult({ ...result, tags: tagsToText(tags) }),
     });
@@ -630,6 +651,8 @@ export const ChaptersApp = ({
         screen={screen}
         progress={progress}
         onGenerate={handleGenerate}
+        style={style}
+        onStyleChange={updateStyle}
         generateLabel={withGenerationCostLabel("Generate", generationCost)}
         onBack={handleBack}
         canRegenerate={generationsLeft > 0}

@@ -1,0 +1,190 @@
+import { useCallback, useRef } from "react";
+import { fs, os, path } from "../../lib/cep/node";
+import { Motionflow } from "@/sdk";
+import { beginApplyOnDropOutside, beginHostFileDrag, beginPlaceholderDrag, finishHostDrag } from "@/lib/utils/cep-file-drag";
+import { adoptTimelinePlaceholder, ensureDragPlaceholderFile, releaseDragAnchor } from "@/lib/utils/drag-placeholder";
+import { cepHostAppId } from "@/lib/utils/bolt";
+import { peekExistingFootageFile, rememberFootageDownloadDir, resolveFootageDownloadDirSilent, } from "@/lib/utils/stock-paths";
+import { useFiltersContext } from "../context/FiltersContext";
+import { useProgressContext } from "../context/ProgressContext";
+import { incrementUsage } from "../utils/trial-usage";
+function mapImportError(reason) {
+    if (!reason)
+        return "Could not import footage. Try again.";
+    if (reason === "NO_ACTIVE_COMP") {
+        return "Open a composition in After Effects, then try again.";
+    }
+    if (reason === "NO_ACTIVE_SEQUENCE") {
+        return "Open a sequence in Premiere Pro, then try again.";
+    }
+    if (reason === "SOURCE_MISSING" || reason === "NO_FILE") {
+        return "File not found. Try downloading again.";
+    }
+    if (reason === "IMPORT_FAILED") {
+        return "Could not import footage. Try again.";
+    }
+    if (reason === "PLACE_FAILED") {
+        return "Footage is in the project, but could not be added to the composition.";
+    }
+    if (/host script returned no result/i.test(reason)) {
+        return "After Effects is busy. Check the project panel — the footage may already be there.";
+    }
+    return reason;
+}
+function resolveSourceUrl(item) {
+    if (item.type === "video") {
+        const files = item.videoFiles ?? [];
+        if (item.resolution && files.length) {
+            const match = files.find((f) => `${f.width}x${f.height}` === item.resolution);
+            if (match?.link)
+                return { url: match.link, duration: item.duration ?? 0 };
+        }
+        if (files.length) {
+            const best = [...files].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+            if (best?.link)
+                return { url: best.link, duration: item.duration ?? 0 };
+        }
+        if (item.downloadUrl)
+            return { url: item.downloadUrl, duration: item.duration ?? 0 };
+        return null;
+    }
+    const quality = (item.quality || "full");
+    const url = item.imageUrls?.[quality] || item.imageUrls?.full || item.downloadUrl || "";
+    if (!url)
+        return null;
+    return { url, duration: item.duration ?? 5 };
+}
+async function fetchToFile(url, filePath, onProgress) {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) {
+        throw new Error(`Download failed (${response.status})`);
+    }
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    const reader = response.body?.getReader();
+    if (!reader)
+        throw new Error("ReadableStream not supported");
+    const chunks = [];
+    let received = 0;
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done)
+            break;
+        chunks.push(value);
+        received += value.length;
+        if (contentLength > 0) {
+            onProgress(Math.round((received / contentLength) * 100));
+        }
+    }
+    const merged = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+    }
+    const dir = path.dirname(filePath);
+    if (typeof fs?.mkdirSync === "function" && !fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(filePath, Buffer.from(merged));
+}
+async function ensureFootageOnDisk(item, onProgress) {
+    const source = resolveSourceUrl(item);
+    if (!source?.url)
+        throw new Error("This item has no download URL.");
+    const downloadDir = (await resolveFootageDownloadDirSilent()) || os.tmpdir();
+    if (!downloadDir)
+        throw new Error("Could not resolve a download folder.");
+    rememberFootageDownloadDir(downloadDir);
+    const filePath = path.join(downloadDir, item.name);
+    if (!fs.existsSync(filePath)) {
+        await fetchToFile(source.url, filePath, onProgress);
+    }
+    if (!fs.existsSync(filePath)) {
+        throw new Error("Download completed but file is missing.");
+    }
+    return { filePath, duration: source.duration };
+}
+export function useImportMedia() {
+    const { setProgress, setPending, setError, setNotice, pending } = useProgressContext();
+    const { destination } = useFiltersContext();
+    const pendingRef = useRef(pending);
+    pendingRef.current = pending;
+    const importMedia = useCallback(async (item, destOverride) => {
+        try {
+            setNotice(null);
+            setPending(true);
+            setProgress(0);
+            const { filePath, duration } = await ensureFootageOnDisk(item, setProgress);
+            setProgress(95);
+            const dest = destOverride ?? (destination === "timeline" ? "timeline" : "project");
+            const outcome = await Motionflow.importMedia(filePath, dest, duration);
+            console.log("[mf] importMedia", Motionflow.host, dest, outcome);
+            if (!outcome.ok) {
+                setError(mapImportError(outcome.error));
+                return;
+            }
+            incrementUsage("gallery");
+            setProgress(100);
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setError(mapImportError(message));
+        }
+        finally {
+            setPending(false);
+            setProgress(0);
+        }
+    }, [setPending, setProgress, setError, setNotice, destination]);
+    const placeFootageFromStub = useCallback(async (item) => {
+        try {
+            const adopted = await adoptTimelinePlaceholder();
+            if (!adopted.ok) {
+                setNotice(adopted.message);
+                return;
+            }
+            await importMedia(item, "timeline");
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setError(mapImportError(message));
+        }
+        finally {
+            void releaseDragAnchor();
+        }
+    }, [importMedia, setError, setNotice]);
+    const beginFootageDrag = useCallback((item, event) => {
+        if (item.type !== "video" && item.type !== "image") {
+            event.preventDefault();
+            return;
+        }
+        if (pendingRef.current) {
+            event.preventDefault();
+            return;
+        }
+        const existing = peekExistingFootageFile(item.name);
+        if (existing && cepHostAppId() === "PPRO") {
+            if (!beginHostFileDrag(event, existing))
+                event.preventDefault();
+            return;
+        }
+        if (existing) {
+            beginApplyOnDropOutside(event);
+            return;
+        }
+        if (cepHostAppId() === "PPRO") {
+            const stub = ensureDragPlaceholderFile();
+            if (!stub || !beginPlaceholderDrag(event, stub))
+                event.preventDefault();
+            return;
+        }
+        beginApplyOnDropOutside(event);
+    }, []);
+    const endFootageDrag = useCallback((item, event) => {
+        const outcome = finishHostDrag(event);
+        if (outcome === "placeholder")
+            void placeFootageFromStub(item);
+        else if (outcome === "apply")
+            void importMedia(item, "timeline");
+    }, [importMedia, placeFootageFromStub]);
+    return { importMedia, beginFootageDrag, endFootageDrag };
+}

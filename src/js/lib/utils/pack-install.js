@@ -1,0 +1,533 @@
+/**
+ * Install a pack from a local file: a raw `.motionflow` (or legacy `.spunkram`), or a `.zip`
+ * downloaded from Market containing one alongside its preview/template
+ * folders. Copies everything into the managed packages root and registers
+ * the pack in `preferences.json`, so it shows up immediately in Editing.
+ */
+import { fs, os, path } from "../cep/node";
+import { loadPreferencesFile, readPrefSettings, resolvePreferencesPath, savePreferencesFile, } from "../api/preferences";
+import { BRAND, packExtensionLabel } from "@brands";
+import { initPackageAsync, initPackageSync, parsePackageFileFormat } from "./pack";
+import { extractZipToFolder, ExtractAbortedError } from "./pack-zip";
+import { installPackFonts } from "./pack-fonts";
+import { reportSupportError, reportSupportInfo } from "@/api/support";
+import { currentPackHost, normalizePackHost } from "./pack-host";
+import { buildPackEntitlementContext, findMarketItemForPack, isPackEntitled, } from "./pack-entitlement";
+function cepFsAvailable() {
+    return typeof fs?.existsSync === "function";
+}
+function installLog(phase, extra) {
+    const detail = extra
+        ? Object.entries(extra)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(" ")
+        : "";
+    const message = detail ? `${phase} ${detail}` : phase;
+    try {
+        console.info(`[pack.install] ${message}`);
+    }
+    catch {
+        /* ignore */
+    }
+    reportSupportInfo("pack.install", message, extra);
+}
+function defaultPackagesInstallRoot() {
+    const prefPath = resolvePreferencesPath();
+    const base = prefPath ? path.dirname(prefPath) : "";
+    return base
+        ? path.join(base, "_ABS")
+        : path.join(os.tmpdir(), `${BRAND.storagePrefix}library-packages`);
+}
+/**
+ * Packages install root.
+ * Requires Settings → packages path (`absCustomAbsolutePath`).
+ * Pass a pack host to install under `<root>/AE` or `<root>/PR`.
+ *
+ * When no path is configured, falls back to `<prefs dir>/_ABS` only for
+ * locating / uninstalling older silent installs — new installs must call
+ * {@link hasConfiguredPackagesInstallPath} / the UI path gate first.
+ */
+export function resolvePackagesInstallRoot(host) {
+    let root = defaultPackagesInstallRoot();
+    try {
+        const prefs = readPrefSettings();
+        const custom = (prefs.absCustomAbsolutePath || "").trim();
+        if (custom) {
+            root = path.normalize(custom);
+        }
+    }
+    catch {
+        // fall back to default
+    }
+    const packHost = host === undefined ? currentPackHost() : host;
+    if (packHost) {
+        root = path.join(root, packHost);
+    }
+    if (cepFsAvailable() && !fs.existsSync(root))
+        fs.mkdirSync(root, { recursive: true });
+    return root;
+}
+/** True when Settings has an explicit packages install folder. */
+export function hasConfiguredPackagesInstallPath() {
+    try {
+        return Boolean((readPrefSettings().absCustomAbsolutePath || "").trim());
+    }
+    catch {
+        return false;
+    }
+}
+/** Panel listens to refresh Editing after a packages-folder rescan. */
+export const PACKAGES_RESCAN_EVENT = "spunkram:packages-rescan";
+const PACK_HOST_DIRS = ["AE", "PR"];
+const LEGACY_PACKS_SUBDIR = "_ABS";
+const PACK_SCAN_MAX_DEPTH = 8;
+function normalizePackPath(p) {
+    return p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+function collectPackFiles(dir, depth, out) {
+    if (depth > PACK_SCAN_MAX_DEPTH || !cepFsAvailable() || !fs.existsSync(dir))
+        return;
+    let entries;
+    try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+    }
+    catch {
+        return;
+    }
+    for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isFile() && parsePackageFileFormat(entry.name)) {
+            out.add(path.normalize(full));
+        }
+        else if (entry.isDirectory()) {
+            collectPackFiles(full, depth + 1, out);
+        }
+    }
+}
+function collectPackFilesAtRoot(customRoot) {
+    const root = path.normalize(customRoot.trim());
+    const found = new Set();
+    if (!root)
+        return [];
+    for (const host of PACK_HOST_DIRS) {
+        collectPackFiles(path.join(root, host), 0, found);
+        collectPackFiles(path.join(root, LEGACY_PACKS_SUBDIR, host), 0, found);
+    }
+    return [...found];
+}
+function metaFromPackFile(packFilePath) {
+    try {
+        const pack = initPackageSync(packFilePath);
+        const { main } = pack.settings;
+        return {
+            name: main.name || path.basename(packFilePath),
+            author: main.cc_author_username || "Unknown",
+            version: main.version || "1.0",
+            path: packFilePath,
+            appID: main.software_id,
+            appVersion: main.software_version,
+        };
+    }
+    catch {
+        return null;
+    }
+}
+function mergeInstalledPackMeta(prev, meta) {
+    const merged = { ...prev, ...meta };
+    // Market installs stamp catalog version onto prefs. Disk scan reads
+    // settings.main.version from the pack file, which often lags admin
+    // (`1.0` vs `1.0.0`, or a leading `v`) and would retrigger Update forever.
+    if (prev.marketId && prev.version) {
+        merged.version = prev.version;
+        merged.marketId = meta.marketId ?? prev.marketId;
+    }
+    return merged;
+}
+function upsertInstalledPackMeta(packages, meta) {
+    const normPath = normalizePackPath(meta.path);
+    const byPath = packages.findIndex((p) => p.path && normalizePackPath(p.path) === normPath);
+    if (byPath >= 0) {
+        const prev = packages[byPath];
+        const merged = mergeInstalledPackMeta(prev, meta);
+        const changed = prev.name !== merged.name ||
+            prev.version !== merged.version ||
+            prev.author !== merged.author ||
+            prev.appID !== merged.appID ||
+            prev.appVersion !== merged.appVersion ||
+            prev.marketId !== merged.marketId;
+        packages[byPath] = merged;
+        return changed ? "updated" : "unchanged";
+    }
+    const metaHost = normalizePackHost(meta.appID);
+    const byName = packages.findIndex((p) => p.name === meta.name &&
+        metaHost &&
+        normalizePackHost(p.appID || p.load) === metaHost);
+    if (byName >= 0) {
+        const prev = packages[byName];
+        packages[byName] = mergeInstalledPackMeta(prev, meta);
+        return "updated";
+    }
+    packages.push(meta);
+    return "added";
+}
+function removeInstalledPackAtPath(packages, packPath) {
+    const normPath = normalizePackPath(packPath);
+    const idx = packages.findIndex((p) => p.path && normalizePackPath(p.path) === normPath);
+    if (idx < 0)
+        return false;
+    packages.splice(idx, 1);
+    return true;
+}
+/**
+ * Scan `<root>/AE`, `<root>/PR` (and legacy `<root>/_ABS/...`) for pack files
+ * and register entitled packs in `preferences.json` without re-downloading.
+ *
+ * When `ctx` is missing or the user is not signed in, nothing is registered.
+ */
+export function scanAndRegisterPacksAtRoot(customRoot, ctx) {
+    const result = {
+        found: 0,
+        added: 0,
+        updated: 0,
+        skipped: 0,
+        rejected: 0,
+        removed: 0,
+        errors: [],
+    };
+    const paths = collectPackFilesAtRoot(customRoot);
+    if (paths.length === 0)
+        return result;
+    const prefs = loadPreferencesFile();
+    const packages = Array.isArray(prefs.packages)
+        ? [...prefs.packages]
+        : [];
+    let prefsChanged = false;
+    for (const packPath of paths) {
+        result.found += 1;
+        const meta = metaFromPackFile(packPath);
+        if (!meta) {
+            result.skipped += 1;
+            result.errors.push(path.basename(packPath));
+            continue;
+        }
+        if (!isPackEntitled(meta, ctx)) {
+            result.rejected += 1;
+            if (removeInstalledPackAtPath(packages, packPath)) {
+                result.removed += 1;
+                prefsChanged = true;
+            }
+            continue;
+        }
+        const marketItem = ctx ? findMarketItemForPack(meta, ctx.catalog) : undefined;
+        const metaToSave = marketItem != null ? { ...meta, marketId: String(marketItem.id) } : meta;
+        const action = upsertInstalledPackMeta(packages, metaToSave);
+        if (action === "added")
+            result.added += 1;
+        else if (action === "updated")
+            result.updated += 1;
+        if (action !== "unchanged")
+            prefsChanged = true;
+    }
+    if (ctx?.signedIn) {
+        for (let i = packages.length - 1; i >= 0; i--) {
+            if (!isPackEntitled(packages[i], ctx)) {
+                packages.splice(i, 1);
+                result.removed += 1;
+                prefsChanged = true;
+            }
+        }
+    }
+    if (prefsChanged) {
+        prefs.packages = packages;
+        savePreferencesFile(prefs);
+        installLog("scan.registered", {
+            root: customRoot,
+            found: result.found,
+            added: result.added,
+            updated: result.updated,
+            skipped: result.skipped,
+            rejected: result.rejected,
+            removed: result.removed,
+        });
+    }
+    return result;
+}
+export { buildPackEntitlementContext, isPackEntitled };
+export function notifyPackagesRescan(result) {
+    if (typeof window === "undefined")
+        return;
+    window.dispatchEvent(new CustomEvent(PACKAGES_RESCAN_EVENT, { detail: result }));
+}
+function findPackFileRecursive(dir, depth = 0) {
+    if (depth > 4 || !fs.existsSync(dir))
+        return null;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+        if (entry.isFile() && parsePackageFileFormat(entry.name)) {
+            return path.join(dir, entry.name);
+        }
+    }
+    for (const entry of entries) {
+        if (entry.isDirectory()) {
+            const found = findPackFileRecursive(path.join(dir, entry.name), depth + 1);
+            if (found)
+                return found;
+        }
+    }
+    return null;
+}
+function copyFolderRecursive(source, destination) {
+    if (!fs.existsSync(source))
+        return;
+    if (!fs.existsSync(destination))
+        fs.mkdirSync(destination, { recursive: true });
+    for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+        const from = path.join(source, entry.name);
+        const to = path.join(destination, entry.name);
+        if (entry.isDirectory()) {
+            copyFolderRecursive(from, to);
+        }
+        else {
+            fs.copyFileSync(from, to);
+        }
+    }
+}
+/**
+ * Copy the pack file and every sibling (Assets / Previews / Fonts /
+ * Spunkram Premiere Pro / …) into the managed install folder.
+ * Market composer zips use Assets+Previews; legacy packs use brand folders.
+ */
+function copyPackBundle(sourceDir, targetDir, packFilePath) {
+    if (!fs.existsSync(targetDir))
+        fs.mkdirSync(targetDir, { recursive: true });
+    for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+        const from = path.join(sourceDir, entry.name);
+        const to = path.join(targetDir, entry.name);
+        if (entry.isDirectory()) {
+            copyFolderRecursive(from, to);
+        }
+        else if (from === packFilePath || entry.isFile()) {
+            fs.copyFileSync(from, to);
+        }
+    }
+}
+function sanitizeFolderName(name) {
+    return name.replace(/[\\/:*?"<>|]/g, "_").trim() || "Pack";
+}
+/**
+ * Install a pack given a local file path (`.spunkram`, or a `.zip`
+ * bundling one). Copies the pack + its sibling asset/template folders into
+ * the managed packages root, then registers it in preferences.json.
+ */
+export async function installPackFromFile(sourcePath, opts) {
+    if (!cepFsAvailable() || !fs.existsSync(sourcePath)) {
+        return { ok: false, message: "File not found." };
+    }
+    if (!hasConfiguredPackagesInstallPath()) {
+        return {
+            ok: false,
+            message: "Choose a packages folder in Settings (or via the Install dialog) before installing packs.",
+        };
+    }
+    let packFilePath = sourcePath;
+    let cleanupStagingDir = null;
+    const startedAt = Date.now();
+    try {
+        const sourceStat = typeof fs.statSync === "function" ? fs.statSync(sourcePath) : null;
+        installLog("start", {
+            sourcePath,
+            size: sourceStat?.size ?? null,
+            isZip: sourcePath.toLowerCase().endsWith(".zip"),
+        });
+        if (sourcePath.toLowerCase().endsWith(".zip")) {
+            const stagingDir = path.join(os.tmpdir(), `${BRAND.storagePrefix}install-${Date.now()}-${Math.round(Math.random() * 1e6)}`);
+            const extractStarted = Date.now();
+            installLog("extract.begin", { stagingDir });
+            try {
+                const written = extractZipToFolder(sourcePath, stagingDir, { signal: opts?.signal });
+                installLog("extract.done", {
+                    files: written.length,
+                    ms: Date.now() - extractStarted,
+                });
+            }
+            catch (e) {
+                if (e instanceof ExtractAbortedError || opts?.signal?.aborted) {
+                    return { ok: false, message: "Installation cancelled" };
+                }
+                throw e;
+            }
+            cleanupStagingDir = stagingDir;
+            const found = findPackFileRecursive(stagingDir);
+            if (!found) {
+                installLog("extract.no_pack", { stagingDir });
+                return { ok: false, message: `No ${packExtensionLabel()} pack file found inside the ZIP.` };
+            }
+            packFilePath = found;
+            installLog("extract.pack_found", { packFilePath });
+        }
+        else if (!parsePackageFileFormat(sourcePath)) {
+            return { ok: false, message: `Pick a ${packExtensionLabel()}, .${BRAND.legacyPackExtension}, or .zip file.` };
+        }
+        const pack = await initPackageAsync(packFilePath);
+        const { main } = pack.settings;
+        const packHost = normalizePackHost(main.software_id);
+        const host = currentPackHost();
+        installLog("parse.ok", {
+            name: main.name || null,
+            appID: main.software_id || null,
+            version: main.version || null,
+            treeFolders: Object.keys(pack.structure || {}).length,
+        });
+        if (host && packHost && packHost !== host) {
+            return {
+                ok: false,
+                message: host === "AE"
+                    ? "This pack is for Premiere Pro and can't be installed in After Effects."
+                    : "This pack is for After Effects and can't be installed in Premiere Pro.",
+            };
+        }
+        if (host && !packHost) {
+            return {
+                ok: false,
+                message: "This pack has no host app id (AE/PR) and can't be installed safely.",
+            };
+        }
+        const folderName = sanitizeFolderName(`${main.name || "Pack"}${main.software_id ? ` - ${main.software_id}` : ""}`);
+        const installRoot = resolvePackagesInstallRoot(packHost || host);
+        const targetDir = path.join(installRoot, folderName);
+        const sourceDir = path.dirname(packFilePath);
+        const targetPackPath = path.join(targetDir, path.basename(packFilePath));
+        const copyStarted = Date.now();
+        copyPackBundle(sourceDir, targetDir, packFilePath);
+        installLog("copy.done", {
+            targetDir,
+            ms: Date.now() - copyStarted,
+        });
+        try {
+            const fontsInstalled = await installPackFonts(targetPackPath);
+            if (fontsInstalled > 0) {
+                installLog("fonts.done", { installed: fontsInstalled });
+            }
+        }
+        catch (fontErr) {
+            installLog("fonts.failed", {
+                error: fontErr instanceof Error ? fontErr.message : String(fontErr),
+            });
+        }
+        const meta = {
+            name: main.name || path.basename(packFilePath),
+            author: main.cc_author_username || "Unknown",
+            version: main.version || "1.0",
+            path: targetPackPath,
+            appID: main.software_id,
+            appVersion: main.software_version,
+        };
+        const prefs = loadPreferencesFile();
+        const packages = Array.isArray(prefs.packages) ? [...prefs.packages] : [];
+        upsertInstalledPackMeta(packages, meta);
+        prefs.packages = packages;
+        savePreferencesFile(prefs);
+        installLog("done", {
+            name: meta.name,
+            appID: meta.appID || null,
+            path: meta.path,
+            ms: Date.now() - startedAt,
+        });
+        return { ok: true, meta };
+    }
+    catch (e) {
+        reportSupportError("pack.install", e, {
+            sourcePath,
+            ms: Date.now() - startedAt,
+        });
+        return { ok: false, message: e instanceof Error ? e.message : String(e) };
+    }
+    finally {
+        if (cleanupStagingDir) {
+            try {
+                fs.rmSync(cleanupStagingDir, { recursive: true, force: true });
+            }
+            catch {
+                // best-effort
+            }
+        }
+    }
+}
+/** Remove all installed packs: preferences entries + managed folders (only inside install root). */
+export function removeAllInstalledPacks() {
+    const result = { removed: 0, errors: [] };
+    try {
+        const prefs = loadPreferencesFile();
+        const packages = Array.isArray(prefs.packages)
+            ? prefs.packages
+            : [];
+        const baseRoot = path.normalize(resolvePackagesInstallRoot(null));
+        for (const meta of packages) {
+            if (!meta.path)
+                continue;
+            const packDir = path.normalize(path.dirname(meta.path));
+            if (cepFsAvailable() &&
+                (packDir === baseRoot || packDir.startsWith(baseRoot + path.sep)) &&
+                fs.existsSync(packDir)) {
+                try {
+                    fs.rmSync(packDir, { recursive: true, force: true });
+                    result.removed++;
+                }
+                catch (e) {
+                    result.errors.push(`${meta.name || packDir}: ${e instanceof Error ? e.message : String(e)}`);
+                }
+            }
+        }
+        prefs.packages = [];
+        if ("Packages" in prefs)
+            prefs.Packages = [];
+        savePreferencesFile(prefs);
+    }
+    catch (e) {
+        result.errors.push(e instanceof Error ? e.message : String(e));
+    }
+    return result;
+}
+/** Remove an installed pack: preferences entry + its managed folder (only inside our install root). */
+export function uninstallPack(meta) {
+    try {
+        const prefs = loadPreferencesFile();
+        const packages = Array.isArray(prefs.packages) ? prefs.packages : [];
+        const norm = (p) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+        const targetPath = norm(meta.path || "");
+        const targetMarketId = meta.marketId != null ? String(meta.marketId) : null;
+        prefs.packages = packages.filter((p) => {
+            if (targetPath && p.path && norm(p.path) === targetPath)
+                return false;
+            if (targetMarketId &&
+                p.marketId != null &&
+                String(p.marketId) === targetMarketId) {
+                return false;
+            }
+            // Same name + host (legacy installs without marketId).
+            const metaHost = normalizePackHost(meta.appID || meta.load);
+            const entryHost = normalizePackHost(p.appID || p.load);
+            if (meta.name &&
+                p.name === meta.name &&
+                metaHost &&
+                entryHost &&
+                metaHost === entryHost) {
+                return false;
+            }
+            return true;
+        });
+        savePreferencesFile(prefs);
+        const baseRoot = path.normalize(resolvePackagesInstallRoot(null));
+        const packDir = path.normalize(path.dirname(meta.path));
+        if (cepFsAvailable() &&
+            meta.path &&
+            (packDir === baseRoot || packDir.startsWith(baseRoot + path.sep)) &&
+            fs.existsSync(packDir)) {
+            fs.rmSync(packDir, { recursive: true, force: true });
+        }
+        return true;
+    }
+    catch {
+        return false;
+    }
+}

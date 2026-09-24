@@ -1,0 +1,410 @@
+import { fs, path } from "../cep/node";
+import { packItemIsAudio } from "./pack-apply-paths";
+import { resolveItemAssetSegments } from "./pack-tree";
+const POSTER_EXTS = [".png", ".jpg", ".jpeg"];
+/**
+ * Cap concurrent FS→blob reads so CEP main thread stays responsive.
+ * Keep at 3 until measured (first-poster time vs long tasks >50ms on category open).
+ */
+const MAX_CONCURRENT_READS = 3;
+const objectUrlCache = new Map();
+/** Let React unmount `<img>`/`<video>` before the blob is dropped (Strict Mode, filters). */
+const REVOKE_DELAY_MS = 250;
+let activeReads = 0;
+const readQueue = [];
+function enqueueReadJob(job) {
+    // Insert by ascending priority so top-of-grid posters load first.
+    let i = readQueue.length;
+    while (i > 0 && readQueue[i - 1].priority > job.priority)
+        i -= 1;
+    readQueue.splice(i, 0, job);
+}
+function cepFsAvailable() {
+    return (typeof fs?.existsSync === "function" &&
+        typeof fs?.readFileSync === "function");
+}
+function mimeFromExt(filePath) {
+    const ext = typeof path?.extname === "function"
+        ? path.extname(filePath).toLowerCase()
+        : filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
+    switch (ext) {
+        case ".png":
+            return "image/png";
+        case ".jpg":
+        case ".jpeg":
+            return "image/jpeg";
+        case ".gif":
+            return "image/gif";
+        case ".webm":
+            return "video/webm";
+        case ".mp4":
+            return "video/mp4";
+        case ".wav":
+            return "audio/wav";
+        case ".mp3":
+            return "audio/mpeg";
+        case ".ogg":
+            return "audio/ogg";
+        case ".m4a":
+        case ".aac":
+            return "audio/mp4";
+        case ".aif":
+        case ".aiff":
+            return "audio/aiff";
+        case ".flac":
+            return "audio/flac";
+        default:
+            return "application/octet-stream";
+    }
+}
+function cancelScheduledRevoke(entry) {
+    if (!entry.revokeTimer)
+        return;
+    clearTimeout(entry.revokeTimer);
+    entry.revokeTimer = null;
+}
+function retainEntry(entry) {
+    entry.refs += 1;
+    cancelScheduledRevoke(entry);
+    return entry.url;
+}
+function dropEntry(path, entry) {
+    cancelScheduledRevoke(entry);
+    URL.revokeObjectURL(entry.url);
+    objectUrlCache.delete(path);
+}
+/**
+ * Read a local file via CEP Node and expose it as a blob: URL.
+ * Native `C:\...` paths are parsed as scheme `c:` → ERR_UNKNOWN_URL_SCHEME.
+ * `file://` is often blocked from the panel's http origin.
+ * Does not retain — callers that display the URL must use `loadPreviewObjectUrl`.
+ */
+export function pathToObjectUrl(absolutePath) {
+    if (!absolutePath || !cepFsAvailable())
+        return null;
+    const cached = objectUrlCache.get(absolutePath);
+    if (cached)
+        return cached.url;
+    try {
+        const data = fs.readFileSync(absolutePath);
+        // Copy into a standalone Uint8Array — CEP Blob rejects pooled Buffer views.
+        const bytes = new Uint8Array(data);
+        const blob = new Blob([bytes], { type: mimeFromExt(absolutePath) });
+        const url = URL.createObjectURL(blob);
+        objectUrlCache.set(absolutePath, { url, refs: 0, revokeTimer: null });
+        return url;
+    }
+    catch {
+        return null;
+    }
+}
+/** Async disk reads keep cached posters and large hover videos off the UI thread. */
+function readObjectUrl(absolutePath) {
+    const cached = objectUrlCache.get(absolutePath);
+    if (cached)
+        return Promise.resolve(cached.url);
+    if (typeof fs?.readFile !== "function")
+        return Promise.resolve(null);
+    return new Promise((resolve) => {
+        fs.readFile(absolutePath, (error, data) => {
+            if (error) {
+                resolve(null);
+                return;
+            }
+            const existing = objectUrlCache.get(absolutePath);
+            if (existing) {
+                resolve(existing.url);
+                return;
+            }
+            try {
+                const blob = new Blob([new Uint8Array(data)], { type: mimeFromExt(absolutePath) });
+                const url = URL.createObjectURL(blob);
+                objectUrlCache.set(absolutePath, { url, refs: 0, revokeTimer: null });
+                resolve(url);
+            }
+            catch {
+                resolve(null);
+            }
+        });
+    });
+}
+function pumpReadQueue() {
+    while (activeReads < MAX_CONCURRENT_READS && readQueue.length > 0) {
+        const job = readQueue.shift();
+        if (!job)
+            break;
+        activeReads += 1;
+        // Yield between reads so CEF can paint / handle input.
+        setTimeout(async () => {
+            try {
+                job.resolve(await readObjectUrl(job.path));
+            }
+            catch {
+                job.resolve(null);
+            }
+            finally {
+                activeReads -= 1;
+                pumpReadQueue();
+            }
+        }, 0);
+    }
+}
+/**
+ * Resolve a file to a blob URL with a concurrency-limited queue.
+ * Each successful call retains the URL — pair with `releasePreviewObjectUrl`.
+ * Optional `priority` (lower = sooner) prefers top-of-grid posters.
+ */
+export function loadPreviewObjectUrl(absolutePath, opts) {
+    if (!absolutePath)
+        return Promise.resolve(null);
+    const cached = objectUrlCache.get(absolutePath);
+    if (cached)
+        return Promise.resolve(retainEntry(cached));
+    const priority = opts?.priority ?? 0;
+    return new Promise((resolve) => {
+        enqueueReadJob({
+            path: absolutePath,
+            priority,
+            resolve: (url) => {
+                if (!url) {
+                    resolve(null);
+                    return;
+                }
+                const entry = objectUrlCache.get(absolutePath);
+                resolve(entry ? retainEntry(entry) : url);
+            },
+        });
+        pumpReadQueue();
+    });
+}
+/**
+ * Sync retain only when the blob is already warm in `objectUrlCache`.
+ * Disk miss → null; caller must use `loadPreviewObjectUrl` (priority queue).
+ * Never call `readFileSync` here — that bypasses backpressure on first paint.
+ */
+export function retainPreviewObjectUrlSync(absolutePath) {
+    if (!absolutePath)
+        return null;
+    const cached = objectUrlCache.get(absolutePath);
+    if (!cached)
+        return null;
+    return retainEntry(cached);
+}
+/** Read a warm blob URL without retaining — safe to call during render. */
+export function peekPreviewObjectUrlSync(absolutePath) {
+    if (!absolutePath)
+        return null;
+    return objectUrlCache.get(absolutePath)?.url ?? null;
+}
+/**
+ * Drop one retain from `loadPreviewObjectUrl`. The blob is revoked after a short
+ * delay once no retainers remain, so Strict Mode remounts can reuse the same URL.
+ */
+export function releasePreviewObjectUrl(absolutePath) {
+    if (!absolutePath)
+        return;
+    const entry = objectUrlCache.get(absolutePath);
+    if (!entry)
+        return;
+    entry.refs = Math.max(0, entry.refs - 1);
+    if (entry.refs > 0 || entry.revokeTimer)
+        return;
+    entry.revokeTimer = setTimeout(() => {
+        const current = objectUrlCache.get(absolutePath);
+        if (!current || current.refs > 0)
+            return;
+        dropEntry(absolutePath, current);
+    }, REVOKE_DELAY_MS);
+}
+/** Drop cached blob URLs that are not currently retained (pack unload). */
+export function revokePreviewObjectUrls(paths) {
+    const keys = paths ?? [...objectUrlCache.keys()];
+    for (const p of keys) {
+        const entry = objectUrlCache.get(p);
+        if (!entry || entry.refs > 0)
+            continue;
+        dropEntry(p, entry);
+    }
+}
+function firstExisting(baseWithoutExt, exts) {
+    if (!cepFsAvailable())
+        return null;
+    for (const ext of exts) {
+        const candidate = baseWithoutExt + ext;
+        if (fs.existsSync(candidate))
+            return candidate;
+    }
+    return null;
+}
+/**
+ * Whether pack prefers webm/mp4 motion previews (modern Spunkram packs).
+ * `inside_option_sets.use_webm_preview` may be `true` or `"mp4"`.
+ */
+export function packPrefersWebmPreview(settings) {
+    const flag = settings?.inside_option_sets?.use_webm_preview;
+    return flag === true || flag === "mp4" || flag === "webm";
+}
+function preferredMotionExts(preferWebm, useMp4) {
+    if (preferWebm) {
+        return useMp4 ? [".mp4", ".webm", ".gif"] : [".webm", ".mp4", ".gif"];
+    }
+    return [".gif", ".webm", ".mp4"];
+}
+function motionKindFromExt(filePath) {
+    const ext = typeof path?.extname === "function"
+        ? path.extname(filePath).toLowerCase()
+        : filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
+    if (ext === ".mp4")
+        return "mp4";
+    if (ext === ".gif")
+        return "gif";
+    return "webm";
+}
+/**
+ * Resolve poster + hover motion media for a pack item.
+ * Paths only (existsSync); poster blob is created lazily via `loadPreviewObjectUrl`.
+ */
+export function resolveItemPreviewMedia(item, assetsPath, options) {
+    if (!assetsPath || typeof path?.join !== "function") {
+        return { posterPath: null, motion: null };
+    }
+    const disableWebm = !!item.group.disable_webm_preview;
+    const isStaticFootage = item.group.is_footage === "JPG" || item.group.is_footage === "PNG";
+    const segments = resolveItemAssetSegments(item);
+    const baseWithoutExt = path.join(assetsPath, ...segments);
+    const posterPath = firstExisting(baseWithoutExt, POSTER_EXTS);
+    if (isStaticFootage || packItemIsAudio(item)) {
+        return { posterPath, motion: null };
+    }
+    const preferWebm = !disableWebm && options?.preferWebm !== false;
+    const motionExts = disableWebm
+        ? [".gif"]
+        : preferredMotionExts(preferWebm, !!options?.useMp4);
+    const motionPath = firstExisting(baseWithoutExt, motionExts);
+    const motion = motionPath
+        ? { kind: motionKindFromExt(motionPath), path: motionPath }
+        : null;
+    return { posterPath, motion };
+}
+function remoteAssetUrl(assetsBaseUrl, segments, ext, hostQuery) {
+    const base = assetsBaseUrl.replace(/\/+$/, "");
+    const encoded = segments.map((s) => encodeURIComponent(s)).join("/");
+    const withExt = ext.startsWith(".") ? ext : `.${ext}`;
+    let url = `${base}/${encoded}${withExt}`;
+    if (hostQuery === "AE") {
+        url += (url.includes("?") ? "&" : "?") + "host=AE";
+    }
+    return url;
+}
+/**
+ * Resolve poster + motion as HTTPS URLs under a media proxy / CDN base
+ * (e.g. `/api/cep/gal/effects/media` → `…/Assets/{segments}.png`).
+ * No existsSync — preferred extensions from pack settings.
+ */
+export function resolveItemRemotePreviewMedia(item, assetsBaseUrl, options) {
+    if (!assetsBaseUrl)
+        return { posterPath: null, motion: null };
+    const disableWebm = !!item.group.disable_webm_preview;
+    const isStaticFootage = item.group.is_footage === "JPG" || item.group.is_footage === "PNG";
+    const segments = resolveItemAssetSegments(item);
+    const host = options?.host === "AE" ? "AE" : "PR";
+    const posterExt = item.group.is_footage === "JPG"
+        ? ".jpg"
+        : item.group.is_footage === "PNG"
+            ? ".png"
+            : ".png";
+    const posterPath = remoteAssetUrl(assetsBaseUrl, segments, posterExt, host);
+    if (isStaticFootage || packItemIsAudio(item)) {
+        return { posterPath, motion: null };
+    }
+    const preferWebm = !disableWebm && options?.preferWebm !== false;
+    const useMp4 = !!options?.useMp4;
+    let motionExt = ".webm";
+    let kind = "webm";
+    if (disableWebm) {
+        motionExt = ".gif";
+        kind = "gif";
+    }
+    else if (preferWebm && useMp4) {
+        motionExt = ".mp4";
+        kind = "mp4";
+    }
+    else if (preferWebm) {
+        motionExt = ".webm";
+        kind = "webm";
+    }
+    else {
+        motionExt = ".gif";
+        kind = "gif";
+    }
+    return {
+        posterPath,
+        motion: {
+            kind,
+            path: remoteAssetUrl(assetsBaseUrl, segments, motionExt, host),
+        },
+    };
+}
+export function isRemoteMediaUrl(value) {
+    return !!value && /^https?:\/\//i.test(value);
+}
+let sfxAudio = null;
+let sfxOwnerId = null;
+/** Play one SFX preview at a time (hover). Replaces any currently playing card. */
+export function playSfxPreview(ownerId, objectUrl, volume = 1) {
+    if (!ownerId || !objectUrl || typeof Audio === "undefined")
+        return;
+    if (!sfxAudio) {
+        sfxAudio = new Audio();
+        sfxAudio.loop = true;
+        sfxAudio.preload = "auto";
+    }
+    sfxOwnerId = ownerId;
+    if (sfxAudio.src !== objectUrl)
+        sfxAudio.src = objectUrl;
+    sfxAudio.volume = Math.min(1, Math.max(0, volume));
+    try {
+        sfxAudio.currentTime = 0;
+    }
+    catch {
+        // ignore seek errors before metadata
+    }
+    void sfxAudio.play().catch(() => { });
+}
+/** Update volume on the active SFX preview without restarting. */
+export function setSfxPreviewVolume(volume) {
+    if (!sfxAudio)
+        return;
+    sfxAudio.volume = Math.min(1, Math.max(0, volume));
+}
+/** Stop hover SFX. Pass `ownerId` to only stop if that card still owns playback. */
+export function stopSfxPreview(ownerId) {
+    if (ownerId && sfxOwnerId !== ownerId)
+        return;
+    if (!sfxAudio)
+        return;
+    sfxAudio.pause();
+    sfxAudio.removeAttribute("src");
+    try {
+        sfxAudio.load();
+    }
+    catch {
+        // ignore
+    }
+    try {
+        sfxAudio.currentTime = 0;
+    }
+    catch {
+        // ignore
+    }
+    sfxOwnerId = null;
+}
+export function resolveItemsPreviewMedia(items, assetsPath, settings) {
+    const preferWebm = packPrefersWebmPreview(settings);
+    const useMp4 = settings?.inside_option_sets?.use_webm_preview === "mp4";
+    const map = new Map();
+    for (const item of items) {
+        map.set(item.id, resolveItemPreviewMedia(item, assetsPath, { preferWebm, useMp4 }));
+    }
+    return map;
+}

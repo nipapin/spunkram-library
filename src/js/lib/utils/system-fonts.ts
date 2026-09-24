@@ -42,6 +42,13 @@ const scanSystemFonts = (base: FontCatalog) => {
     });
 };
 
+/** Drop the cached catalog after new font files are installed. */
+export function invalidateFontCatalog(): void {
+  cached = null;
+  pending = null;
+  systemScanStarted = false;
+}
+
 /** Cached OS font catalog (family + style + PostScript id). */
 export function getFontCatalog(): Promise<FontCatalog> {
   if (cached) {

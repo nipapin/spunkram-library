@@ -1,0 +1,89 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+/**
+ * Gate pack installs behind an explicit packages-folder choice.
+ * Shows an in-panel dialog (not a silent native picker / default `_ABS`).
+ */
+import { createContext, useCallback, useContext, useMemo, useRef, useState, } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { BRAND } from "@brands";
+import { readPrefSettings } from "@/lib/api/preferences";
+import { resolvePackEntitlementContextForScan } from "@/api/cep-market";
+import { selectFolder } from "@/lib/utils/bolt";
+import { hasConfiguredPackagesInstallPath, notifyPackagesRescan, scanAndRegisterPacksAtRoot, } from "@/lib/utils/pack-install";
+import { cn } from "@/lib/utils";
+const ACCENT_PILL = "pill-brand";
+/** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
+ * would disconnect Provider from consumers until a full page reload. */
+const PACKAGES_PATH_GATE_CONTEXT_KEY = "__spunkram_packages_path_gate_context__";
+const PackagesPathGateContext = globalThis[PACKAGES_PATH_GATE_CONTEXT_KEY] ??
+    createContext(null);
+globalThis[PACKAGES_PATH_GATE_CONTEXT_KEY] =
+    PackagesPathGateContext;
+export function PackagesPathGateProvider({ children }) {
+    const { prefs, updatePrefs, signedIn, subscription } = useAuth();
+    const [open, setOpen] = useState(false);
+    const waiterRef = useRef(null);
+    const finish = useCallback((ok) => {
+        const waiter = waiterRef.current;
+        waiterRef.current = null;
+        setOpen(false);
+        waiter?.resolve(ok);
+    }, []);
+    const ensurePackagesPath = useCallback(() => {
+        if (hasConfiguredPackagesInstallPath()) {
+            const fromDisk = readPrefSettings();
+            const diskPath = (fromDisk.absCustomAbsolutePath || "").trim();
+            if (diskPath && diskPath !== (prefs.absCustomAbsolutePath || "").trim()) {
+                updatePrefs({
+                    absCustomAbsolutePath: diskPath,
+                    useCustomPathBySubscription: 1,
+                });
+            }
+            return Promise.resolve(true);
+        }
+        return new Promise((resolve) => {
+            if (waiterRef.current)
+                waiterRef.current.resolve(false);
+            waiterRef.current = { resolve };
+            setOpen(true);
+        });
+    }, [prefs.absCustomAbsolutePath, updatePrefs]);
+    const onChooseFolder = useCallback(() => {
+        selectFolder((prefs.absCustomAbsolutePath || "").trim(), "Select packages folder", (folder) => {
+            if (!folder)
+                return;
+            void (async () => {
+                updatePrefs({
+                    absCustomAbsolutePath: folder,
+                    useCustomPathBySubscription: 1,
+                });
+                const entitlement = signedIn
+                    ? await resolvePackEntitlementContextForScan({
+                        signedIn: true,
+                        purchases: subscription.purchases,
+                    })
+                    : null;
+                const scan = scanAndRegisterPacksAtRoot(folder, entitlement);
+                if (scan.added > 0 || scan.updated > 0 || scan.removed > 0) {
+                    notifyPackagesRescan(scan);
+                }
+                finish(true);
+            })();
+        });
+    }, [
+        finish,
+        prefs.absCustomAbsolutePath,
+        signedIn,
+        subscription.purchases,
+        updatePrefs,
+    ]);
+    const value = useMemo(() => ({ ensurePackagesPath }), [ensurePackagesPath]);
+    return (_jsxs(PackagesPathGateContext.Provider, { value: value, children: [children, open ? (_jsx("div", { className: "fixed inset-0 z-[1300] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm", children: _jsxs("div", { className: "w-full max-w-sm rounded-xl border border-white/10 bg-card p-4 shadow-2xl", role: "dialog", "aria-modal": "true", "aria-labelledby": "packages-path-title", children: [_jsx("h3", { id: "packages-path-title", className: "text-sm font-semibold text-foreground", children: "Choose packages install folder" }), _jsxs("p", { className: "mt-1.5 text-[11px] leading-relaxed text-muted-foreground", children: ["Before installing a pack, pick where ", BRAND.authorName, " should store packs. They are saved under AE/ or PR/ inside this folder. Existing packs in that folder are detected automatically. You can change it later in Settings."] }), _jsxs("div", { className: "mt-3 flex gap-2", children: [_jsx("button", { type: "button", onClick: onChooseFolder, className: cn("flex flex-1 items-center justify-center rounded-full px-3 py-2 text-xs font-medium", ACCENT_PILL), children: "Choose folder\u2026" }), _jsx("button", { type: "button", onClick: () => finish(false), className: "flex flex-1 items-center justify-center rounded-full border border-white/10 bg-secondary/60 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground", children: "Cancel" })] })] }) })) : null] }));
+}
+export function usePackagesPathGate() {
+    const ctx = useContext(PackagesPathGateContext);
+    if (!ctx) {
+        throw new Error("usePackagesPathGate must be used within PackagesPathGateProvider");
+    }
+    return ctx;
+}

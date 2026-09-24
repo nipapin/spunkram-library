@@ -1,0 +1,329 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, } from "react";
+import { ChevronRight, Folder, Layers, Film, Music, Sparkles, Star, Loader2, } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { usePanelUI } from "@/lib/panel-ui-context";
+import { BRAND, storageKey } from "@brands";
+import * as panelStore from "@/lib/userdata-store";
+import { resolveGalRootCategoryIcon, } from "@/ui/gal/gal-category-icons";
+import "./panel-sidebar.scss";
+const SIDEBAR_WIDTH_KEY = storageKey("sidebarWidth");
+const SIDEBAR_MIN_WIDTH = 140;
+const SIDEBAR_MAX_WIDTH = 360;
+const SIDEBAR_DEFAULT_WIDTH = 192;
+const IS_GAL = BRAND.id === "gal";
+function clampSidebarWidth(width) {
+    return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+}
+function loadSidebarWidth() {
+    try {
+        const stored = Number(panelStore.getItem(SIDEBAR_WIDTH_KEY));
+        if (Number.isFinite(stored) && stored > 0)
+            return clampSidebarWidth(stored);
+    }
+    catch {
+        // ignore storage errors
+    }
+    return SIDEBAR_DEFAULT_WIDTH;
+}
+function FolderKids({ open, children }) {
+    const innerRef = useRef(null);
+    const [height, setHeight] = useState(open ? "auto" : 0);
+    useLayoutEffect(() => {
+        const el = innerRef.current;
+        if (!el)
+            return;
+        if (open) {
+            const frame = requestAnimationFrame(() => setHeight(el.scrollHeight));
+            const timer = window.setTimeout(() => setHeight("auto"), 240);
+            return () => {
+                cancelAnimationFrame(frame);
+                window.clearTimeout(timer);
+            };
+        }
+        const px = el.getBoundingClientRect().height;
+        setHeight(px);
+        const frame = requestAnimationFrame(() => setHeight(0));
+        return () => cancelAnimationFrame(frame);
+    }, [open]);
+    return (_jsx("div", { className: "sidebar-tree__kids", style: { height: height === "auto" ? "auto" : `${height}px` }, children: _jsx("div", { ref: innerRef, className: "sidebar-tree__kids-inner", children: children }) }));
+}
+function TreeIcon({ icon, active, emphasized, RootIcon, }) {
+    const className = cn("size-3.5 shrink-0 sidebar-tree__icon", active || emphasized ? "text-primary" : "text-muted-foreground");
+    if (RootIcon) {
+        return _jsx(RootIcon, { className: className });
+    }
+    switch (icon) {
+        case "folder":
+            return _jsx(Folder, { className: className });
+        case "FOOTAGE":
+            return _jsx(Film, { className: className });
+        case "SFX":
+            return _jsx(Music, { className: className });
+        case "PRESETS":
+            return _jsx(Sparkles, { className: className });
+        default:
+            return _jsx(Layers, { className: className });
+    }
+}
+/** Folder ids that must be open to reveal `targetId` (includes target if it is a folder). */
+function folderPathToActive(nodes, targetId, trail = []) {
+    for (const node of nodes) {
+        if (node.id === targetId) {
+            return node.kind === "folder" ? [...trail, node.id] : trail;
+        }
+        if (node.kind === "folder") {
+            const found = folderPathToActive(node.children, targetId, [
+                ...trail,
+                node.id,
+            ]);
+            if (found)
+                return found;
+        }
+    }
+    return null;
+}
+/** True when this row sits under a folder that is closed (or closing). */
+function isRowInsideCollapsedKids(row) {
+    let el = row.parentElement;
+    while (el) {
+        if (el.classList.contains("sidebar-tree__node") &&
+            !el.classList.contains("is-open") &&
+            el.querySelector(":scope > .sidebar-tree__kids")) {
+            return true;
+        }
+        el = el.parentElement;
+    }
+    return false;
+}
+function TreeNodeRow({ node, active, onSelect, depth, openIds, onToggleOpen, showNewBadges, ancestorIds, }) {
+    const isFolder = node.kind === "folder";
+    const isActive = active === node.id;
+    const isAncestor = ancestorIds.has(node.id);
+    const open = isFolder && openIds.has(node.id);
+    const isRoot = depth === 0;
+    const rootOnPath = IS_GAL && isRoot && (isActive || isAncestor);
+    // All first-order rows stay bright (folders and leaf groups alike).
+    const rootEmphasized = IS_GAL && isRoot && !rootOnPath && !isActive;
+    const parentEmphasized = IS_GAL && isFolder && !isRoot && !isActive && !isAncestor;
+    const RootIcon = IS_GAL && isRoot ? resolveGalRootCategoryIcon(node.label) : undefined;
+    const rowRef = useRef(null);
+    const wasActiveRef = useRef(false);
+    // When scroll-spy (or a click) activates this row, keep it visible in the nav.
+    // Skip while the row is inside a collapsed/collapsing folder (avoids scroll-on-close).
+    useEffect(() => {
+        if (!isActive) {
+            wasActiveRef.current = false;
+            return;
+        }
+        if (wasActiveRef.current)
+            return;
+        wasActiveRef.current = true;
+        const row = rowRef.current;
+        if (!row)
+            return;
+        if (isRowInsideCollapsedKids(row))
+            return;
+        // Collapsing this folder itself: kids are closing — don't chase the row.
+        if (isFolder && !open)
+            return;
+        const nav = row.closest(".sidebar-tree__nav");
+        if (!(nav instanceof HTMLElement)) {
+            row.scrollIntoView({ block: "nearest" });
+            return;
+        }
+        const rowRect = row.getBoundingClientRect();
+        const navRect = nav.getBoundingClientRect();
+        const fullyVisible = rowRect.top >= navRect.top && rowRect.bottom <= navRect.bottom;
+        if (!fullyVisible) {
+            row.scrollIntoView({ block: "nearest" });
+        }
+    }, [isActive, isFolder, open]);
+    const chevron = isFolder ? (_jsx("button", { type: "button", onClick: () => onToggleOpen(node.id), className: "sidebar-tree__chevron flex size-3 shrink-0 items-center justify-center", "aria-label": open ? "Collapse" : "Expand", "aria-expanded": open, children: _jsx(ChevronRight, { className: cn("size-3 transition-transform duration-200 ease-out", IS_GAL ? "sidebar-tree__chevron-icon" : "text-muted-foreground", open && "rotate-90") }) })) : IS_GAL ? (_jsx("span", { className: "sidebar-tree__chevron flex size-3 shrink-0 items-center justify-center opacity-0", "aria-hidden": true, children: _jsx(ChevronRight, { className: "size-3" }) })) : (_jsx("span", { className: "size-3 shrink-0" }));
+    const countChip = (_jsx("span", { className: cn("sidebar-tree__count rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none", isActive || rootOnPath
+            ? "bg-background/60 text-foreground"
+            : "bg-secondary/70 text-muted-foreground"), children: node.count }));
+    return (_jsxs("div", { className: cn("sidebar-tree__node", open && "is-open"), children: [_jsxs("div", { ref: rowRef, className: cn("sidebar-tree__row group flex w-full items-center gap-1.5 text-left text-xs transition-colors", 
+                // Nested Gal rows use left-flat radius via SCSS — only roots get rounded-full.
+                IS_GAL
+                    ? isRoot
+                        ? "rounded-full py-2.5"
+                        : "py-2.5"
+                    : "rounded-lg py-1.5", !IS_GAL &&
+                    (isActive
+                        ? "bg-[#7c4dff]/15 font-semibold text-foreground"
+                        : "text-muted-foreground hover:text-foreground"), IS_GAL && isRoot && "is-root", IS_GAL && isFolder && "is-folder", IS_GAL && isActive && "is-active", IS_GAL && isAncestor && "is-ancestor", IS_GAL && rootOnPath && "is-root-active", IS_GAL && (rootEmphasized || parentEmphasized) && "is-parent", IS_GAL &&
+                    !isActive &&
+                    !rootOnPath &&
+                    !rootEmphasized &&
+                    !parentEmphasized &&
+                    "text-muted-foreground hover:text-foreground", IS_GAL &&
+                    (rootEmphasized ||
+                        parentEmphasized ||
+                        isActive ||
+                        rootOnPath) &&
+                    "font-semibold text-foreground"), style: {
+                    paddingLeft: IS_GAL ? 8 : 8 + depth * 10,
+                    paddingRight: 8,
+                }, "data-depth": depth, children: [!IS_GAL ? chevron : null, _jsxs("button", { type: "button", onClick: () => {
+                            // Gal: LMB on folder on the active path toggles open/close without
+                            // re-selecting (spy leaves roots as is-ancestor, not is-active).
+                            // Chevron still toggles without select for any folder.
+                            if (IS_GAL && isFolder && (isActive || isAncestor)) {
+                                onToggleOpen(node.id);
+                                return;
+                            }
+                            onSelect(node.id);
+                        }, "aria-pressed": isActive, className: "sidebar-tree__select flex min-w-0 flex-1 items-center gap-1.5 text-left", children: [_jsx(TreeIcon, { icon: node.icon, active: isActive || rootOnPath, emphasized: rootEmphasized || parentEmphasized, RootIcon: RootIcon }), _jsx("span", { className: "sidebar-tree__label min-w-0 flex-1 truncate", children: node.label }), showNewBadges && node.newCount > 0 && (_jsx("span", { className: "rounded px-1 text-[9px] font-semibold uppercase tracking-wide text-primary", children: "NEW" })), countChip] }), IS_GAL ? chevron : null] }), isFolder && (_jsx(FolderKids, { open: open, children: node.children.map((child) => (_jsx(TreeNodeRow, { node: child, active: active, onSelect: onSelect, depth: depth + 1, openIds: openIds, onToggleOpen: onToggleOpen, showNewBadges: showNewBadges, ancestorIds: ancestorIds }, child.id))) }))] }));
+}
+export function PanelSidebar({ tree, active, onSelect, orientation = "vertical", tools, favoritesId, favoritesCount, loading = false, }) {
+    const [openIds, setOpenIds] = useState(() => new Set());
+    /** Folders the user explicitly collapsed — auto-open must not reopen these. */
+    const [userCollapsedIds, setUserCollapsedIds] = useState(() => new Set());
+    const [width, setWidth] = useState(loadSidebarWidth);
+    const [resizing, setResizing] = useState(false);
+    const dragStateRef = useRef(null);
+    const { showNewBadges } = usePanelUI();
+    const ancestorIds = useMemo(() => {
+        if (!active || tree.length === 0)
+            return new Set();
+        const path = folderPathToActive(tree, active);
+        return new Set(path ?? []);
+    }, [active, tree]);
+    const handleResizePointerMove = useCallback((e) => {
+        const drag = dragStateRef.current;
+        if (!drag)
+            return;
+        setWidth(clampSidebarWidth(drag.startWidth + (e.clientX - drag.startX)));
+    }, []);
+    const handleResizePointerUp = useCallback(() => {
+        dragStateRef.current = null;
+        setResizing(false);
+        window.removeEventListener("pointermove", handleResizePointerMove);
+        window.removeEventListener("pointerup", handleResizePointerUp);
+        setWidth((w) => {
+            try {
+                panelStore.setItem(SIDEBAR_WIDTH_KEY, String(w));
+            }
+            catch {
+                // ignore storage errors
+            }
+            return w;
+        });
+    }, [handleResizePointerMove]);
+    const handleResizePointerDown = (e) => {
+        e.preventDefault();
+        dragStateRef.current = { startX: e.clientX, startWidth: width };
+        setResizing(true);
+        window.addEventListener("pointermove", handleResizePointerMove);
+        window.addEventListener("pointerup", handleResizePointerUp);
+    };
+    // avoids leaking listeners if the component unmounts mid-drag
+    useEffect(() => {
+        return () => {
+            window.removeEventListener("pointermove", handleResizePointerMove);
+            window.removeEventListener("pointerup", handleResizePointerUp);
+        };
+    }, [handleResizePointerMove, handleResizePointerUp]);
+    const handleResizeReset = () => {
+        setWidth(SIDEBAR_DEFAULT_WIDTH);
+        try {
+            panelStore.setItem(SIDEBAR_WIDTH_KEY, String(SIDEBAR_DEFAULT_WIDTH));
+        }
+        catch {
+            // ignore storage errors
+        }
+    };
+    // Auto-open ancestors of the active leaf — but honor explicit user collapses.
+    useEffect(() => {
+        if (!active || tree.length === 0)
+            return;
+        const path = folderPathToActive(tree, active);
+        if (!path || path.length === 0)
+            return;
+        setOpenIds((prev) => {
+            let changed = false;
+            const next = new Set(prev);
+            for (const id of path) {
+                if (userCollapsedIds.has(id))
+                    continue;
+                if (!next.has(id)) {
+                    next.add(id);
+                    changed = true;
+                }
+            }
+            return changed ? next : prev;
+        });
+    }, [active, tree, userCollapsedIds]);
+    const toggleOpen = useCallback((id) => {
+        setOpenIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+                setUserCollapsedIds((collapsed) => {
+                    if (collapsed.has(id))
+                        return collapsed;
+                    const c = new Set(collapsed);
+                    c.add(id);
+                    return c;
+                });
+            }
+            else {
+                next.add(id);
+                setUserCollapsedIds((collapsed) => {
+                    if (!collapsed.has(id))
+                        return collapsed;
+                    const c = new Set(collapsed);
+                    c.delete(id);
+                    return c;
+                });
+            }
+            return next;
+        });
+    }, []);
+    /** Explicit nav select: clear collapsed flags for folders on the path, then select. */
+    const handleSelect = useCallback((id) => {
+        const path = folderPathToActive(tree, id);
+        if (path && path.length > 0) {
+            setUserCollapsedIds((prev) => {
+                let changed = false;
+                const next = new Set(prev);
+                for (const folderId of path) {
+                    if (next.delete(folderId))
+                        changed = true;
+                }
+                return changed ? next : prev;
+            });
+            setOpenIds((prev) => {
+                let changed = false;
+                const next = new Set(prev);
+                for (const folderId of path) {
+                    if (!next.has(folderId)) {
+                        next.add(folderId);
+                        changed = true;
+                    }
+                }
+                return changed ? next : prev;
+            });
+        }
+        onSelect(id);
+    }, [tree, onSelect]);
+    if (orientation === "horizontal") {
+        return (_jsx("nav", { className: "mx-2.5 mt-2 flex flex-wrap items-center gap-1.5 rounded-2xl px-2.5 py-2 glass-bar", children: tree.map((node) => {
+                const isActive = active === node.id;
+                return (_jsxs("button", { type: "button", onClick: () => onSelect(node.id), "aria-pressed": isActive, className: cn("flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors", isActive
+                        ? "border-0 pill-brand font-semibold"
+                        : "border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 text-muted-foreground hover:text-foreground"), children: [_jsx("span", { className: "whitespace-nowrap", children: node.label }), _jsx("span", { className: cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none", isActive
+                                ? "bg-background/60 text-foreground"
+                                : "bg-secondary/70 text-muted-foreground"), children: node.count })] }, node.id));
+            }) }));
+    }
+    const favoritesActive = Boolean(favoritesId && active === favoritesId);
+    return (_jsxs("aside", { className: cn("relative flex shrink-0 border-r border-[rgb(42,36,64)]", IS_GAL && "sidebar-tree--gal"), style: { width }, children: [_jsxs("div", { className: "flex min-w-0 flex-1 flex-col", children: [tools ? (_jsx("div", { className: "shrink-0 border-b border-[rgb(42,36,64)] px-1.5 py-2", children: tools })) : null, _jsxs("nav", { className: "sidebar-tree__nav min-w-0 flex-1 overflow-y-auto flex flex-col gap-0.5 px-1 py-2", children: [favoritesId ? (_jsxs("button", { type: "button", onClick: () => onSelect(favoritesId), "aria-pressed": favoritesActive, className: cn("group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-xs transition-colors", IS_GAL && "rounded-full py-2.5", favoritesActive
+                                    ? IS_GAL
+                                        ? "sidebar-tree__row is-root is-root-active font-semibold text-foreground"
+                                        : "bg-[#7c4dff]/15 font-semibold text-foreground"
+                                    : "text-muted-foreground hover:text-foreground"), children: [_jsx(Star, { className: cn("size-3.5 shrink-0", favoritesActive ? "text-primary" : "text-muted-foreground"), fill: favoritesActive ? "currentColor" : "none" }), _jsx("span", { className: "min-w-0 flex-1 truncate", children: "Favorites" }), typeof favoritesCount === "number" ? (_jsx("span", { className: cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none", favoritesActive
+                                            ? "bg-background/60 text-foreground"
+                                            : "bg-secondary/70 text-muted-foreground"), children: favoritesCount })) : null] })) : null, tree.length === 0 ? (loading ? (_jsxs("div", { className: "flex flex-col items-center justify-center gap-2 px-2 py-8 text-muted-foreground", "aria-busy": "true", "aria-label": "Loading categories", children: [_jsx(Loader2, { className: "size-4 animate-spin text-primary" }), _jsx("p", { className: "text-[11px]", children: "Loading\u2026" })] })) : (_jsx("p", { className: "px-2 py-3 text-[11px] text-muted-foreground", children: "No pack loaded" }))) : (tree.map((node) => (_jsx(TreeNodeRow, { node: node, active: active, onSelect: handleSelect, depth: 0, openIds: openIds, onToggleOpen: toggleOpen, showNewBadges: showNewBadges, ancestorIds: ancestorIds }, node.id))))] })] }), _jsx("div", { role: "separator", "aria-orientation": "vertical", "aria-label": "Resize sidebar", onPointerDown: handleResizePointerDown, onDoubleClick: handleResizeReset, "data-tooltip": "Drag to resize \u00B7 double-click to reset", className: cn("absolute left-full top-0 z-10 h-full w-1.5 cursor-col-resize touch-none", "after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent after:transition-colors", "hover:after:bg-primary/50", resizing && "after:bg-primary") })] }));
+}

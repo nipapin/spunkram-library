@@ -3,6 +3,7 @@
  *
  * `{root}/` ≡ `{Brand} Captions/` on CDN:
  *   {Pack}/{Pack}.aep | {Pack}/{Pack}.mogrt   — one template per pack
+ *   {Pack}/Fonts/*.{ttf,otf,ttc}              — installed with the group
  *   {Pack}/{Style}/controls.json|thumb.png|preview.mp4
  *   Base/manifest.json                        — catalog version bump
  *   flat {Caption}/… catalogued under Base

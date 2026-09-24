@@ -7,6 +7,7 @@ import type { MogrtDefinition } from "../presets/types";
 import { loadLocalPackage } from "./localStore";
 import { getLocalOverrideAssetPaths } from "./localSource";
 import { packIdFromStyleId } from "./paths";
+import { ensureCaptionFontsInstalled } from "./caption-fonts";
 import { downloadStylePackage, ensureDefinitionForStyle, hasLocalPackTemplate, makeOrigin, previewFromValues } from "./sync";
 import type { CaptionCatalogEntry, StylePreset } from "./types";
 
@@ -113,6 +114,7 @@ export const acquirePresetProject = async (
 
   if (!options?.forceDownload && hasLocalPackTemplate(packId, hostAppId) && hostHasNeededFile(paths, hostAppId)) {
     const pack = loadLocalPackage(packId);
+    await ensureCaptionFontsInstalled(target.styleId).catch(() => 0);
     return {
       preset: presetFromLocal(target, definition, pack?.manifest.version || "local"),
       definition,
@@ -130,9 +132,12 @@ export const acquirePresetProject = async (
     force: options?.forceDownload,
   });
 
+  const resolvedDefinition = downloadedDef.clientControls?.length ? downloadedDef : definition;
+  await ensureCaptionFontsInstalled(target.styleId).catch(() => 0);
+
   return {
     preset,
-    definition: downloadedDef.clientControls?.length ? downloadedDef : definition,
+    definition: resolvedDefinition,
     paths: getLocalStyleAssetPaths(target.styleId),
   };
 };
