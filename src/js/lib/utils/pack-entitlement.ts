@@ -6,6 +6,7 @@ import type { MotionflowPurchase } from "@/api/motionflow-auth";
 import type { CepMarketPackage } from "@/api/cep-market";
 import type { InstalledPackMeta } from "./pack-types";
 import { normalizePackHost } from "./pack-host";
+import { BRAND } from "@brands";
 
 /** Collapse "Wedding Pack" / "Wedding Package for Premiere Pro" → "wedding". */
 function normalizePackLabel(value: string): string {
@@ -39,6 +40,12 @@ export function installedPackMatchesMarketItem(
   meta: InstalledPackMeta,
   item: CepMarketPackage,
 ): boolean {
+  if (BRAND.id === "odin") {
+    const demo = (version?: string) => version?.trim().toUpperCase() === "DEMO";
+    if (demo(meta.version) !== demo(item.version)) return false;
+    if (normalizePackHost(meta.appID || meta.load) !== normalizePackHost(item.primary_type)) return false;
+    if (meta.marketId != null) return String(meta.marketId) === String(item.id);
+  }
   if (meta.marketId != null && String(meta.marketId) === String(item.id)) {
     return true;
   }

@@ -1,4 +1,4 @@
-import logo from "@/assets/logo.png";
+import { brandLogo as logo } from "@/lib/utils/brand-logo";
 import "./spunkram-boot-loader.scss";
 
 /** Auth-boot splash: header-style logo orb + soft pulse rings. */

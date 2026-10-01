@@ -30,13 +30,11 @@ jobs:
           $tag = $env:GITHUB_REF_NAME
           if ($tag -like "gal-*") {
             Add-Content -Path $env:GITHUB_OUTPUT -Value "id=gal"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "script=zxp:gal"
           } else {
             Add-Content -Path $env:GITHUB_OUTPUT -Value "id=spunkram"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "script=zxp:spunkram"
           }
       - run: npm i --legacy-peer-deps
-      - run: npm run ${{ steps.brand.outputs.script }}
+      - run: npm run build -- --author=${{ steps.brand.outputs.id }} --format=zxp
 
       - name: GitHub Release
         uses: softprops/action-gh-release@v1

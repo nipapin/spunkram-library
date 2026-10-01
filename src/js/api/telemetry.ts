@@ -1,3 +1,5 @@
+import { API_BASE } from "./config";
+import { BRAND } from "@brands";
 import {
   TELEMETRY_ACTIVE_PACKS_ENDPOINT,
   TELEMETRY_INSTALLS_ENDPOINT,
@@ -9,9 +11,9 @@ import { cepHttpRequest } from "@/lib/api/cep-http";
 import { loadPreferencesFile } from "@/lib/api/preferences";
 import type { InstalledPackMeta } from "@/lib/utils/pack-types";
 
-const TELEMETRY_URL = `https://motionflow.pro${TELEMETRY_SESSION_ENDPOINT}`;
-const INSTALLS_URL = `https://motionflow.pro${TELEMETRY_INSTALLS_ENDPOINT}`;
-const ACTIVE_PACKS_URL = `https://motionflow.pro${TELEMETRY_ACTIVE_PACKS_ENDPOINT}`;
+const TELEMETRY_URL = `${API_BASE}${TELEMETRY_SESSION_ENDPOINT}`;
+const INSTALLS_URL = `${API_BASE}${TELEMETRY_INSTALLS_ENDPOINT}`;
+const ACTIVE_PACKS_URL = `${API_BASE}${TELEMETRY_ACTIVE_PACKS_ENDPOINT}`;
 
 /** Last user id we successfully reported for in this panel JS context. */
 let reportedForUserId: string | null = null;
@@ -32,6 +34,7 @@ function authHeaders(token: string): Record<string, string> {
  * session) and again server-side (~12h for the same environment).
  */
 export async function reportClientSession(): Promise<void> {
+  if (!BRAND.features.telemetry) return;
   const user = getUserIdentity();
   const token = user?.token;
   const userId = user?.id || null;
@@ -68,6 +71,7 @@ export async function reportClientSession(): Promise<void> {
  * Call after sign-in / market refresh and after install/update.
  */
 export async function reportInstalledPacks(): Promise<void> {
+  if (!BRAND.features.telemetry) return;
   const user = getUserIdentity();
   const token = user?.token;
   if (!token) return;
@@ -105,6 +109,7 @@ export async function reportInstalledPacks(): Promise<void> {
  * Dedupes identical consecutive snapshots in this JS context.
  */
 export async function reportActivePacks(packIds: number[]): Promise<void> {
+  if (!BRAND.features.telemetry) return;
   const user = getUserIdentity();
   const token = user?.token;
   if (!token) return;

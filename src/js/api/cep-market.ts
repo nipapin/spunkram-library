@@ -1,5 +1,5 @@
 /**
- * CEP market catalog — Motionflow only.
+ * CEP market catalog, served by the selected brand's backend.
  *
  * `GET /api/cep/market?host=` with Bearer; install via authenticated download.
  * @see next-app/CEP_API.md
@@ -308,6 +308,7 @@ export async function fetchCepMarketStructure(
   error?: string;
   notModified?: boolean;
 }> {
+  if (!BRAND.features.remotePackPreview) return { error: "NO_STRUCTURE" };
   const token = getSessionToken();
   if (!token) {
     return { error: "UNAUTHORIZED" };

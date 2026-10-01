@@ -201,6 +201,7 @@ function upsertInstalledPackMeta(
   const byName = packages.findIndex(
     (p) =>
       p.name === meta.name &&
+      (BRAND.id !== "odin" || (p.version?.toUpperCase() === "DEMO") === (meta.version?.toUpperCase() === "DEMO")) &&
       metaHost &&
       normalizePackHost(p.appID || p.load) === metaHost,
   );
@@ -470,7 +471,7 @@ export async function installPackFromFile(
     }
 
     const folderName = sanitizeFolderName(
-      `${main.name || "Pack"}${main.software_id ? ` - ${main.software_id}` : ""}`,
+      `${main.name || "Pack"}${BRAND.id === "odin" && main.version?.toUpperCase() === "DEMO" ? " - Demo" : ""}${main.software_id ? ` - ${main.software_id}` : ""}`,
     );
     const installRoot = resolvePackagesInstallRoot(packHost || host);
     const targetDir = path.join(installRoot, folderName);
@@ -598,6 +599,7 @@ export function uninstallPack(meta: InstalledPackMeta): boolean {
       if (
         meta.name &&
         p.name === meta.name &&
+        (BRAND.id !== "odin" || (p.version?.toUpperCase() === "DEMO") === (meta.version?.toUpperCase() === "DEMO")) &&
         metaHost &&
         entryHost &&
         metaHost === entryHost

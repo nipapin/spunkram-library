@@ -1,6 +1,51 @@
 import brandBuild from "./brand-build.json";
 export const BRANDS = {
+    odin: {
+        id: "odin",
+        extensionId: "com.odinpro.cep",
+        displayName: "Odin Pro",
+        panelDisplayName: "Odin Pro",
+        ...brandBuild.odin,
+        panelMainPath: "./odin/index.html",
+        authorName: "Premiere Basics",
+        apiClient: "odin-cep",
+        sitePath: "/",
+        siteOrigin: "https://odin-pro.com",
+        tutorialsUrl: "",
+        devPack: {
+            path: "C:/Users/nipap/Downloads/Telegram Desktop/Odin Pro 1.2.0 - Premiere Pro Test Mode.odin",
+            host: "PR",
+        },
+        packagePreviews: {
+            AE: "https://api.get-atomx.com/atomx_files/ext_market/packages/560.jpg",
+            PR: "https://api.get-atomx.com/atomx_files/ext_market/packages/542.jpg",
+        },
+        apiOrigin: "https://odin-pro.com",
+        verificationPath: "/cep/login",
+        manageSubscriptionPath: "/account",
+        features: { aiTools: false, footages: false, remoteNotifications: false, extensionUpdates: false, telemetry: false, remotePackPreview: false },
+        packExtension: "odin",
+        legacyPackExtension: "odin",
+        prefsCompany: "Premiere Basics",
+        prefsProduct: "Odin Pro Extension",
+        panelCompany: "Premiere Basics",
+        panelProduct: "Odin Pro",
+        adobeCommonFolder: "Odin Pro",
+        stylesBin: "Odin Pro Styles",
+        captionsBin: "Odin Pro Captions",
+        captionsCdnPrefix: "Odin Pro Captions",
+        assetsBin: "Odin Pro Assets",
+        storagePrefix: "odin.",
+        appDataFolder: "odin-pro",
+        access: {
+            tiers: ["free", "subscribed"],
+            packPurchasesGrantAccess: false,
+            generations: { free: 0, purchased: 0, subscribed: 0 },
+            freePackSlots: 0,
+        },
+    },
     gal: {
+        features: { aiTools: true, footages: false, remoteNotifications: true, extensionUpdates: true, telemetry: true, remotePackPreview: true },
         id: "gal",
         extensionId: "com.premieregal.cep",
         displayName: "Gal Toolkit MAX",
@@ -35,6 +80,7 @@ export const BRANDS = {
         },
     },
     spunkram: {
+        features: { aiTools: true, footages: true, remoteNotifications: true, extensionUpdates: true, telemetry: true, remotePackPreview: true },
         id: "spunkram",
         extensionId: "com.spunkramlibrary.cep",
         displayName: "Spunkram Library",
@@ -70,15 +116,15 @@ export const BRANDS = {
     },
 };
 export const DEFAULT_BRAND = "spunkram";
-export function otherBrandId(id = activeBrandId()) {
-    return id === "gal" ? "spunkram" : "gal";
+export function otherBrandIds(id = activeBrandId()) {
+    return Object.keys(BRANDS).filter((brandId) => brandId !== id);
 }
 /** Folder under `dist/` for this brand's CEP output (`cep-spunkram`, `cep-gal`). */
 export function brandCepDist(id = activeBrandId()) {
     return `cep-${id}`;
 }
 export function resolveBrand(raw) {
-    return raw === "gal" ? "gal" : DEFAULT_BRAND;
+    return raw && Object.prototype.hasOwnProperty.call(BRANDS, raw) ? raw : DEFAULT_BRAND;
 }
 export function getBrand(raw) {
     return BRANDS[resolveBrand(raw)];
@@ -122,6 +168,8 @@ export function resolveAccessTier(opts, brand = BRAND) {
 }
 /** Monthly AI cap. Accounts without a subscription get 0, even if `/me` still sends a free allotment. */
 export function resolveGenerationLimit(serverLimit, accessTier = "free", brand = BRAND) {
+    if (!brand.features.aiTools)
+        return 0;
     if (accessTier !== "subscribed")
         return 0;
     if (typeof serverLimit === "number" && Number.isFinite(serverLimit) && serverLimit > 0) {

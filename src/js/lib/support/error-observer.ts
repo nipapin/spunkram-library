@@ -1,4 +1,5 @@
-import { SUPPORT_ENDPOINT } from "@/api/config";
+import { API_BASE, SUPPORT_ENDPOINT } from "@/api/config";
+import { BRAND } from "@brands";
 import { getUserIdentity } from "@/api/user";
 import { cepHttpRequest, type HttpResult } from "@/lib/api/cep-http";
 import { collectSupportMeta } from "./collect-meta";
@@ -8,7 +9,7 @@ const DEDUPE_WINDOW_MS = 60_000;
 /**
  * Absolute production URL — CEP Node `http` cannot POST relative paths.
  */
-const SUPPORT_REPORT_URL = `https://motionflow.pro${SUPPORT_ENDPOINT}`;
+const SUPPORT_REPORT_URL = `${API_BASE}${SUPPORT_ENDPOINT}`;
 
 /**
  * Severity:
@@ -338,6 +339,7 @@ export function reportError(
   error: unknown,
   opts?: SupportReportOptions,
 ): Promise<void> {
+  if (!BRAND.features.telemetry) return Promise.resolve();
   try {
     const actionName = (action || "unknown").trim().slice(0, 200);
     const parts = extractErrorParts(error);

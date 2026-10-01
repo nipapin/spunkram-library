@@ -12,7 +12,7 @@ import {
   brandCepDist,
   DEFAULT_BRAND,
   getBrand,
-  otherBrandId,
+  otherBrandIds,
   resolveBrand,
 } from "./brands.config";
 import { writeLegacyCepEntries } from "./src/js/utils/legacy-cep-entries";
@@ -26,11 +26,13 @@ const require = createRequire(import.meta.url);
 const hostPkgRoot = path.dirname(require.resolve("motionflow-host/package.json"));
 const hostEntry = path.join(hostPkgRoot, "src/index.ts");
 
-const extensions = [".js", ".ts", ".tsx"];
+// TypeScript is the source of truth. The remaining .js files are CEP vendor
+// libraries without TypeScript counterparts.
+const extensions = [".ts", ".tsx", ".js"];
 
 const appBrandId = resolveBrand(process.env.APP_BRAND ?? DEFAULT_BRAND);
 const brand = getBrand(appBrandId);
-const otherBrand = otherBrandId(appBrandId);
+const otherBrands = otherBrandIds(appBrandId);
 
 const devDist = "dist";
 const cepDist = brandCepDist(appBrandId);
@@ -197,7 +199,7 @@ const action = process.env.BOLT_ACTION;
 const devEnv = loadEnv("development", __dirname, "");
 
 // Dev Vite proxy target for /api/* — always https://motionflow.pro unless overridden.
-const apiTarget = devEnv.MOTIONFLOW_API_TARGET?.trim() || "https://motionflow.pro";
+const apiTarget = devEnv.MOTIONFLOW_API_TARGET?.trim() || brand.apiOrigin || "https://motionflow.pro";
 
 let input: { [key: string]: string } = {};
 cepConfig.panels.map((panel) => {
@@ -222,17 +224,17 @@ if (action) runAction(config, action);
 
 /** Block the other brand's HTML entry so Vite does not crawl it in this process. */
 function isolateBrandHtmlPlugin(): Plugin {
-  const blocked = `/${otherBrand}`;
   return {
     name: "isolate-brand-html",
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const pathname = (req.url ?? "").split("?")[0];
-        if (pathname === blocked || pathname.startsWith(`${blocked}/`)) {
+        const otherBrand = otherBrands.find((id) => pathname === `/${id}` || pathname.startsWith(`/${id}/`));
+        if (otherBrand) {
           res.statusCode = 404;
           res.setHeader("Content-Type", "text/plain; charset=utf-8");
           res.end(
-            `This Vite process serves ${appBrandId} on :${brand.port}. Use npm run dev:${otherBrand} for ${otherBrand}.`,
+            `This Vite process serves ${appBrandId} on :${brand.port}. Use npm run dev -- --author=${otherBrand} for ${otherBrand}.`,
           );
           return;
         }
@@ -245,6 +247,23 @@ function isolateBrandHtmlPlugin(): Plugin {
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
+    {
+      name: "odin-local-test-pack",
+      apply: "serve",
+      configureServer(server) {
+        if (appBrandId !== "odin" || !brand.devPack?.path) return;
+        const file = brand.devPack.path;
+        server.middlewares.use("/__odin-dev-pack.json", (req, res) => {
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+          res.setHeader("Cache-Control", "no-store");
+          if (req.method !== "GET") { res.statusCode = 405; res.end(); return; }
+          fs.readFile(file, "utf8", (error, json) => {
+            if (error) { res.statusCode = 404; res.end('{"error":"Local pack unavailable"}'); }
+            else res.end(json.replace(/^\uFEFF/, ""));
+          });
+        });
+      },
+    },
     isolateBrandHtmlPlugin(),
     react(),
     cep(config),
@@ -278,10 +297,7 @@ export default defineConfig({
     port: cepConfig.port,
     strictPort: true,
     watch: {
-      ignored: [
-        `**/src/js/${otherBrand}/**`,
-        `**/src/js/ui/${otherBrand}/**`,
-      ],
+      ignored: otherBrands.map((id) => `**/src/js/${id}/**`),
     },
     // Motion Flow API → https://motionflow.pro (see `apiTarget`). Each brand
     // has its own Vite port — proxy avoids CORS in dev. Paths must end with

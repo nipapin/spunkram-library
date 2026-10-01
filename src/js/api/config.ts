@@ -1,7 +1,9 @@
 /**
  * Motion Flow API — production: https://motionflow.pro
  */
-export const API_BASE = "https://motionflow.pro";
+import { BRAND } from "@brands";
+
+export const API_BASE = BRAND.apiOrigin ?? "https://motionflow.pro";
 
 export const GENERATIONS_ENDPOINTS = {
   /** POST — транскрипция аудио (multipart/form-data), см. utils/transcribe.ts */

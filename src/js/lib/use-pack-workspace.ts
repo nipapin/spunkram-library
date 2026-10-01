@@ -147,7 +147,10 @@ function pickMarketPack(
   );
 }
 
-export function usePackWorkspace() {
+export function usePackWorkspace(options?: {
+  loadTestPack?: () => Promise<Awaited<ReturnType<typeof loadInstalledPack>>>;
+}) {
+  const loadTestPack = import.meta.env.DEV ? options?.loadTestPack : undefined;
   const { signedIn, subscription, market, authReady, refreshMarket } = useAuth();
   const { showFavoritesOnly, showAvailableOnly, favoriteIds, setShowFavoritesOnly } =
     usePanelUI();
@@ -196,6 +199,9 @@ export function usePackWorkspace() {
 
   const setCategory = useCallback(
     (id: string) => {
+      // A category click is a new browsing context, not a refinement of the
+      // previous search result.
+      setQuery("");
       if (id === FAVORITES_CATEGORY_ID) {
         setShowFavoritesOnly(true);
         setCategoryState(FAVORITES_CATEGORY_ID);
@@ -347,6 +353,21 @@ export function usePackWorkspace() {
   }, [showFavoritesOnly, category, tree]);
 
   const reloadPackList = useCallback(async () => {
+    if (loadTestPack) {
+      setStructureLoading(true);
+      try {
+        const loaded = await loadTestPack();
+        setAssetsPath(loaded.assetsPath);
+        setPackFilePath(loaded.meta.path);
+        setPackSettings(loaded.pack.settings);
+        applyLocalTree(loaded);
+      } catch (error) {
+        setPackError(error instanceof Error ? error.message : "Could not load local test pack.");
+      } finally {
+        setStructureLoading(false);
+      }
+      return;
+    }
     const custom = (readPrefSettings().absCustomAbsolutePath || "").trim();
     if (custom) {
       const entitlement = signedIn
@@ -389,7 +410,7 @@ export function usePackWorkspace() {
       const message = err instanceof Error ? err.message : String(err);
       setPackError(packInitErrorMessage(message));
     }
-  }, [applyLocalTree, hydrateLocalPack, signedIn, subscription.purchases]);
+  }, [applyLocalTree, hydrateLocalPack, signedIn, subscription.purchases, loadTestPack]);
 
   useEffect(() => {
     if (!authReady || !signedIn) return;
@@ -412,6 +433,7 @@ export function usePackWorkspace() {
 
   // Prefer remote catalog for sidebar / search (Gal: dedicated R2; else market structure).
   useEffect(() => {
+    if (loadTestPack) return;
     if (!authReady || !signedIn) {
       if (BRAND.id === "gal") setStructureLoading(false);
       return;
@@ -515,7 +537,7 @@ export function usePackWorkspace() {
         );
       }
     })();
-  }, [authReady, signedIn, market, runGalAssetsSync]);
+  }, [authReady, signedIn, market, runGalAssetsSync, loadTestPack]);
 
   const entitlementCtx = useMemo(
     () =>
@@ -556,13 +578,14 @@ export function usePackWorkspace() {
 
   /** Account may use pack content. Gal: any signed-in user has a plan; Spunkram: pack entitlement. */
   const isEntitled = useMemo(() => {
+    if (loadTestPack) return Boolean(signedIn);
     if (BRAND.id === "gal") {
       return Boolean(signedIn);
     }
     return (
       activePackMeta != null && isPackEntitled(activePackMeta, entitlementCtx)
     );
-  }, [signedIn, activePackMeta, entitlementCtx]);
+  }, [signedIn, activePackMeta, entitlementCtx, loadTestPack]);
 
   /** Entitled + (local zip assets OR Gal on-demand path). */
   const canApply = useMemo(
@@ -780,6 +803,7 @@ export function usePackWorkspace() {
   );
 
   return {
+    isTestPack: Boolean(loadTestPack),
     tree,
     sidebarTree,
     category,

@@ -3,6 +3,7 @@
  * Receives pack lifecycle events + extension.update (new ZXP on CDN).
  */
 import { API_BASE, apiUrl } from "@/api/config";
+import { BRAND } from "@brands";
 import { getSessionToken, handleUnauthorized } from "@/lib/api/session";
 import { shouldKeepSharedSession } from "@/lib/api/shared-auth-session";
 import { currentHostAppId } from "@/lib/utils/apply-item";
@@ -29,7 +30,7 @@ export type CepExtensionUpdateEvent = {
   zxp_url?: string;
   changelog?: string;
   channel?: "stable" | "beta";
-  product?: "spunkram" | "gal";
+  product?: "spunkram" | "gal" | "odin";
   published_at?: string;
   ts: number;
 };
@@ -77,6 +78,7 @@ class CepWsClient {
   }
 
   start(): void {
+    if (!BRAND.features.remoteNotifications) return;
     this.intentionalClose = false;
     this.started = true;
     this.connect();

@@ -17,37 +17,19 @@ if (pkg.name !== "motionflow-cep") {
   errors.push(`package.json name is "${pkg.name}", expected "motionflow-cep"`);
 }
 
-const spunkram = build.spunkram;
-const gal = build.gal;
-if (!spunkram || !gal) errors.push("brand-build.json must have spunkram and gal");
-
-const pairs = [
-  ["port", spunkram.port, gal.port],
-  ["servePort", spunkram.servePort, gal.servePort],
-  ["startingDebugPort", spunkram.startingDebugPort, gal.startingDebugPort],
-];
-for (const [key, a, b] of pairs) {
-  if (a === b) errors.push(`${key} collides: both brands use ${a}`);
+const usedPorts = new Map();
+for (const id of ['spunkram', 'gal', 'odin']) {
+  const brand = build[id];
+  if (!brand) { errors.push(id + ' config missing'); continue; }
+  if (!brand.version) errors.push(id + '.version missing');
+  for (const key of ['port', 'servePort', 'startingDebugPort']) {
+    const port = brand[key];
+    if (!Number.isInteger(port)) errors.push(id + '.' + key + ' invalid');
+    if (usedPorts.has(port)) errors.push(id + '.' + key + ' collides with ' + usedPorts.get(port));
+    usedPorts.set(port, id + '.' + key);
+  }
 }
-
-if (typeof spunkram.version !== "string" || !spunkram.version) {
-  errors.push("spunkram.version missing");
-}
-if (typeof gal.version !== "string" || !gal.version) {
-  errors.push("gal.version missing");
-}
-
-console.log(
-  JSON.stringify(
-    {
-      package: pkg.name,
-      spunkram: { ...spunkram, dist: "dist/cep-spunkram" },
-      gal: { ...gal, dist: "dist/cep-gal" },
-    },
-    null,
-    2,
-  ),
-);
+console.log(JSON.stringify(build, null, 2));
 
 if (errors.length) {
   console.error("[assert-brand-isolation]", errors.join("\n"));

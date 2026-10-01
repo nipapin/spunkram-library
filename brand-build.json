@@ -1,4 +1,10 @@
 {
+  "odin": {
+    "version": "1.0.0",
+    "port": 4020,
+    "servePort": 5020,
+    "startingDebugPort": 8880
+  },
   "spunkram": {
     "version": "0.10.4",
     "port": 4000,

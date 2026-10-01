@@ -131,9 +131,11 @@ Install Dependencies (if not already done by create command)
 
 **⚠️ Enable PlayerDebugMode**
 
-- Adobe CEP's PlayerDebugMode must be enabled on your machine to test `yarn build` or `yarn dev` builds. Only an installed ZXP with `yarn zxp` will work without PlayerDebugMode enabled.
+- Adobe CEP's PlayerDebugMode must be enabled on your machine to test `yarn build` or `yarn dev` builds. Only an installed ZXP with `yarn build --format=zxp` will work without PlayerDebugMode enabled.
   - Enable this easily with the [aescripts ZXP Installer](https://aescripts.com/learn/zxp-installer/) > Settings > Debug > Enable Debugging
   - Or enable manually per OS by following the CEP Cookbook Instructions: [Adobe CEP 12 Cookbook](https://github.com/Adobe-CEP/CEP-Resources/blob/master/CEP_12.x/Documentation/CEP%2012%20HTML%20Extension%20Cookbook.md#debugging-unsigned-extensions)
+
+Use `npm run dev`, `npm run build`, or `npm run release` for the interactive wizard. Release asks for patch/minor/major, then the author. See [CLI commands](docs/CLI.md) for automation and packaging flags.
 
 Build the extension (must run before `dev`, can also run after for panel to work statically without the process) Symlink is created to extensions folder.
 
@@ -142,7 +144,7 @@ Build the extension (must run before `dev`, can also run after for panel to work
 - pnpm `pnpm build`
 
 Run the extension in HMR Hot-reload mode for rapid development. Both JS and ExtendScript folders re-build on changes.
-Viewable in browser via localhost:3000/panel/ (see [Panel Structure](#cep-panel-structure) to set up multiple panels)
+The wizard selects the author: Spunkram (:4000/spunkram/), Gal (:4010/gal/), or Odin (:4020/odin/).
 
 - yarn `yarn dev`
 - npm `npm run dev`
@@ -150,15 +152,15 @@ Viewable in browser via localhost:3000/panel/ (see [Panel Structure](#cep-panel-
 
 Build & Package the extension as a ZXP for delivery to the `dist/zxp` folder (install with [aescripts ZXP Installer](https://aescripts.com/learn/zxp-installer/) or another ZXP installer)
 
-- yarn `yarn zxp`
-- npm `npm run zxp`
-- pnpm `pnpm zxp`
+- yarn `yarn build --format=zxp`
+- npm `npm run build -- --format=zxp`
+- pnpm `pnpm build --format=zxp`
 
 Bundles your packaged zxp file and specified assets from `copyZipAssets` to a zip archive in the `./zip` folder
 
-- yarn `yarn zip`
-- npm `npm run zip`
-- pnpm `pnpm zip`
+- yarn `yarn build --format=zip`
+- npm `npm run build -- --format=zip`
+- pnpm `pnpm build --format=zip`
 
 ---
 

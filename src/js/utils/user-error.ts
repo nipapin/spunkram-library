@@ -1,11 +1,13 @@
 import { CaptionApiError, authErrorMessage } from "../styles/api";
 import { ChapterApiError } from "./chapters";
 import { cepHostAppId } from "../lib/utils/bolt";
+import { BRAND } from "@brands";
 
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 const NETWORK_ERROR = "Network error. Check your connection and try again.";
 const TIMEOUT_ERROR = "Request timed out. Check your connection and try again.";
 const SERVER_ERROR = "Server error. Please try again in a moment.";
+const SERVICE_UNAVAILABLE = `Unable to reach ${BRAND.id === "odin" ? "Odin Pro" : "Motionflow"}. Try again in a moment.`;
 
 const TIMEOUT_CODES = new Set([
   "ETIMEDOUT",
@@ -198,7 +200,7 @@ export function friendlyErrorMessage(err: unknown): string {
   if (err == null || err === "") return GENERIC_ERROR;
 
   if (typeof err === "string") {
-    if (err === "NO_SUCCESS_LOAD") return "Unable to reach Motionflow. Try again in a moment.";
+    if (err === "NO_SUCCESS_LOAD") return SERVICE_UNAVAILABLE;
     if (/UNKNOWN_CLIENT/i.test(err) || /unknown client/i.test(err)) {
       return "This extension isn’t registered for sign-in yet.";
     }
@@ -306,7 +308,7 @@ export function friendlyErrorMessage(err: unknown): string {
   }
 
   if (looksLikeInternalError(msg)) return GENERIC_ERROR;
-  if (msg === "NO_SUCCESS_LOAD") return "Unable to reach Motionflow. Try again in a moment.";
+  if (msg === "NO_SUCCESS_LOAD") return SERVICE_UNAVAILABLE;
   if (/UNKNOWN_CLIENT/i.test(msg) || /unknown client/i.test(msg)) {
     return "This extension isn’t registered for sign-in yet.";
   }

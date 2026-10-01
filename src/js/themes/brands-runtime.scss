@@ -2,6 +2,7 @@
 @use "./gal" as gal;
 @use "./spunkram" as spunk;
 @use "./css-vars" as cv;
+@use "./odin";
 
 :root[data-brand="gal"] {
   @include cv.emit-tokens(gal.$tokens);

@@ -23,9 +23,10 @@ const DIST = path.join(ROOT, "dist");
 const OLD_SUFFIX = ".update-old";
 const BACKUP_DIR = "_mf_old";
 
-const BRAND = process.env.APP_BRAND === "gal" ? "gal" : "spunkram";
+const BRAND = ["gal", "odin"].includes(process.env.APP_BRAND) ? process.env.APP_BRAND : "spunkram";
 const EXT_ID = {
   gal: "com.premieregal.cep",
+  odin: "com.odinpro.cep",
   spunkram: "com.spunkramlibrary.cep",
 }[BRAND];
 const WIPE_ALL =

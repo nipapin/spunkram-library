@@ -1,0 +1,89 @@
+@use "sass:map";
+@use "./spunkram" as base;
+@use "./css-vars" as cv;
+
+// Odin Pro storefront palette; use the common panel's complete token set.
+:root[data-brand="odin"] {
+  @include cv.emit-tokens(map.merge(base.$tokens, (
+    "bg-page": #0e0f11,
+    "bg-panel": #17181c,
+    "bg-header": #17181c,
+    "bg-tabbar": #17181c,
+    "bg-modal": #0e0f11,
+    "bg-input": #222429,
+    "bg-input-dark": #17181c,
+    "card-gradient": #17181c,
+    "surface-active": #293300,
+    "surface-segmented": #293300,
+    "accent": #ccff00,
+    "accent-2": #a3cc00,
+    "accent-hover": #ddff55,
+    "accent-soft": rgba(204, 255, 0, 0.12),
+    "accent-glow": rgba(204, 255, 0, 0.25),
+    "accent-ring": rgba(204, 255, 0, 0.5),
+    "accent-gradient": linear-gradient(145deg, #a3cc00, #ccff00),
+    "accent-gradient-hover": linear-gradient(145deg, #ccff00, #ddff55),
+    "accent-gradient-disabled": #293300,
+    "highlight": #ccff00,
+    "highlight-border": rgba(204, 255, 0, 0.4),
+    "caption-highlight-bg": #293300,
+    "border": rgba(255, 255, 255, 0.12),
+    "border-card": rgba(255, 255, 255, 0.12),
+    "border-input": rgba(255, 255, 255, 0.2),
+    "border-hover": rgba(204, 255, 0, 0.4),
+    "font-headline": ("Inter Variable", Inter, system-ui, sans-serif),
+    "font-sans": ("Inter Variable", Inter, system-ui, sans-serif),
+    "font-family": ("Inter Variable", Inter, system-ui, sans-serif),
+  )));
+  --background: 14, 15, 17;
+  --foreground: 255, 255, 255;
+  --card: 23, 24, 28;
+  --popover: 23, 24, 28;
+  --primary: 204, 255, 0;
+  --primary-foreground: 14, 15, 17;
+  --secondary: 34, 36, 41;
+  --muted: 34, 36, 41;
+  --muted-foreground: 160, 163, 170;
+  --ring: 204, 255, 0;
+  --sidebar: 14, 15, 17;
+  --sidebar-primary: 204, 255, 0;
+  --sidebar-primary-foreground: 14, 15, 17;
+  --sidebar-accent: 41, 51, 0;
+  --sidebar-ring: 204, 255, 0;
+
+  .panel-header {
+    --ph-page: 14, 15, 17;
+    --ph-surface: 23, 24, 28;
+    --ph-line: 50, 52, 58;
+    --ph-cta: var(--accent-gradient);
+    --ph-cta-hover: var(--accent-gradient-hover);
+    --ph-soft: #293300;
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+  }
+  .spunkram-boot { --sb-cta: var(--accent-gradient); }
+  .spunkram-boot__ring { border-color: rgba(204, 255, 0, 0.3); box-shadow: none; }
+  .account-spunkram__pair { grid-template-columns: 1fr; }
+  .account-spunkram {
+    --acc-page: 14, 15, 17;
+    --acc-surface: 23, 24, 28;
+    --acc-surface-2: 34, 36, 41;
+    --acc-line: 50, 52, 58;
+    --acc-line-strong: 70, 72, 78;
+    --acc-brand: #ccff00;
+    --acc-cta: var(--accent-gradient);
+    --acc-cta-hover: var(--accent-gradient-hover);
+    background-image: none;
+  }
+  .account-spunkram__mesh, .account-spunkram__grid { display: none; }
+  .account-btn--primary { color: #0e0f11; }
+  .pill-brand, .btn--primary {
+    color: #0e0f11;
+    background-color: #ccff00;
+    background-image: var(--accent-gradient);
+    box-shadow: 0 4px 18px rgba(204, 255, 0, 0.15);
+  }
+  .pill-brand:hover:not(:disabled) { background-image: var(--accent-gradient-hover); }
+  .spunkram-shell { background: #0e0f11; }
+  .spunkram-shell__mesh, .spunkram-shell__grid { display: none; }
+  .panel-header__logo, .spunkram-boot__logo { background: #17181c; }
+}

@@ -24,6 +24,7 @@ export type GenerationsStatus = {
 export async function fetchGenerationsStatus(
   signal?: AbortSignal,
 ): Promise<GenerationsStatus | null> {
+  if (!BRAND.features.aiTools) return null;
   const user = getUserIdentity();
   try {
     const headers: Record<string, string> = { "Content-Type": "application/json" };

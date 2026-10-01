@@ -1,6 +1,6 @@
 import brandBuild from "./brand-build.json";
 
-export type BrandId = "gal" | "spunkram";
+export type BrandId = "gal" | "spunkram" | "odin";
 
 /** Author access model. Server `/me.tier` must be one of these (or mappable). */
 export type AccessTier = "free" | "purchased" | "subscribed";
@@ -58,6 +58,24 @@ export type BrandConfig = {
   sitePath: string;
   /** Absolute origin for public pages when they live on a storefront host. */
   siteOrigin?: string;
+  /** External tutorials page or playlist. Empty until the author supplies a URL. */
+  tutorialsUrl?: string;
+  /** Local JSON pack for development only; never used by release builds. */
+  devPack?: { path: string; host: "AE" | "PR" };
+  /** Existing catalog artwork, also used while the account catalog is loading. */
+  packagePreviews?: Partial<Record<"AE" | "PR", string>>;
+  /** Backend hosting this brand's CEP routes. */
+  apiOrigin?: string;
+  verificationPath?: string;
+  manageSubscriptionPath?: string;
+  features: {
+    aiTools: boolean;
+    footages: boolean;
+    remoteNotifications: boolean;
+    extensionUpdates: boolean;
+    telemetry: boolean;
+    remotePackPreview: boolean;
+  };
   packExtension: string;
   legacyPackExtension: string;
   prefsCompany: string;
@@ -76,7 +94,52 @@ export type BrandConfig = {
 };
 
 export const BRANDS: Record<BrandId, BrandConfig> = {
+  odin: {
+    id: "odin",
+    extensionId: "com.odinpro.cep",
+    displayName: "Odin Pro",
+    panelDisplayName: "Odin Pro",
+    ...brandBuild.odin,
+    panelMainPath: "./odin/index.html",
+    authorName: "Premiere Basics",
+    apiClient: "odin-cep",
+    sitePath: "/",
+    siteOrigin: "https://odin-pro.com",
+    tutorialsUrl: "",
+    devPack: {
+      path: "C:/Users/nipap/Downloads/Telegram Desktop/Odin Pro 1.2.0 - Premiere Pro Test Mode.odin",
+      host: "PR",
+    },
+    packagePreviews: {
+      AE: "https://api.get-atomx.com/atomx_files/ext_market/packages/560.jpg",
+      PR: "https://api.get-atomx.com/atomx_files/ext_market/packages/542.jpg",
+    },
+    apiOrigin: "https://odin-pro.com",
+    verificationPath: "/cep/login",
+    manageSubscriptionPath: "/account",
+    features: { aiTools: false, footages: false, remoteNotifications: false, extensionUpdates: false, telemetry: false, remotePackPreview: false },
+    packExtension: "odin",
+    legacyPackExtension: "odin",
+    prefsCompany: "Premiere Basics",
+    prefsProduct: "Odin Pro Extension",
+    panelCompany: "Premiere Basics",
+    panelProduct: "Odin Pro",
+    adobeCommonFolder: "Odin Pro",
+    stylesBin: "Odin Pro Styles",
+    captionsBin: "Odin Pro Captions",
+    captionsCdnPrefix: "Odin Pro Captions",
+    assetsBin: "Odin Pro Assets",
+    storagePrefix: "odin.",
+    appDataFolder: "odin-pro",
+    access: {
+      tiers: ["free", "subscribed"],
+      packPurchasesGrantAccess: false,
+      generations: { free: 0, purchased: 0, subscribed: 0 },
+      freePackSlots: 0,
+    },
+  },
   gal: {
+    features: { aiTools: true, footages: false, remoteNotifications: true, extensionUpdates: true, telemetry: true, remotePackPreview: true },
     id: "gal",
     extensionId: "com.premieregal.cep",
     displayName: "Gal Toolkit MAX",
@@ -111,6 +174,7 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
     },
   },
   spunkram: {
+    features: { aiTools: true, footages: true, remoteNotifications: true, extensionUpdates: true, telemetry: true, remotePackPreview: true },
     id: "spunkram",
     extensionId: "com.spunkramlibrary.cep",
     displayName: "Spunkram Library",
@@ -148,8 +212,8 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
 
 export const DEFAULT_BRAND: BrandId = "spunkram";
 
-export function otherBrandId(id: BrandId = activeBrandId()): BrandId {
-  return id === "gal" ? "spunkram" : "gal";
+export function otherBrandIds(id: BrandId = activeBrandId()): BrandId[] {
+  return (Object.keys(BRANDS) as BrandId[]).filter((brandId) => brandId !== id);
 }
 
 /** Folder under `dist/` for this brand's CEP output (`cep-spunkram`, `cep-gal`). */
@@ -160,7 +224,7 @@ export function brandCepDist(id: BrandId = activeBrandId()): string {
 declare const __APP_BRAND__: string | undefined;
 
 export function resolveBrand(raw?: string | null): BrandId {
-  return raw === "gal" ? "gal" : DEFAULT_BRAND;
+  return raw && Object.prototype.hasOwnProperty.call(BRANDS, raw) ? raw as BrandId : DEFAULT_BRAND;
 }
 
 export function getBrand(raw?: string | null): BrandConfig {
@@ -228,6 +292,7 @@ export function resolveGenerationLimit(
   accessTier: AccessTier = "free",
   brand: BrandConfig = BRAND,
 ): number | null {
+  if (!brand.features.aiTools) return 0;
   if (accessTier !== "subscribed") return 0;
   if (typeof serverLimit === "number" && Number.isFinite(serverLimit) && serverLimit > 0) {
     return Math.floor(serverLimit);

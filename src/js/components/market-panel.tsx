@@ -1,3 +1,4 @@
+import { BRAND } from "@brands";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Loader2, Play, RotateCcw, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -315,7 +316,7 @@ function MarketCard({
           </p>
         )}
 
-        {showSubHint && <p className="text-[10px] leading-snug text-muted-foreground">Available free with Spunkram subscription</p>}
+        {showSubHint && <p className="text-[10px] leading-snug text-muted-foreground">Included with {BRAND.displayName} subscription</p>}
 
         <div className="flex gap-1">
           <button
@@ -521,7 +522,7 @@ export function MarketPanel({
       {!subscriptionActive && (
         <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-[16px] border border-[#7c4dff]/30 bg-[#7c4dff]/10 px-2.5 py-2 text-[11px] text-foreground">
           <span className="flex-1">
-            Packs are available free with a Spunkram subscription from <strong>$9.9/month</strong>
+            {BRAND.id === "odin" ? "Access Odin Pro packs with your subscription" : <>Packs are available free with a Spunkram subscription from <strong>$9.9/month</strong></>}
           </span>
           <button
             type="button"
@@ -591,7 +592,7 @@ export function MarketPanel({
       <div className="shrink-0 px-2.5 pb-2.5 pt-1">
         <button
           type="button"
-          onClick={() => openMotionflowStore()}
+          onClick={() => BRAND.id === "odin" ? openMotionflowSubscribe() : openMotionflowStore()}
           className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full border border-[rgb(42,36,64)] bg-[rgb(14,12,26)]/50 text-xs font-medium text-foreground transition-colors hover:border-[#7c4dff]/40 hover:bg-[rgb(14,12,26)]"
         >
           <ExternalLink className="size-3.5" />

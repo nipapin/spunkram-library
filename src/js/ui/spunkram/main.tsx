@@ -62,7 +62,7 @@ import {
 import type { InstalledPackMeta, PackSettings, PackTreeItem, PackTreeNode } from "@/lib/utils/pack-types";
 import { cn } from "@/lib/utils";
 import * as panelStore from "@/lib/userdata-store";
-import { storageKey } from "@brands";
+import { BRAND, storageKey } from "@brands";
 import "./main.scss";
 
 const CATEGORY_BY_PACK_KEY = storageKey("categoryByPack");
@@ -138,7 +138,9 @@ function PurchaseGateBanner({ onOpenAccount }: { onOpenAccount: () => void }) {
     <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-200">
       <Lock className="size-3.5 shrink-0" />
       <span className="flex-1">
-        Free plan includes 1 free pack. Subscribe or buy a pack to unlock this content.
+        {BRAND.id === "odin"
+          ? "Subscribe to Odin Pro to unlock this content."
+          : "Free plan includes 1 free pack. Subscribe or buy a pack to unlock this content."}
       </span>
       <button
         type="button"
@@ -163,7 +165,7 @@ function FreePlanBanner({ onOpenAccount }: { onOpenAccount: () => void }) {
   return (
     <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-2 text-[11px] text-foreground">
       <span className="flex-1">
-        Free plan: {packPart} · {genPart}
+        {BRAND.id === "odin" ? "An Odin Pro subscription is required to use these packs." : <>Free plan: {packPart} · {genPart}</>}
       </span>
       <button
         type="button"
@@ -620,7 +622,7 @@ function AppShell() {
 
   // Prefetch ffmpeg after the shell is up so unzip/download cannot freeze Loading.
   useEffect(() => {
-    if (!authReady) return;
+    if (!authReady || !BRAND.features.aiTools) return;
     const timer = window.setTimeout(() => {
       ensureFfmpeg().catch((err) => {
         console.warn(
@@ -661,6 +663,8 @@ function AppShell() {
   };
 
   function handleNav(id: string) {
+    if (id === "ai-tools" && !BRAND.features.aiTools) return;
+    if (id === "footages" && !BRAND.features.footages) return;
     if (id === "editing" && !hasInstalledPacks) return;
     setSettingsOpen(false);
     setNav(id);
@@ -766,7 +770,7 @@ function AppShell() {
             }}
           />
         </section>
-      ) : nav === "ai-tools" ? (
+      ) : nav === "ai-tools" && BRAND.features.aiTools ? (
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {subscription.subscribed ? (
             <AiToolsPanel {...aiToolsProps} />
@@ -776,7 +780,7 @@ function AppShell() {
             />
           )}
         </section>
-      ) : nav === "footages" ? (
+      ) : nav === "footages" && BRAND.features.footages ? (
         <section className="min-h-0 flex-1 overflow-hidden">
           <FootagesPanel />
         </section>

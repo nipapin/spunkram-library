@@ -461,7 +461,7 @@ CEP downloads ffmpeg into userdata (not the extension folder) so ZXP overwrite u
 - Verify `X-Hub-Signature-256` with `GITHUB_WEBHOOK_SECRET`
 - Optional filter: `GITHUB_SPUNKRAM_REPO` (`org/repo`)
 - On `release` `published` / `edited`: download `.zxp` asset → R2 (Spunkram path unless extended)
-- Prefer CEP `npm run release:*` upload for multi-brand (`--brand=all`)
+- Prefer CEP `npm run release` upload for multi-brand (`--brand=all`)
 - Prerelease / tag containing `-beta` → `beta.json`; otherwise `latest.json`
 - Optional `GITHUB_TOKEN` if release assets need auth
 
@@ -479,10 +479,10 @@ After R2 upload the script calls **`POST /api/cep/update/notify`** with `x-motio
 CEP:
 
 ```bash
-npm run release:all -- --bump=patch    # Spunkram + Gal, independent versions / tags
-npm run release:gal:patch              # Gal only
-npm run release:all -- --beta          # beta.json per brand
-npm run release:spunkram:patch         # Spunkram only
+npm run release -- --author=all --type=patch    # Spunkram + Gal, independent versions / tags
+npm run release -- --author=gal --type=patch              # Gal only
+npm run release -- --author=all --beta          # beta.json per brand
+npm run release -- --author=spunkram --type=patch         # Spunkram only
 ```
 
 ### 5.5 CEP client behaviour

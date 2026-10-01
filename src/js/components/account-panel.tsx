@@ -37,6 +37,7 @@ function accountInitial(account: Pick<MotionflowAccountSession, "name" | "email"
 
 /** Server plan titles include the product name (`Spunkram Library Editor`). */
 function planTitle(plan?: string): string {
+  if (BRAND.id === "odin") return plan?.trim() || BRAND.displayName;
   const raw = (plan || "").trim();
   if (!raw) return "Editor";
   const brand = BRAND.displayName.trim();
@@ -460,7 +461,7 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
                     ) : planStatus !== "Active" ? (
                       <p className="account-spunkram__sub">{planStatus}</p>
                     ) : null}
-                    {isAdmin ? (
+                    {isAdmin && BRAND.id === "spunkram" ? (
                       <div className="account-spunkram__dev-plan">
                         <div className="account-spunkram__plan-switch" role="group" aria-label="Dev plan">
                           {SPUNKRAM_DEV_PLANS.map((plan) => (
@@ -496,7 +497,7 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
                 </div>
               </section>
 
-              <section className="account-spunkram__card account-spunkram__card--tile">
+              {BRAND.features.aiTools && (<section className="account-spunkram__card account-spunkram__card--tile">
                 <Sheen />
                 <div className="account-spunkram__inner account-spunkram__tile">
                   <div className="account-spunkram__tile-head">
@@ -537,12 +538,12 @@ export function AccountPanel({ onBack }: { onBack: () => void }) {
                     </div>
                   </div>
                 </div>
-              </section>
+              </section>)}
             </div>
 
             {!subscription.subscribed && (
               <button type="button" className="account-btn account-btn--primary account-btn--block" onClick={openMotionflowSubscribe}>
-                Subscribe from $9.9/mo
+                {BRAND.id === "odin" ? "Subscribe to Odin Pro" : "Subscribe from $9.9/mo"}
                 <ArrowUpRight className="size-3.5" />
               </button>
             )}

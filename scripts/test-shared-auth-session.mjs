@@ -12,6 +12,7 @@ import {
 
 /** Keep in sync with `brands.config.ts` — tests cannot import that file (JSON assert). */
 const CEP_BRANDS = [
+  { id: "odin", apiClient: "odin-cep", prefsCompany: "Premiere Basics", prefsProduct: "Odin Pro Extension" },
   {
     id: "gal",
     apiClient: "gal-cep",

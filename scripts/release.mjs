@@ -2,16 +2,16 @@
 /**
  * CEP release (Spunkram and/or Gal Toolkit MAX):
  *  1) optional per-brand version bump in brand-build.json (stable or beta)
- *  2) npm run zxp:spunkram / zxp:gal
+ *  2) CLI build --author=<id> --format=zxp (without interactive prompts)
  *  3) git commit (if dirty) + push + tag `{brand}-{version}` per brand
  *  4) upload each ZXP → R2 (next-app script) → latest.json or beta.json
  *
  * Usage (from CEP repo root):
  *   npm run release
- *   npm run release:spunkram:patch    # bump + release Spunkram
- *   npm run release:gal:minor         # bump + release Gal
- *   npm run release:spunkram:beta     # 0.4.2 → 0.4.3-beta.1 (beta.json only)
- *   npm run release:all -- --bump=patch
+ *   npm run release -- --author=spunkram --type=patch
+ *   npm run release -- --author=gal --type=minor
+ *   npm run release -- --author=spunkram --beta
+ *   npm run release -- --author=all --type=patch
  *   npm run release -- --dry-run
  *   npm run release -- --no-git
  *   npm run release -- --no-upload
@@ -29,35 +29,18 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { AUTHORS } from "./cli-config.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const BUILD_PATH = path.join(ROOT, "brand-build.json");
 const CHANGELOG_PATH = path.join(ROOT, "CHANGELOG.md");
 
-/** @typedef {"spunkram" | "gal"} BrandId */
-
-const BRANDS = {
-  spunkram: {
-    id: "spunkram",
-    extensionId: "com.spunkramlibrary.cep",
-    zxpScript: "zxp:spunkram",
-    product: "spunkram",
-    zxpFileHint: "spunkram.zxp",
-  },
-  gal: {
-    id: "gal",
-    extensionId: "com.premieregal.cep",
-    zxpScript: "zxp:gal",
-    product: "gal",
-    zxpFileHint: "gal.zxp",
-  },
-};
+const BRANDS = Object.fromEntries(AUTHORS.map(author => [author.id, author]));
 
 function parseArgs(argv) {
   const opts = {
@@ -81,7 +64,7 @@ function parseArgs(argv) {
     else if (arg.startsWith("--message=")) opts.message = arg.slice("--message=".length);
     else if (arg === "--help" || arg === "-h") {
       console.log(
-        `Usage: node scripts/release.mjs [--brand=spunkram|gal|all] [--bump=patch|minor|major] [--beta] [--message=…] [--dry-run] [--no-git] [--no-upload] [--skip-build]`,
+        `Usage: node scripts/release.mjs [--brand=spunkram|gal|odin|all] [--bump=patch|minor|major] [--beta] [--message=…] [--dry-run] [--no-git] [--no-upload] [--skip-build] (Odin requires --no-upload)`,
       );
       process.exit(0);
     } else {
@@ -95,8 +78,8 @@ function parseArgs(argv) {
     throw new Error("Use either --beta or --bump=…, not both");
   }
   const brand = String(opts.brand || "spunkram").toLowerCase();
-  if (!["spunkram", "gal", "all"].includes(brand)) {
-    throw new Error(`Invalid --brand=${opts.brand} (use spunkram|gal|all)`);
+  if (![...Object.keys(BRANDS), "all"].includes(brand)) {
+    throw new Error(`Invalid --brand=${opts.brand} (use spunkram|gal|odin|all)`);
   }
   opts.brand = brand;
   return opts;
@@ -115,7 +98,7 @@ function shellQuote(arg) {
 }
 
 function run(cmd, args, opts = {}) {
-  const useShell = opts.shell ?? process.platform === "win32";
+  const useShell = opts.shell ?? false;
   const finalArgs = useShell ? args.map(shellQuote) : args;
   console.log(`$ ${cmd} ${args.join(" ")}`);
   const res = spawnSync(cmd, finalArgs, {
@@ -124,13 +107,14 @@ function run(cmd, args, opts = {}) {
     shell: useShell,
     env: { ...process.env, ...opts.env },
   });
+  if (res.error) throw res.error;
   if (res.status !== 0) {
     throw new Error(`Command failed (${res.status}): ${cmd} ${args.join(" ")}`);
   }
 }
 
 function runCapture(cmd, args) {
-  const useShell = process.platform === "win32";
+  const useShell = false;
   const finalArgs = useShell ? args.map(shellQuote) : args;
   const res = spawnSync(cmd, finalArgs, {
     cwd: ROOT,
@@ -221,11 +205,7 @@ function changelogForVersion(version) {
 
 function findZxp(extensionId) {
   const exact = path.join(ROOT, "dist", "zxp", `${extensionId}.zxp`);
-  if (existsSync(exact)) return exact;
-  const dir = path.join(ROOT, "dist", "zxp");
-  if (!existsSync(dir)) return null;
-  const hit = readdirSync(dir).find((f) => f.toLowerCase().endsWith(".zxp"));
-  return hit ? path.join(dir, hit) : null;
+  return existsSync(exact) ? exact : null;
 }
 
 /** Keep each brand ZXP outside dist/ — clean-dist wipes the whole tree. */
@@ -248,6 +228,14 @@ function main() {
   const opts = parseArgs(process.argv);
   const brands = resolveBrandList(opts.brand);
   const build = readBuild();
+  // Validate publication before bumping versions, building, or changing Git state.
+  if (!opts.noUpload) {
+    if (brands.some(brand => !brand.product)) throw new Error("Odin upload is not configured. Use --no-upload.");
+    const nextApp = resolveNextAppRoot();
+    for (const file of ["scripts/upload-spunkram-zxp.mjs", ".env"]) {
+      if (!existsSync(path.join(nextApp, file))) throw new Error(`Missing ${file} in ${nextApp} (set NEXT_APP_ROOT)`);
+    }
+  }
 
   /** @type {Map<string, string>} */
   const versionByBrand = new Map();
@@ -288,14 +276,14 @@ function main() {
   for (const brand of brands) {
     if (!opts.skipBuild) {
       if (opts.dryRun) {
-        console.log(`[release] dry-run: skip npm run ${brand.zxpScript}`);
+        console.log(`[release] dry-run: would build --author=${brand.id} --format=zxp`);
       } else {
         console.log(`[release] building ${brand.id}…`);
-        run("npm", ["run", brand.zxpScript]);
+        run(process.execPath, [path.join(ROOT, "scripts/cli.mjs"), "build", `--author=${brand.id}`, "--format=zxp"]);
       }
     }
 
-    const zxpPath = opts.dryRun && opts.skipBuild ? null : findZxp(brand.extensionId);
+    const zxpPath = opts.dryRun ? null : findZxp(brand.extensionId);
     if (!opts.dryRun && !opts.skipBuild && !zxpPath) {
       throw new Error(`ZXP not found for ${brand.extensionId} under dist/zxp/ after build`);
     }
@@ -335,7 +323,7 @@ function main() {
         const existing = spawnSync("git", ["rev-parse", `refs/tags/${tag}`], {
           cwd: ROOT,
           encoding: "utf8",
-          shell: process.platform === "win32",
+          shell: false,
         });
         if (existing.status === 0) {
           console.log(`[release] tag ${tag} already exists — skipping create`);
@@ -384,18 +372,18 @@ function main() {
         console.log(
           `[release] uploading ${brand.id} to R2 (channel=${uploadChannel})…`,
         );
-        run("node", uploadArgs, { cwd: nextApp });
+        run(process.execPath, uploadArgs, { cwd: nextApp });
       }
     }
   } else {
-    console.log("[release] --no-upload: skip R2 (webhook can publish from GitHub Release)");
+    console.log("[release] --no-upload: skip R2");
   }
 
   console.log(
     `[release] done → ${versionLabel} (${uploadChannel})`,
   );
-  console.log(`  check: https://motionflow.pro/api/cep/update`);
-  if (uploadChannel === "beta") {
+  if (!opts.noUpload) console.log(`  check: https://motionflow.pro/api/cep/update`);
+  if (!opts.noUpload && uploadChannel === "beta") {
     console.log(
       "  beta visible only to basepackagehelp@gmail.com (signed-in CEP with Bearer)",
     );

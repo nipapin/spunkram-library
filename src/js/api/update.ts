@@ -35,6 +35,7 @@ const RELEASE_ADMIN_EMAILS = new Set([
 ]);
 
 export function isReleaseAdminEmail(email: string | null | undefined): boolean {
+  if (!BRAND.features.extensionUpdates) return false;
   if (!email) return false;
   return RELEASE_ADMIN_EMAILS.has(email.trim().toLowerCase());
 }
@@ -84,6 +85,7 @@ function authHeaders(): Record<string, string> {
 }
 
 export async function fetchUpdateInfo(): Promise<UpdateManifest | null> {
+  if (!BRAND.features.extensionUpdates) return null;
   try {
     const qs = new URLSearchParams({ client: BRAND.apiClient });
     const result = await cepHttpRequest(

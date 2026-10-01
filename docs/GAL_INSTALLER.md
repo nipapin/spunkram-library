@@ -121,7 +121,7 @@ CTA в панели: градиент `--accent-gradient`, hover `--accent-gradi
 
 Для установщика: `download.url` = **`zxpUrl` из `latest.json`**, не хардкодить версию.
 
-Локальный артефакт сборки: `dist/zxp/com.premieregal.cep.zxp` (`npm run zxp:gal`). На CDN файл всегда называется **`gal.zxp`**.
+Локальный артефакт сборки: `dist/zxp/com.premieregal.cep.zxp` (`npm run build -- --author=gal --format=zxp`). На CDN файл всегда называется **`gal.zxp`**.
 
 ### Куда ставить CEP
 

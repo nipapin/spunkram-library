@@ -27,7 +27,7 @@ function cepFsAvailable(): boolean {
 }
 
 /**
- * Check whether filename matches a Motionflow pack extension (`.motionflow` / legacy `.spunkram`).
+ * Check whether filename matches this brand's pack extension (including `.odin`).
  */
 export function parsePackageFileFormat(
   filename: string,
@@ -82,8 +82,14 @@ function readPackUtf8(data: string | Buffer): string {
   return String(data);
 }
 
+function parsePackData(data: string | Buffer): PackInitResult {
+  const utf8 = readPackUtf8(data);
+  if (!looksLikeJsonPack(utf8)) throw new Error("CORRUPTED_PACK");
+  return toInitResult(parseJsonPackContent(utf8));
+}
+
 /**
- * Read and parse a plaintext Motionflow pack file (JSON).
+ * Read a UTF-8 JSON pack, including Odin's `.odin` files. Binary containers are unsupported.
  */
 export function initPackage(
   packPath: string,
@@ -106,15 +112,8 @@ export function initPackage(
       return;
     }
 
-    const asUtf8 = readPackUtf8(data);
-
-    if (!looksLikeJsonPack(asUtf8)) {
-      initCallback(false, "CORRUPTED_PACK");
-      return;
-    }
-
     try {
-      initCallback(toInitResult(parseJsonPackContent(asUtf8)));
+      initCallback(parsePackData(data));
     } catch (ex) {
       const message = ex instanceof Error ? ex.message : String(ex);
       if (options?.testMode) {
@@ -155,14 +154,8 @@ export function initPackageSync(
     throw new Error("PACK_NOT_FOUND");
   }
 
-  const asUtf8 = readPackUtf8(fs.readFileSync(packPath));
-
-  if (!looksLikeJsonPack(asUtf8)) {
-    throw new Error("CORRUPTED_PACK");
-  }
-
   try {
-    return toInitResult(parseJsonPackContent(asUtf8));
+    return parsePackData(fs.readFileSync(packPath));
   } catch (ex) {
     const message = ex instanceof Error ? ex.message : String(ex);
     if (options?.testMode) {

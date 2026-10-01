@@ -38,6 +38,7 @@ function isAllowedVerificationOrigin(origin: string): boolean {
       return url.protocol === "http:" || url.protocol === "https:";
     }
     if (url.protocol !== "https:") return false;
+    if (BRAND.id === "odin") return url.origin === brandPublicOrigin();
     return host === "motionflow.pro" || host.endsWith(".motionflow.pro");
   } catch {
     return false;
@@ -56,7 +57,9 @@ export const AUTH_ENDPOINTS = {
   revokeDevice: "/api/cep/devices/revoke",
   subscribe: brandPublicBase(),
   store: `${brandPublicBase()}/store`,
-  manageSubscription: `${PUBLIC_AUTH_ORIGIN}/profile/subscriptions?${clientQuery()}`,
+  manageSubscription: BRAND.manageSubscriptionPath
+    ? `${brandPublicOrigin()}${BRAND.manageSubscriptionPath}`
+    : `${PUBLIC_AUTH_ORIGIN}/profile/subscriptions?${clientQuery()}`,
   contact: `${brandPublicBase()}#contact`,
   buyExtra: `${brandPublicBase()}/?buy=extra`,
 } as const;
@@ -64,7 +67,7 @@ export const AUTH_ENDPOINTS = {
 /** Browser confirm page — author site (login modal → Allow/Deny). */
 export function verificationUrlForCode(code: string, fromApi?: string): string {
   const params = new URLSearchParams({ code, client: BRAND.apiClient });
-  const fallbackUrl = new URL(`${brandPublicBase()}/`);
+  const fallbackUrl = new URL(BRAND.verificationPath || `${brandPublicBase()}/`, brandPublicOrigin());
   fallbackUrl.search = params.toString();
   const fallback = fallbackUrl.toString();
   if (!fromApi) return fallback;
@@ -73,7 +76,7 @@ export function verificationUrlForCode(code: string, fromApi?: string): string {
     if (!isAllowedVerificationOrigin(url.origin)) return fallback;
     // Prefer the brand landing even if an older API still returns /cep/login.
     if (url.pathname.includes("/cep/login")) {
-      url.pathname = BRAND.siteOrigin ? "/" : BRAND.sitePath;
+      url.pathname = BRAND.verificationPath ?? (BRAND.siteOrigin ? "/" : BRAND.sitePath);
     }
     if (!url.searchParams.has("client")) url.searchParams.set("client", BRAND.apiClient);
     if (!url.searchParams.has("code")) url.searchParams.set("code", code);
@@ -229,7 +232,10 @@ export async function startDeviceAuth(): Promise<
     };
   }
 
-  return { error: error || "Unable to start Motionflow login" };
+  if (BRAND.id === "odin" && status === 404) {
+    return { error: "Odin Pro sign-in is currently unavailable. Please try again later." };
+  }
+  return { error: error || `Unable to start ${BRAND.id === "odin" ? "Odin Pro" : "Motionflow"} login` };
 }
 
 export async function pollDeviceAuth(

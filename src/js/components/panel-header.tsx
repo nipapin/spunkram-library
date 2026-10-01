@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Scissors, Video, Sparkles, ShoppingBag, User, Loader2 } from "lucide-react";
-import logo from "@/assets/logo.png";
+import { brandLogo as logo } from "@/lib/utils/brand-logo";
 import { useAuth } from "@/lib/auth-context";
 import { BRAND } from "@brands";
 import { useNotifications } from "@/lib/notifications-context";
@@ -11,7 +11,10 @@ const NAV_ITEMS = [
   { id: "editing", label: "Editing", icon: Scissors },
   { id: "footages", label: "Footages", icon: Video },
   { id: "ai-tools", label: "AI Tools", icon: Sparkles },
-] as const;
+].filter((item) =>
+  (item.id !== "ai-tools" || BRAND.features.aiTools) &&
+  (item.id !== "footages" || BRAND.features.footages),
+);
 
 export function PanelHeader({
   active,

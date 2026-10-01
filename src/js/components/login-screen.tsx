@@ -3,8 +3,7 @@ import { ExternalLink, Loader2, LogIn, Monitor, Plus, UserRound } from "lucide-r
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { FogBackground } from "@/components/fog-background";
-import logo from "@/assets/logo.png";
-import galLogo from "@/ui/gal/assets/logo-mark.png";
+import { brandLogo } from "@/lib/utils/brand-logo";
 import { BRAND } from "@brands";
 import { friendlyErrorMessage } from "@/utils/user-error";
 import type { MotionflowAccountSession } from "@/lib/api/preferences";
@@ -50,7 +49,7 @@ export function LoginScreen() {
   const showChooser = savedAccounts.length > 0 && !loginBusy;
   const showDeviceLimit = Boolean(loginBusy && loginDeviceLimit);
   const isGal = BRAND.id === "gal";
-  const brandLogo = isGal ? galLogo : logo;
+  const accountBrand = BRAND.id === "odin" ? "Odin Pro" : "Motionflow";
 
   async function handleSignIn() {
     setMessage({ tone: "info", text: "Opening browser to sign in…" });
@@ -91,7 +90,7 @@ export function LoginScreen() {
         isGal && "gal-login",
       )}
     >
-      {isGal ? null : (
+      {BRAND.id !== "spunkram" ? null : (
         <FogBackground className="pointer-events-none absolute inset-0 z-0" />
       )}
 
@@ -102,7 +101,9 @@ export function LoginScreen() {
               "flex size-16 items-center justify-center",
               isGal
                 ? "gal-login__mark"
-                : "rounded-full bg-gradient-to-b from-primary to-primary/70 shadow-[0_0_20px_2px] shadow-primary/50 ring-1 ring-inset ring-white/15",
+                : BRAND.id === "odin"
+                  ? ""
+                  : "rounded-full bg-gradient-to-b from-primary to-primary/70 shadow-[0_0_20px_2px] shadow-primary/50 ring-1 ring-inset ring-white/15",
             )}
           >
             <img
@@ -120,14 +121,14 @@ export function LoginScreen() {
                 ? "Device limit reached"
                 : showChooser
                   ? "Choose an account"
-                  : `Welcome to ${BRAND.authorName}`}
+                  : `Welcome to ${BRAND.displayName}`}
             </h1>
             <p className="mt-1 max-w-xs text-[11px] text-muted-foreground drop-shadow-[0_1px_6px_rgba(0,0,0,0.55)]">
               {showDeviceLimit
                 ? `This account is signed in on ${loginDeviceLimit!.device_limit} devices. Disconnect one to continue here.`
                 : showChooser
-                  ? "Continue with a saved Motionflow account, or add another."
-                  : `Sign in with your Motionflow account to use the ${BRAND.authorName} extension — packs, subscriptions, and AI tools.`}
+                  ? `Continue with a saved ${accountBrand} account, or add another.`
+                  : `Sign in or create your ${accountBrand} account to use ${BRAND.displayName}.`}
             </p>
           </div>
         </div>
@@ -153,7 +154,7 @@ export function LoginScreen() {
             {loginDeviceLimit!.devices.length === 0 ? (
               <p className="px-3 py-3 text-center text-[11px] text-muted-foreground">
                 Couldn&apos;t load the device list. Cancel and sign in again, or disconnect a
-                device at motionflow.pro.
+                device on the account website.
               </p>
             ) : null}
             <ul>
@@ -287,7 +288,7 @@ export function LoginScreen() {
               )}
             >
               <LogIn className="size-3.5" />
-              Sign in to {BRAND.authorName}
+              Sign in to {BRAND.displayName}
               <ExternalLink className="size-3 opacity-70" />
             </button>
           )}

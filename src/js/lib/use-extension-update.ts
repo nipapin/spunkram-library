@@ -87,6 +87,7 @@ export function useExtensionUpdate() {
 
   // Promote Motionflow.dll (etc.) written as *.pending-update while host held the lock.
   useEffect(() => {
+    if (typeof window === "undefined" || !window.cep) return;
     try {
       const { remaining } = finalizePendingNativeUpdate();
       const nativeLeft = pendingNativesOnly(remaining);

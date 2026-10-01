@@ -354,7 +354,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
             </p>
           ) : null}
 
-          <div className="mt-3">
+          {BRAND.features.footages && <div className="mt-3">
             <div className="mb-1 text-xs text-foreground">Assets download path</div>
             <p className="mb-1 text-[10px] text-muted-foreground">Stock footage downloads land here. Asked on download if empty.</p>
             <PathBrowse value={prefs.customStockLocation || ""} onBrowse={browseAssets} />
@@ -366,7 +366,7 @@ export function SettingsPanel({ onBack }: { onBack: () => void }) {
                 onChange={(v) => patch({ useCurrentProjectLocation: v ? 1 : 0 })}
               />
             </div>
-          </div>
+          </div>}
         </section>
 
         {isAdmin && (
