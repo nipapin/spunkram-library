@@ -12,10 +12,6 @@ export const BRANDS = {
         sitePath: "/",
         siteOrigin: "https://odin-pro.com",
         tutorialsUrl: "",
-        devPack: {
-            path: "C:/Users/nipap/Downloads/Telegram Desktop/Odin Pro 1.2.0 - Premiere Pro Test Mode.odin",
-            host: "PR",
-        },
         packagePreviews: {
             AE: "https://api.get-atomx.com/atomx_files/ext_market/packages/560.jpg",
             PR: "https://api.get-atomx.com/atomx_files/ext_market/packages/542.jpg",

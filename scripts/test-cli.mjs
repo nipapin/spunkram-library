@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PassThrough } from "node:stream";
 import { parseArgs, completeOptions, executionPlan, runPlan, Cancelled, select } from "./cli.mjs";
@@ -21,6 +23,32 @@ test("wizard asks release type before author; dev/build only ask author", async 
   }
 });
 
+test("all-brand release chooses stable/beta independently and dry-run does not copy artifacts", () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "cep-mixed-release-test-"));
+  try {
+    const scripts = path.join(directory, "scripts");
+    mkdirSync(scripts);
+    for (const file of ["release.mjs", "cli-config.mjs"]) copyFileSync(path.join(root, "scripts", file), path.join(scripts, file));
+    writeFileSync(path.join(scripts, "upload-spunkram-zxp.mjs"), "throw new Error('Unexpected upload');\n");
+    writeFileSync(path.join(directory, ".env"), "");
+    const buildFile = path.join(directory, "brand-build.json");
+    const before = JSON.stringify({ spunkram: { version: "1.0.0-beta.2" }, gal: { version: "2.0.0" }, odin: { version: "3.0.0" } });
+    writeFileSync(buildFile, before);
+    const result = spawnSync(process.execPath, [path.join(scripts, "release.mjs"), "--brand=all", "--dry-run", "--no-git"], {
+      cwd: directory, encoding: "utf8", env: { ...process.env, NEXT_APP_ROOT: directory },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /channel=mixed/);
+    assert.match(result.stdout, /--product=spunkram .*--version=1\.0\.0-beta\.2 --channel=beta/);
+    assert.match(result.stdout, /--product=gal .*--version=2\.0\.0 --channel=stable/);
+    assert.match(result.stdout, /--product=odin .*--version=3\.0\.0 --channel=stable/);
+    assert.equal(readFileSync(buildFile, "utf8"), before);
+    assert.throws(() => readFileSync(path.join(directory, ".release-artifacts", "odin", "com.odinpro.cep.zxp")), { code: "ENOENT" });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("explicit flags bypass prompts, including beta and legacy flag aliases", async () => {
   const options = parseArgs(["release", "--brand=gal", "--bump", "minor", "--message=release & literal $(text)"]);
   const result = await completeOptions(options, () => assert.fail("Unexpected prompt"));
@@ -36,8 +64,15 @@ test("invalid or misplaced options fail before execution", () => {
   }
 });
 
-test("Odin cannot publish accidentally, but local releases are available", async () => {
-  await assert.rejects(completeOptions(parseArgs(["release", "--author=odin", "--type=patch"])), /не настроена/);
+test("Odin supports published and local releases and appears in the release wizard", async () => {
+  const published = await completeOptions(parseArgs(["release", "--author=odin", "--type=patch"]), () => assert.fail("Unexpected prompt"));
+  assert.ok(executionPlan(published)[0].args.includes("--brand=odin"));
+  assert.ok(!executionPlan(published)[0].args.includes("--no-upload"));
+  const wizard = await completeOptions(parseArgs(["release", "--type=patch"]), async (_title, choices) => {
+    assert.ok(choices.some(choice => choice.value === "odin"));
+    return "odin";
+  });
+  assert.equal(wizard.author, "odin");
   const local = await completeOptions(parseArgs(["release", "--author=odin", "--type=patch", "--no-upload"]));
   assert.ok(executionPlan(local)[0].args.includes("--no-upload"));
 });
@@ -108,5 +143,37 @@ test("release dry-run leaves version file untouched, including Odin local releas
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, new RegExp(`would build --author=${author} --format=zxp`));
     assert.equal(readFileSync(buildFile, "utf8"), before);
+  }
+});
+
+test("Odin and all-brand publication dry-runs include the correct uploads and tags without changing versions", () => {
+  const nextApp = mkdtempSync(path.join(os.tmpdir(), "cep-release-test-"));
+  const buildFile = new URL("../brand-build.json", import.meta.url);
+  const before = readFileSync(buildFile, "utf8");
+  const build = JSON.parse(before);
+  try {
+    mkdirSync(path.join(nextApp, "scripts"));
+    // These files only satisfy preflight; dry-run must never execute the uploader.
+    writeFileSync(path.join(nextApp, "scripts/upload-spunkram-zxp.mjs"), "throw new Error('Unexpected upload');\n");
+    writeFileSync(path.join(nextApp, ".env"), "");
+    for (const author of ["odin", "all"]) {
+      for (const type of ["--type=patch", "--beta"]) {
+        const result = spawnSync(process.execPath, ["scripts/cli.mjs", "release", `--author=${author}`, type, "--dry-run"], {
+          cwd: root, encoding: "utf8", env: { ...process.env, NEXT_APP_ROOT: nextApp },
+        });
+        assert.equal(result.status, 0, result.stderr);
+        const brands = author === "all" ? ["spunkram", "gal", "odin"] : ["odin"];
+        for (const brand of brands) {
+          const [major, minor, patch] = build[brand].version.split(".").map(Number);
+          const version = `${major}.${minor}.${patch + 1}${type === "--beta" ? "-beta.1" : ""}`;
+          assert.ok(result.stdout.includes(`would build --author=${brand} --format=zxp`));
+          assert.ok(result.stdout.includes(`${brand}-${version}`));
+          assert.match(result.stdout, new RegExp(`--product=${brand} .*--version=${version.replaceAll(".", "\\.")} --channel=${type === "--beta" ? "beta" : "stable"}`));
+        }
+        assert.equal(readFileSync(buildFile, "utf8"), before);
+      }
+    }
+  } finally {
+    rmSync(nextApp, { recursive: true, force: true });
   }
 });

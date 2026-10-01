@@ -22,19 +22,23 @@ npm run release -- --type=patch --author=spunkram
 npm run release -- --type=minor --author=gal --dry-run
 npm run release -- --author=all --type=patch
 npm run release -- --author=gal --beta
+npm run release -- --author=odin --type=patch
+npm run release -- --author=odin --beta
 ```
 
 `build` по умолчанию собирает панель. `--format=zxp` подписывает пакет; `--format=zip` использует существующий ZIP-процесс Vite CEP. Зависимости собираются перед dev/build; `SKIP_DEPS_BUILD=1` сохраняет прежнюю возможность пропустить этот этап.
 
 Релиз повышает версию выбранного бренда, собирает ZXP, коммитит текущие изменения, выполняет push/tag и загрузку в R2 по существующему сценарию. `--dry-run` показывает шаги без сборки, изменения версии, копирования артефактов, Git-записей и upload. Дополнительные параметры: `--no-git`, `--no-upload`, `--skip-build`, `--message="..."`. Старые флаги `--brand` и `--bump` остаются алиасами `--author` и `--type`.
 
-Публикация настроена для Spunkram и Gal (`--author=all` означает оба этих бренда). Для Odin доступна сборка ZXP и релиз без загрузки:
+Публикация настроена для Spunkram, Gal и Odin. `--author=all` выпускает все три бренда с независимыми версиями, тегами и каталогами R2. Для Odin используется тег `odin-{version}`, подписанный пакет `com.odinpro.cep.zxp` и CDN-каталог `public/downloads/odin/` (`odin.zxp`, `latest.json` или `beta.json`). Релиз без загрузки также доступен:
 
 ```sh
 npm run release -- --type=patch --author=odin --no-upload
 ```
 
-Для обычной публикации нужны `next-app/.env`, R2 и загрузчик `scripts/upload-spunkram-zxp.mjs`. `NEXT_APP_ROOT` позволяет указать другой путь к `next-app`. Odin пока не поддерживается этим загрузчиком.
+Для обычной публикации нужны `next-app/.env`, R2 и загрузчик `scripts/upload-spunkram-zxp.mjs`, поддерживающий все три бренда. `NEXT_APP_ROOT` позволяет указать другой путь к `next-app`. GitHub Actions определяет бренд по префиксу тега и прикладывает соответствующий ZXP к GitHub Release. Серверный GitHub webhook также определяет бренд по тегу; изменения сервера находятся в соседнем `next-app` и требуют его обычного деплоя.
+
+Публикация ZXP не включает автообновления в панели Odin: её текущий API на `odin-pro.com` и настройки автообновлений остаются отдельной интеграцией.
 
 Редкие служебные действия доступны напрямую, без дополнительных npm scripts:
 

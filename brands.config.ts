@@ -58,10 +58,6 @@ export type BrandConfig = {
   sitePath: string;
   /** Absolute origin for public pages when they live on a storefront host. */
   siteOrigin?: string;
-  /** External tutorials page or playlist. Empty until the author supplies a URL. */
-  tutorialsUrl?: string;
-  /** Local JSON pack for development only; never used by release builds. */
-  devPack?: { path: string; host: "AE" | "PR" };
   /** Existing catalog artwork, also used while the account catalog is loading. */
   packagePreviews?: Partial<Record<"AE" | "PR", string>>;
   /** Backend hosting this brand's CEP routes. */
@@ -105,11 +101,6 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
     apiClient: "odin-cep",
     sitePath: "/",
     siteOrigin: "https://odin-pro.com",
-    tutorialsUrl: "",
-    devPack: {
-      path: "C:/Users/nipap/Downloads/Telegram Desktop/Odin Pro 1.2.0 - Premiere Pro Test Mode.odin",
-      host: "PR",
-    },
     packagePreviews: {
       AE: "https://api.get-atomx.com/atomx_files/ext_market/packages/560.jpg",
       PR: "https://api.get-atomx.com/atomx_files/ext_market/packages/542.jpg",

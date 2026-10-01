@@ -23,5 +23,5 @@ for (const entry of manifest) {
 const definitions = manifest.filter(e => e.path.endsWith('.odin'));
 if (definitions.length !== 1) throw new Error('Expected one .odin');
 const pack = JSON.parse(fs.readFileSync(path.join(output, definitions[0].path), 'utf8').replace(/^\uFEFF/, ''));
-if (!pack.settings || !(pack.structure ?? pack.content ?? pack.contents)) throw new Error('Invalid JSON pack');
+if (!pack.settings || !(pack.structure ?? pack.content ?? pack.contents ?? pack.settings.contents)) throw new Error('Invalid JSON pack');
 console.log(JSON.stringify({ host: pack.settings.main.software_id, extractedByCep: true, files: files.length, allHashesMatch: true }));

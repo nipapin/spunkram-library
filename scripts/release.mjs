@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * CEP release (Spunkram and/or Gal Toolkit MAX):
+ * CEP release (Spunkram, Gal Toolkit MAX and/or Odin Pro):
  *  1) optional per-brand version bump in brand-build.json (stable or beta)
  *  2) CLI build --author=<id> --format=zxp (without interactive prompts)
  *  3) git commit (if dirty) + push + tag `{brand}-{version}` per brand
@@ -10,6 +10,7 @@
  *   npm run release
  *   npm run release -- --author=spunkram --type=patch
  *   npm run release -- --author=gal --type=minor
+ *   npm run release -- --author=odin --type=patch
  *   npm run release -- --author=spunkram --beta
  *   npm run release -- --author=all --type=patch
  *   npm run release -- --dry-run
@@ -51,7 +52,7 @@ function parseArgs(argv) {
     noGit: false,
     noUpload: false,
     skipBuild: false,
-    brand: "spunkram", // spunkram | gal | all
+    brand: "spunkram", // spunkram | gal | odin | all
   };
   for (const arg of argv.slice(2)) {
     if (arg === "--dry-run") opts.dryRun = true;
@@ -64,7 +65,7 @@ function parseArgs(argv) {
     else if (arg.startsWith("--message=")) opts.message = arg.slice("--message=".length);
     else if (arg === "--help" || arg === "-h") {
       console.log(
-        `Usage: node scripts/release.mjs [--brand=spunkram|gal|odin|all] [--bump=patch|minor|major] [--beta] [--message=…] [--dry-run] [--no-git] [--no-upload] [--skip-build] (Odin requires --no-upload)`,
+        `Usage: node scripts/release.mjs [--brand=spunkram|gal|odin|all] [--bump=patch|minor|major] [--beta] [--message=…] [--dry-run] [--no-git] [--no-upload] [--skip-build]`,
       );
       process.exit(0);
     } else {
@@ -86,7 +87,7 @@ function parseArgs(argv) {
 }
 
 function resolveBrandList(brand) {
-  if (brand === "all") return [BRANDS.spunkram, BRANDS.gal];
+  if (brand === "all") return AUTHORS;
   return [BRANDS[brand]];
 }
 
@@ -230,7 +231,7 @@ function main() {
   const build = readBuild();
   // Validate publication before bumping versions, building, or changing Git state.
   if (!opts.noUpload) {
-    if (brands.some(brand => !brand.product)) throw new Error("Odin upload is not configured. Use --no-upload.");
+    if (brands.some(brand => !brand.product)) throw new Error("Upload is not configured for a selected brand. Use --no-upload.");
     const nextApp = resolveNextAppRoot();
     for (const file of ["scripts/upload-spunkram-zxp.mjs", ".env"]) {
       if (!existsSync(path.join(nextApp, file))) throw new Error(`Missing ${file} in ${nextApp} (set NEXT_APP_ROOT)`);
@@ -261,11 +262,11 @@ function main() {
   const versionLabel = brands
     .map((b) => brandTag(b.id, versionByBrand.get(b.id)))
     .join(", ");
-  const uploadChannel = brands.some((b) => /-beta/i.test(versionByBrand.get(b.id)))
-    ? "beta"
-    : opts.beta
-      ? "beta"
-      : "stable";
+  const channelByBrand = new Map(brands.map(b => [
+    b.id, /-beta/i.test(versionByBrand.get(b.id)) ? "beta" : "stable",
+  ]));
+  const channels = new Set(channelByBrand.values());
+  const uploadChannel = channels.size === 1 ? channels.values().next().value : "mixed";
   console.log(
     `[release] ${versionLabel} channel=${uploadChannel} brands=${brands.map((b) => b.id).join(",")}`,
   );
@@ -349,6 +350,7 @@ function main() {
     }
     for (const brand of brands) {
       const version = versionByBrand.get(brand.id);
+      const uploadChannel = channelByBrand.get(brand.id);
       const notes = changelogForVersion(version);
       const zxpPath =
         zxpByBrand.get(brand.id) ||

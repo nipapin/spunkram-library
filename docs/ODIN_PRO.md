@@ -4,19 +4,21 @@ Odin has its own library shell, profile, and package setup screen, with shared l
 
 Files keep the `.odin` extension but contain plain UTF-8 JSON with `settings` and a category tree (`structure`, `contents`, or `content`). Encoded/binary legacy containers are not supported; published packs must use the JSON format.
 
-AI Tools, Footages, generation counters, ffmpeg prefetch, Motionflow telemetry, remote notifications, and extension auto-updates are disabled for this brand. Package categories come from installed `.odin` files. Package downloads and updates use full archives from the existing Odin service.
+AI Tools are available in the Odin toolbar. Footages, ffmpeg prefetch, Motionflow telemetry, remote notifications, and extension auto-updates are disabled for this brand. Package categories come from installed `.odin` files. Package downloads and updates use full archives from the existing Odin service.
 
 ```sh
 npm run dev -- --author=odin
 npm run build -- --author=odin
 npm run build -- --author=odin --format=zxp
+npm run release -- --author=odin --type=patch
+npm run release -- --author=odin --beta
 ```
 
 Entry: `src/js/odin/index.html`. Development URL: `http://localhost:4020/odin/`. Preview port: 5020. Extension ID: `com.odinpro.cep`. Build output: `dist/cep-odin`. The legacy Odin Pro Beta installation is separate.
 
 Authentication and registration use `https://odin-pro.com/cep/login`, with backend changes in the sibling `ione-premiere-basics` project. Before production use, follow that project's `CEP_ODIN.md` to apply the new database migration and deploy its CEP routes. Building the panel alone does not activate these routes on the public site.
 
-The existing `release.mjs` uploader remains specific to the Motionflow-hosted brands. Use `npm run build -- --author=odin --format=zxp` for an Odin package; do not use `release -- --author=all` to publish Odin.
+Odin uses the same `release.mjs` pipeline as Spunkram and Gal: version bump, signed ZXP build, commit/push, `odin-{version}` tag, and upload through the sibling `next-app/scripts/upload-spunkram-zxp.mjs`. `--author=all` includes all three brands. Odin artifacts use `public/downloads/odin/{version}/odin.zxp` and `public/downloads/odin/latest.json` (stable) or `beta.json`. Use `--dry-run` to preview or `--no-upload` for a local release. Publication requires `next-app/.env` with the existing public R2 credentials; `NEXT_APP_ROOT` overrides that project's location. Deploy the next-app webhook/notify changes before relying on server-side GitHub imports or Odin-tagged notifications. Extension auto-updates in the Odin panel remain disabled; the Odin website API does not yet expose the update endpoints.
 
 Checks:
 
@@ -36,37 +38,30 @@ Toolbar and nested tool buttons use small Lucide icons with tooltips positioned
 within the window. Shared settings use Odin's neutral palette. The profile shows
 the host-specific catalog artwork, with `BRANDS.odin.packagePreviews` as a fallback.
 
-`BRANDS.odin.devPack` configures a local plain-JSON `.odin` file and its Adobe host.
-It is currently set to the supplied Premiere Pro 1.2.0 Test Mode file. During
-`npm run dev -- --author=odin`, it opens without a subscription, without registering
-an install or starting a package download. In a browser, Vite serves only that
-configured file at `/__odin-dev-pack.json`; CEP reads it from disk. Release builds
-disable the loader and do not expose that development endpoint. Clear `devPack`
-to return development to the normal package workflow. Preview media and project
-assets are separate files; the JSON alone provides the category/item structure.
+Odin has no configured development packs or local pack-serving endpoint.
+Development and release panels use the same authenticated Full/Demo package
+workflow; the Adobe host is resolved from the host application.
 
 The package setup selects one package for the current Adobe host and account
-edition. Free accounts automatically install Demo; subscribed accounts are offered
-the full pack. Existing matching installations are reused. Demo catalog entries
+edition. Free accounts automatically install Demo; subscribed accounts automatically
+install the full pack. Existing matching installations are reused. Demo catalog entries
 and archive metadata must have `version: "DEMO"`; Demo and full installations are
 kept separate even when their names match. Failed subscription verification does
 not trigger an automatic download.
 
-The current website backend exposes full packs only and requires a subscription
-for downloads. Demo installation therefore remains unavailable until its JSON
-archive source is supplied and the backend exposes a free Demo catalog entry and
-download route. The old AtomX binary Demo must not be reintroduced.
+The website backend exposes Full and Demo packs for AE and PR from Motionflow's
+private R2 bucket. When the subscription ends, the panel switches to Demo behind
+a blocking full-screen setup progress display. Current catalog configuration:
+`../next-app/docs/odin-connected-2026-10-01.md`.
 
-The third toolbar button opens **Observer / Portal**, a folder-shortcut view
-inside the library shell. It supports folder picking and drops in CEP, search,
+**AI Tools → Observer** opens the folder-shortcut view. Observer is available
+without AI generations or a subscription. It supports folder picking and drops in CEP, search,
 rename, shortcut removal, drag ordering, Ctrl/Cmd multi-selection and sharing
 between AE and Premiere. It reads the original `cards.json` in the
 `Premiere Basics/Odin Pro Extension` application-data folder. Removing a shortcut
 does not delete its folder. Native filesystem actions require Adobe CEP.
 
-Set `BRANDS.odin.tutorialsUrl` in `brands.config.ts` to the tutorials page or
-playlist URL. It is intentionally empty; Odin does not request the AtomX
-tutorial catalog. Rebuild the Odin panel after setting the URL.
+The library toolbar has Toolbar, Favorites, and AI Tools. Tutorials have been removed.
 
 Composer tools call existing MotionFlow SDK methods. Preset-manager markers,
 alignment and stagger controls retain the original UI but have no host call

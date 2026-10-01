@@ -247,23 +247,6 @@ function isolateBrandHtmlPlugin(): Plugin {
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
-    {
-      name: "odin-local-test-pack",
-      apply: "serve",
-      configureServer(server) {
-        if (appBrandId !== "odin" || !brand.devPack?.path) return;
-        const file = brand.devPack.path;
-        server.middlewares.use("/__odin-dev-pack.json", (req, res) => {
-          res.setHeader("Content-Type", "application/json; charset=utf-8");
-          res.setHeader("Cache-Control", "no-store");
-          if (req.method !== "GET") { res.statusCode = 405; res.end(); return; }
-          fs.readFile(file, "utf8", (error, json) => {
-            if (error) { res.statusCode = 404; res.end('{"error":"Local pack unavailable"}'); }
-            else res.end(json.replace(/^\uFEFF/, ""));
-          });
-        });
-      },
-    },
     isolateBrandHtmlPlugin(),
     react(),
     cep(config),

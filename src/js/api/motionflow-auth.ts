@@ -55,7 +55,7 @@ export const AUTH_ENDPOINTS = {
   replaceDevice: "/api/cep/auth/replace-device",
   me: "/api/cep/me",
   revokeDevice: "/api/cep/devices/revoke",
-  subscribe: brandPublicBase(),
+  subscribe: BRAND.id === "odin" ? `${brandPublicOrigin()}/pricing` : brandPublicBase(),
   store: `${brandPublicBase()}/store`,
   manageSubscription: BRAND.manageSubscriptionPath
     ? `${brandPublicOrigin()}${BRAND.manageSubscriptionPath}`
@@ -368,7 +368,7 @@ export function setSubscriptionUrls(urls: {
 }
 
 export function openMotionflowSubscribe(): void {
-  // Always the brand landing — ignore server subscribe_url (legacy /pricing).
+  // Use the brand's subscription destination consistently across the panel.
   openLinkInBrowser(AUTH_ENDPOINTS.subscribe);
 }
 

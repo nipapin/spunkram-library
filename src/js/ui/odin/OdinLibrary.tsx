@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  BookOpen,
-  FolderTree,
   LayoutGrid,
   Loader2,
   Search,
@@ -18,22 +16,17 @@ import { OdinPackagePanel } from "./OdinPackagePanel";
 import { OdinFooter } from "./OdinFooter";
 import { OdinToolSpoiler } from "./OdinToolSpoiler";
 import { useOdinHost } from "./use-odin-host";
-import { OdinObserver } from "./observer/OdinObserver";
 
 export function OdinLibrary({
   workspace,
   packageModel,
-  onTutorials,
   onAiTools,
 }: {
   workspace: ReturnType<typeof usePackWorkspace>;
   packageModel: ReturnType<typeof useOdinPackage>;
-  onTutorials: () => void;
   onAiTools: () => void;
 }) {
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [observer, setObserver] = useState(false);
-  const [folderQuery, setFolderQuery] = useState("");
   const host = useOdinHost();
   const ui = usePanelUI();
   const sections = useMemo(
@@ -60,32 +53,11 @@ export function OdinLibrary({
           </button>
           <button
             type="button"
-            aria-label="Tutorials"
-            data-tooltip="Tutorials"
-            onClick={onTutorials}
-          >
-            <BookOpen size={18} />
-          </button>
-          <button
-            type="button"
-            aria-label="Observer"
-            data-tooltip="Observer"
-            aria-pressed={observer}
-            className={observer ? "current" : ""}
-            onClick={() => setObserver((value) => !value)}
-          >
-            <FolderTree size={18} />
-          </button>
-          <button
-            type="button"
             aria-label="Favorites"
             data-tooltip="Favorites"
-            aria-pressed={ui.showFavoritesOnly && !observer}
-            className={ui.showFavoritesOnly && !observer ? "current" : ""}
-            onClick={() => {
-              setObserver(false);
-              ui.toggleShowFavoritesOnly();
-            }}
+            aria-pressed={ui.showFavoritesOnly}
+            className={ui.showFavoritesOnly ? "current" : ""}
+            onClick={ui.toggleShowFavoritesOnly}
           >
             <Star size={18} />
           </button>
@@ -105,12 +77,8 @@ export function OdinLibrary({
           <input
             aria-label="Find items"
             placeholder="Find items"
-            value={observer ? folderQuery : workspace.query}
-            onChange={(event) =>
-              observer
-                ? setFolderQuery(event.target.value)
-                : workspace.setQuery(event.target.value)
-            }
+            value={workspace.query}
+            onChange={(event) => workspace.setQuery(event.target.value)}
           />
         </label>
       </div>
@@ -121,7 +89,7 @@ export function OdinLibrary({
           packName={workspace.packSettings?.main?.name}
         />
       )}
-      {!observer && workspace.packError && (
+      {workspace.packError && (
         <div className="odin-error" role="alert">
           {workspace.packError}
           <button type="button" onClick={() => workspace.reloadPackList()}>
@@ -129,10 +97,7 @@ export function OdinLibrary({
           </button>
         </div>
       )}
-      {observer ? (
-        <OdinObserver query={folderQuery} />
-      ) : (
-        <div className="odin-library__body">
+      <div className="odin-library__body">
           {!missing && packageModel.installed && (
             <PanelSidebar
               tree={workspace.sidebarTree}
@@ -166,8 +131,7 @@ export function OdinLibrary({
               />
             )}
           </main>
-        </div>
-      )}
+      </div>
       <OdinFooter />
     </section>
   );

@@ -1,7 +1,8 @@
 /**
- * Single session token source for all Motionflow CEP calls.
- * Opaque `mfcep_…` from device login — never invent secondary credentials.
+ * Single session token source for the selected brand's CEP calls.
+ * Use the opaque token issued by that brand's device login.
  */
+import { BRAND } from "@brands";
 import {
   readActiveMotionflowAuth,
   removeAccountSession,
@@ -15,7 +16,8 @@ export const UNAUTHORIZED_WIPE_CONFIRM_MS = 800;
 
 export function getSessionToken(): string | null {
   const t = readActiveMotionflowAuth().token?.trim();
-  return t && t.startsWith("mfcep_") ? t : null;
+  const prefix = BRAND.id === "odin" ? "odincep_" : "mfcep_";
+  return t && t.startsWith(prefix) ? t : null;
 }
 
 let lastSentSessionToken: string | null = null;

@@ -31,6 +31,10 @@
 .odin-library {
   flex: 1;
 }
+.odin-app__library {
+  flex: 1;
+  min-height: 0;
+}
 .odin-app button {
   cursor: pointer;
 }
@@ -44,6 +48,8 @@
   outline-offset: 2px;
 }
 .odin-header {
+  position: relative;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -51,25 +57,134 @@
   height: 63px;
   padding: 0 20px;
   border-bottom: 1px solid #303030;
-  &__logo,
-  &__profile {
+  &__logo {
     display: grid;
     place-items: center;
-    background: none;
-    color: #fff;
-    border: 0;
+    width: 36px;
+    height: 36px;
     padding: 0;
+    border: 0;
+    background: transparent;
   }
   &__logo img {
     width: 36px;
     height: 36px;
     object-fit: contain;
   }
-  &__profile {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-  }
+}
+.odin-profile-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+.odin-profile-menu__trigger {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #343639;
+  border-radius: 11px;
+  background: #222426;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 500;
+  transition: border-color 0.15s, background 0.15s;
+}
+.odin-profile-menu__trigger:hover,
+.odin-profile-menu__trigger[aria-expanded="true"] {
+  border-color: #ccff00;
+  background: #292c29;
+}
+.odin-profile-menu__dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  width: min(240px, calc(100vw - 32px));
+  padding-top: 8px;
+}
+.odin-profile-menu__surface {
+  padding: 7px;
+  border: 1px solid #343639;
+  border-radius: 12px;
+  background: #191b1d;
+  box-shadow: 0 14px 36px #0009;
+}
+.odin-profile-menu__identity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  margin-bottom: 6px;
+  padding: 9px;
+  border: 1px solid #303236;
+  border-radius: 9px;
+  background: #222426;
+}
+.odin-profile-menu__identity-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid #3d3f41;
+  border-radius: 9px;
+  color: #fff;
+  font-size: 16px;
+}
+.odin-profile-menu__identity-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.odin-profile-menu__identity-copy strong {
+  overflow: hidden;
+  color: #f0f1f2;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.odin-profile-menu__identity-copy small {
+  color: #a1a4a9;
+  font-size: 10px;
+}
+.odin-profile-menu__identity-copy small.is-active {
+  color: #ccff00;
+}
+.odin-profile-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 35px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #e2e4e5;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+}
+.odin-profile-menu__item:hover,
+.odin-profile-menu__item:focus-visible {
+  background: #ccff0018;
+  color: #ccff00;
+}
+.odin-profile-menu__divider {
+  height: 1px;
+  margin: 5px 8px;
+  background: #343639;
+}
+.odin-profile-menu__item--logout {
+  color: #efa5a8;
+}
+.odin-profile-menu__item--logout:hover,
+.odin-profile-menu__item--logout:focus-visible {
+  background: #ef6f7418;
+  color: #ffb7ba;
 }
 .odin-subheader {
   display: flex;
@@ -445,7 +560,7 @@
   display: flex;
   flex-direction: column;
   background: #0e0f11;
-  z-index: 30;
+  z-index: 60;
 }
 .odin-overlay__heading {
   height: 50px;
@@ -460,12 +575,19 @@
     font-weight: 600;
     font-size: 14px;
   }
+  .odin-overlay__heading-spacer {
+    flex: 1;
+  }
   button {
     background: none;
     border: 0;
     color: white;
     padding: 5px;
   }
+}
+.odin-overlay--account {
+  top: 63px;
+  z-index: 30;
 }
 .odin-overlay__content {
   flex: 1;
@@ -479,6 +601,104 @@
   margin-left: auto;
   margin-right: auto;
   box-sizing: border-box;
+}
+.odin-overlay__content > .odin-account-zone {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.odin-account-zone {
+  display: flex;
+  min-width: 0;
+  background: #0e0f11;
+}
+.odin-account-zone__nav {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 4px;
+  width: 132px;
+  padding: 15px 9px;
+  border-right: 1px solid #303236;
+  background: #151719;
+}
+.odin-account-zone__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #a8abb0;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+}
+.odin-account-zone__item:hover,
+.odin-account-zone__item:focus-visible {
+  background: #ffffff0d;
+  color: #fff;
+}
+.odin-account-zone__item.is-active {
+  background: #ccff00;
+  color: #10120a;
+}
+.odin-account-zone__item--logout {
+  margin-top: auto;
+  color: #efa5a8;
+}
+.odin-account-zone__item--logout:hover,
+.odin-account-zone__item--logout:focus-visible {
+  background: #ef6f7418;
+  color: #ffb7ba;
+}
+.odin-account-zone__content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #ccff00 #17181c;
+}
+.odin-account-zone__content::-webkit-scrollbar {
+  width: 5px;
+}
+.odin-account-zone__content::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: #ccff00;
+}
+.odin-account-zone__content > .odin-profile,
+.odin-account-zone__content > .odin-settings {
+  width: 100%;
+  max-width: 454px;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+@media (max-width: 520px) {
+  .odin-account-zone {
+    flex-direction: column;
+  }
+  .odin-account-zone__nav {
+    flex-direction: row;
+    width: 100%;
+    padding: 7px 10px;
+    border-right: 0;
+    border-bottom: 1px solid #303236;
+  }
+  .odin-account-zone__item {
+    justify-content: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 7px;
+  }
+  .odin-account-zone__item--logout {
+    width: auto;
+    margin-top: 0;
+    margin-left: auto;
+  }
 }
 
 .odin-profile {
@@ -791,6 +1011,12 @@
 .odin-status--error {
   border-color: #ae3838;
 }
+.odin-observer-container {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
 .odin-observer {
   position: relative;
   flex: 1;
@@ -848,14 +1074,17 @@
   border-color: #ccff00;
   background: #272d16;
 }
-.odin-observer__add {
-  position: fixed;
-  bottom: 54px;
+.odin-observer-container > .odin-observer__add {
+  position: absolute;
+  z-index: 5;
+  bottom: 16px;
   right: 16px;
   width: 48px;
   height: 48px;
   display: grid;
   place-items: center;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
   background: #ccff00;
   color: #0e0f11;
@@ -1069,6 +1298,11 @@
 .odin-ai-tools__panel {
   height: 100%;
   min-height: 0;
+}
+.odin-observer-tool .odin-search {
+  flex: 1;
+  min-width: 80px;
+  max-width: 230px;
 }
 :root[data-brand="odin"] .odin-ai-tools .ai-tools-scope {
   // The shared AI scope emits Spunkram tokens; restore the Odin theme for every token.
@@ -1340,3 +1574,46 @@
   height: 5px;
   accent-color: #ccff00;
 }
+
+.odin-provision {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 28px 22px;
+  background: radial-gradient(ellipse at 50% 20%, #ccff0009, transparent 60%), #0e0f11;
+  color: #fff;
+  font-family: "Inter Variable", Inter, sans-serif;
+  outline: none;
+}
+.odin-provision__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(360px, 100%);
+  text-align: center;
+  gap: 16px;
+}
+.odin-provision__content > img { margin-bottom: 12px; }
+.odin-provision__content h2 { margin: 0; font-size: 22px; font-weight: 650; }
+.odin-provision__content > p { margin: 0; color: #aeb1b8; font-size: 12px; line-height: 1.6; }
+.odin-provision__progress { width: 100%; margin-top: 16px; }
+.odin-provision__phase { display: flex; align-items: center; gap: 9px; text-align: left; font-size: 11px; }
+.odin-provision__phase svg { flex-shrink: 0; color: #ccff00; }
+.odin-provision__phase strong { margin-left: auto; font-variant-numeric: tabular-nums; color: #ccff00; }
+.odin-provision__progress progress {
+  display: block;
+  width: 100%;
+  height: 7px;
+  margin: 14px 0;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  accent-color: #ccff00;
+}
+.odin-provision__progress progress::-webkit-progress-bar { background: #2b2e32; border-radius: 10px; }
+.odin-provision__progress progress::-webkit-progress-value { background: #ccff00; border-radius: 10px; transition: width .2s; }
+.odin-provision__progress small { color: #71757e; font-size: 10px; line-height: 1.5; }
+.odin-provision .odin-primary { display: flex; align-items: center; gap: 8px; }

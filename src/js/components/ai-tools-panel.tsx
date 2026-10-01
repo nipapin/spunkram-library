@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { AiToolsList } from "@/components/ai-tools-list";
 import { CaptionsApp } from "@/ui/spunkram/apps/CaptionsApp";
@@ -29,6 +29,7 @@ export function AiToolsPanel({
   isFreeUser,
   onUse,
   onNoCredits,
+  additionalTools,
 }: {
   monthly: number;
   extra: number;
@@ -37,6 +38,7 @@ export function AiToolsPanel({
   onUse: () => void;
   onNoCredits?: (tool: string) => void;
   onBuyExtra?: (amount: number) => void;
+  additionalTools?: ReactNode;
 }) {
   const [activeTool, setActiveTool] = useState<ActiveTool>(() => BRAND.id === "odin" ? "hub" : loadTool());
   const totalLeft = monthly + extra;
@@ -106,6 +108,7 @@ export function AiToolsPanel({
       onOpenTool={openTool}
       allowOpenWithoutCredits={Boolean(onNoCredits)}
       showGetMore={!onNoCredits}
+      additionalTools={additionalTools}
     />
   );
 }

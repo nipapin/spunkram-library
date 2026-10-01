@@ -434,6 +434,9 @@ async function installFromZipPath(
   item?: CepMarketPackage,
   opts?: { signal?: AbortSignal },
 ): Promise<DownloadAndInstallResult> {
+  // Let Odin's blocking setup screen paint its installing phase before the
+  // synchronous CEP ZIP extraction starts.
+  if (BRAND.id === "odin") await new Promise<void>((resolve) => setTimeout(resolve, 32));
   const installed = await installPackFromFile(zipPath, { signal: opts?.signal });
   if (!installed.ok) {
     const isCancelled =

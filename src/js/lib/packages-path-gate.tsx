@@ -13,12 +13,13 @@ import {
 } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { BRAND } from "@brands";
-import { readPrefSettings } from "@/lib/api/preferences";
+import { readPrefSettings, writePrefSettings } from "@/lib/api/preferences";
 import { resolvePackEntitlementContextForScan } from "@/api/cep-market";
 import { selectFolder } from "@/lib/utils/bolt";
 import {
   hasConfiguredPackagesInstallPath,
   notifyPackagesRescan,
+  resolvePackagesInstallRoot,
   scanAndRegisterPacksAtRoot,
 } from "@/lib/utils/pack-install";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,7 @@ const ACCENT_PILL = "pill-brand";
 
 type PackagesPathGateValue = {
   /** Resolves true once a packages path is configured (existing or newly chosen). */
-  ensurePackagesPath: () => Promise<boolean>;
+  ensurePackagesPath: (options?: { useDefault?: boolean }) => Promise<boolean>;
 };
 
 /** Survive Vite HMR: Fast Refresh recreates the module and a fresh createContext()
@@ -57,7 +58,7 @@ export function PackagesPathGateProvider({ children }: { children: ReactNode }) 
     waiter?.resolve(ok);
   }, []);
 
-  const ensurePackagesPath = useCallback((): Promise<boolean> => {
+  const ensurePackagesPath = useCallback((options?: { useDefault?: boolean }): Promise<boolean> => {
     if (hasConfiguredPackagesInstallPath()) {
       const fromDisk = readPrefSettings();
       const diskPath = (fromDisk.absCustomAbsolutePath || "").trim();
@@ -67,6 +68,18 @@ export function PackagesPathGateProvider({ children }: { children: ReactNode }) 
           useCustomPathBySubscription: 1,
         });
       }
+      return Promise.resolve(true);
+    }
+
+    // Odin provisions its library automatically after login. Keep the explicit
+    // folder chooser for the other brands and preserve any existing user path.
+    if (BRAND.id === "odin" && options?.useDefault) {
+      const patch = {
+        absCustomAbsolutePath: resolvePackagesInstallRoot(null),
+        useCustomPathBySubscription: 1,
+      };
+      writePrefSettings({ ...readPrefSettings(), ...patch });
+      updatePrefs(patch);
       return Promise.resolve(true);
     }
 

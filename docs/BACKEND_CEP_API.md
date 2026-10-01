@@ -399,6 +399,9 @@ Returns the release manifest for the caller's brand. **Bearer required** (signed
 |---|---|
 | `spunkram-cep` (default) | `public/downloads/spunkram/` |
 | `gal-cep` | `public/downloads/gal/` |
+| `odin-cep` (Motionflow API) | `public/downloads/odin/` |
+
+The Odin panel authenticates through `odin-pro.com` with its own tokens and currently has extension updates disabled. Publishing an Odin ZXP to R2 does not enable those client endpoints.
 
 - **Stable (any signed-in user):** R2 `public/downloads/{product}/latest.json`
 - **Beta (allowlisted only):** if the user is a beta-tester (`basepackagehelp@gmail.com`, or `SPUNKRAM_BETA_EMAILS`), and `{product}/beta.json` is newer than stable, that manifest is returned instead (`channel: "beta"`).
@@ -453,6 +456,9 @@ CEP Settings → **Admin · Builds** shows this list and can install any build (
 | `public/downloads/gal/{version}/gal.zxp` | Gal Toolkit MAX signed ZXP |
 | `public/downloads/gal/latest.json` | Gal stable pointer |
 | `public/downloads/gal/beta.json` | Gal beta pointer (email-gated) |
+| `public/downloads/odin/{version}/odin.zxp` | Odin Pro signed ZXP |
+| `public/downloads/odin/latest.json` | Odin stable pointer |
+| `public/downloads/odin/beta.json` | Odin beta pointer (email-gated) |
 
 CEP downloads ffmpeg into userdata (not the extension folder) so ZXP overwrite updates do not delete it.
 
@@ -460,7 +466,7 @@ CEP downloads ffmpeg into userdata (not the extension folder) so ZXP overwrite u
 
 - Verify `X-Hub-Signature-256` with `GITHUB_WEBHOOK_SECRET`
 - Optional filter: `GITHUB_SPUNKRAM_REPO` (`org/repo`)
-- On `release` `published` / `edited`: download `.zxp` asset → R2 (Spunkram path unless extended)
+- On `release` `published` / `edited`: resolve `spunkram-`, `gal-`, or `odin-` tag prefix and download that brand's `.zxp` asset → its R2 folder. Legacy unprefixed semver tags resolve to Spunkram.
 - Prefer CEP `npm run release` upload for multi-brand (`--brand=all`)
 - Prerelease / tag containing `-beta` → `beta.json`; otherwise `latest.json`
 - Optional `GITHUB_TOKEN` if release assets need auth
@@ -471,16 +477,18 @@ CEP downloads ffmpeg into userdata (not the extension folder) so ZXP overwrite u
 node --env-file=.env scripts/upload-spunkram-ffmpeg.mjs --win=…/ffmpeg.exe --mac=…/ffmpeg-mac.zip
 node --env-file=.env scripts/upload-spunkram-zxp.mjs --product=spunkram --zxp=./dist/zxp/com.spunkramlibrary.cep.zxp --version=0.1.0
 node --env-file=.env scripts/upload-spunkram-zxp.mjs --product=gal --zxp=./dist/zxp/com.premieregal.cep.zxp --version=0.1.0
+node --env-file=.env scripts/upload-spunkram-zxp.mjs --product=odin --zxp=./dist/zxp/com.odinpro.cep.zxp --version=1.0.0
 node --env-file=.env scripts/upload-spunkram-zxp.mjs --product=spunkram --zxp=./x.zxp --version=0.1.1-beta.1 --channel=beta
 ```
 
-After R2 upload the script calls **`POST /api/cep/update/notify`** with `x-motionflow-admin-secret: <MOTIONFLOW_ADMIN_API_SECRET>` (same durable secret as credits admin — not a panel `mfcep_…` session). Body includes `product: "spunkram" | "gal"` so WSS clients can filter. Override URL with `CEP_UPDATE_NOTIFY_URL`. Notify failure does not fail the release.
+After R2 upload the script calls **`POST /api/cep/update/notify`** with `x-motionflow-admin-secret: <MOTIONFLOW_ADMIN_API_SECRET>` (same durable secret as credits admin — not a panel `mfcep_…` session). Body includes `product: "spunkram" | "gal" | "odin"` so WSS clients can filter. Override URL with `CEP_UPDATE_NOTIFY_URL`. Notify failure does not fail the release.
 
 CEP:
 
 ```bash
-npm run release -- --author=all --type=patch    # Spunkram + Gal, independent versions / tags
+npm run release -- --author=all --type=patch    # Spunkram + Gal + Odin, independent versions / tags
 npm run release -- --author=gal --type=patch              # Gal only
+npm run release -- --author=odin --type=patch             # Odin only
 npm run release -- --author=all --beta          # beta.json per brand
 npm run release -- --author=spunkram --type=patch         # Spunkram only
 ```

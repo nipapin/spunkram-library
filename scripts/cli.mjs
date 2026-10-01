@@ -93,11 +93,10 @@ export async function completeOptions(options, choose = select) {
   const canSkipUpload = result.releaseArgs.includes("--no-upload");
   const available = AUTHORS.filter(a => !release || canSkipUpload || a.product);
   if (!result.author) {
-    if (release && !canSkipUpload) console.log("Odin: публикация не настроена. Для релиза без загрузки используйте --no-upload.\n");
     result.author = await choose("Автор", available.map(a => ({ value: a.id, label: a.label })));
   }
   if (result.author !== "all" && !available.some(a => a.id === result.author)) {
-    throw new Error("Публикация Odin не настроена. Используйте build --format=zxp или release --no-upload.");
+    throw new Error(`Публикация ${result.author} не настроена. Используйте build --format=zxp или release --no-upload.`);
   }
   return result;
 }
@@ -151,14 +150,14 @@ async function main() {
   npm run dev -- --author=odin
   npm run build -- --author=gal --format=zxp
   npm run release -- --type=patch --author=spunkram --dry-run
+  npm run release -- --type=patch --author=odin
 
 Авторы: ${AUTHORS.map(a => a.id).join(", ")}
 build: --format=panel|zxp|zip (по умолчанию panel)
 release: --type=patch|minor|major, --beta, --no-git, --no-upload,
-         --skip-build, --message="...", --author=all (Spunkram + Gal)
+         --skip-build, --message="...", --author=all (Spunkram + Gal + Odin)
 --brand / --bump — алиасы --author / --type. --dry-run — без изменений.
 Релиз выполняет сборку ZXP, commit/push/tag и загрузку в R2.
-Odin: только release --no-upload, пока публикация не настроена.
 
 Дополнительно: node scripts/cli.mjs watch|zxp|zip|serve|symlink|delsymlink --author=…`);
     return;

@@ -4,7 +4,6 @@ import {
   Check,
   ChevronRight,
   Download,
-  LogOut,
   Monitor,
   RefreshCw,
   ShieldCheck,
@@ -16,6 +15,10 @@ import { BRAND } from "@brands";
 import logo from "@/assets/odin.webp";
 import { useOdinHost } from "./use-odin-host";
 import { selectOdinPackage } from "./odin-package-selection";
+
+export function odinAccountInitial(email?: string | null): string {
+  return (email || "O").trim().charAt(0).toUpperCase() || "O";
+}
 
 export function OdinProfile({
   onPackage,
@@ -30,10 +33,10 @@ export function OdinProfile({
   testPack?: boolean;
   version?: string;
 }) {
-  const { auth, subscription, market, logout, revoke, recheck } = useAuth();
+  const { auth, subscription, market, revoke, recheck } = useAuth();
   const host = useOdinHost() === "PPRO" ? "PR" : "AE";
   const hostLabel = host === "PR" ? "Premiere Pro" : "After Effects";
-  const pack = selectOdinPackage(market?.Packages || [], host, true);
+  const pack = selectOdinPackage(market?.Packages || [], host, subscription.subscribed);
   const preview =
     pack?.image_url?.replace(
       /^http:\/\/api\.get-atomx\.com\//,
@@ -69,7 +72,7 @@ export function OdinProfile({
     <div className="odin-profile">
       <section className="odin-profile__hero">
         <span className="odin-profile__avatar">
-          {(auth.email || "O").slice(0, 1).toUpperCase()}
+          {odinAccountInitial(auth.email)}
         </span>
         <div>
           <p className="odin-profile__email">{auth.email}</p>
@@ -84,16 +87,6 @@ export function OdinProfile({
             {subscription.subscribed ? "Subscription active" : "Free account"}
           </span>
         </div>
-        <button
-          type="button"
-          className="odin-profile__icon-button"
-          aria-label="Log out"
-          data-tooltip="Log out"
-          disabled={busy}
-          onClick={() => void act(logout)}
-        >
-          <LogOut size={17} />
-        </button>
       </section>
       {(error || subscription.error) && (
         <p role="alert" className="odin-error">
@@ -150,9 +143,7 @@ export function OdinProfile({
               {installed ? <ChevronRight size={16} /> : <Download size={16} />}
               {installed
                 ? "Open library"
-                : subscription.subscribed
-                  ? "Download Pack"
-                  : "Demo package"}
+                : "Setting up library…"}
             </button>
             {!subscription.subscribed && (
               <button

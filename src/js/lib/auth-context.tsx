@@ -733,11 +733,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const recheck = useCallback(async () => {
     const current = readActiveMotionflowAuth();
-    if (!current.token) return { ok: false, message: "Not signed in" };
+    if (!current.token) {
+      forgetSessionInMemory();
+      return { ok: false, message: "Not signed in" };
+    }
     return refreshProfile(current.token, {
       removeAccountIdOnUnauthorized: current.id,
     });
-  }, [refreshProfile]);
+  }, [refreshProfile, forgetSessionInMemory]);
 
   const revoke = useCallback(
     async (deviceId: string) => {

@@ -76,6 +76,7 @@ export function OdinObserver({ query }: { query: string }) {
     }
   }
   return (
+    <div className="odin-observer-container">
     <section
       className={`odin-observer${dragOver ? " is-dragging" : ""}`}
       aria-label="Observer"
@@ -185,15 +186,6 @@ export function OdinObserver({ query }: { query: string }) {
             : "Add folders by dropping them here, or tap + to choose folders. Ctrl+click to select several."}
         </div>
       )}
-      <button
-        type="button"
-        className="odin-observer__add"
-        aria-label="Add folders"
-        data-tooltip="Add folders"
-        onClick={pick}
-      >
-        <Plus size={24} />
-      </button>
       {selected.length > 0 && (
         <div className="odin-observer__selection">
           <span>{selected.length} selected</span>
@@ -330,5 +322,15 @@ export function OdinObserver({ query }: { query: string }) {
         </div>
       )}
     </section>
+      <button
+        type="button"
+        className="odin-observer__add"
+        aria-label="Add folders"
+        data-tooltip="Add folders"
+        onClick={pick}
+      >
+        <Plus size={24} />
+      </button>
+    </div>
   );
 }

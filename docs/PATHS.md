@@ -66,9 +66,10 @@ Code: `fetchCaptionsCdnBaseManifest` / `captionsCdnBaseManifestUrl` in `src/js/s
 Из корня CEP:
 
 ```bash
-npm run release -- --author=all --type=patch    # Spunkram + Gal → R2 …/spunkram/ + …/gal/
+npm run release -- --author=all --type=patch    # Spunkram + Gal + Odin → отдельные каталоги R2
 npm run release -- --author=spunkram --type=patch         # Spunkram only
 npm run release -- --author=gal --type=patch              # Gal only
+npm run release -- --author=odin --type=patch             # Odin only
 npm run release -- --author=spunkram --type=minor # также major; --beta отдельно
 npm run release -- --author=gal --type=minor # также major; --beta отдельно
 npm run release                        # мастер: тип релиза → автор
@@ -77,7 +78,7 @@ npm run release -- --no-upload         # сборка ZXP + Git без загр�
 ```
 
 Нужен `next-app/.env` с R2 (или `NEXT_APP_ROOT` если путь другой). После upload: signed-in `GET /api/cep/update` (manifest by Bearer `client`: `spunkram-cep` / `gal-cep`).
-CDN pointers: `public/downloads/{spunkram|gal}/latest.json` (+ `beta.json` for testers).
+CDN pointers: `public/downloads/{spunkram|gal|odin}/latest.json` (+ `beta.json` for testers). Odin ZXP: `public/downloads/odin/{version}/odin.zxp`; автообновления в панели Odin пока отключены, её API находится на `odin-pro.com`.
 Beta видна только `basepackagehelp@gmail.com` (после логина в CEP). Промоут beta → stable: `npm run release -- --author=spunkram --type=patch` (с `x.y.z-beta.N` снимет `-beta` → `x.y.z`).
 
 ## Полезные ориентиры в исходном проекте (историческое)

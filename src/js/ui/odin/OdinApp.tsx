@@ -1,66 +1,54 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowUpRight, Loader2, Sparkles, User, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Loader2, Sparkles, X } from "lucide-react";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { PanelUIProvider, usePanelUI } from "@/lib/panel-ui-context";
 import { NotificationsProvider } from "@/lib/notifications-context";
 import { PackagesPathGateProvider } from "@/lib/packages-path-gate";
 import {
   DownloadManagerProvider,
-  useDownloadManager,
 } from "@/lib/download-manager-context";
 import { usePackWorkspace } from "@/lib/use-pack-workspace";
+import { getFirstPackRoot } from "@/lib/utils/pack-tree";
 import { LoginScreen } from "@/components/login-screen";
 import { OdinPackagePanel } from "./OdinPackagePanel";
 import { useOdinPackage } from "./use-odin-package";
-import { useOdinHost } from "./use-odin-host";
-import { loadOdinDevPack } from "./odin-dev-pack";
 import { OdinTooltips } from "./OdinTooltips";
-import { SettingsPanel } from "@/components/settings-panel";
-import { BRAND } from "@brands";
 import { openMotionflowSubscribe } from "@/api/motionflow-auth";
-import { openLinkInBrowser } from "@/lib/utils/bolt";
 import { OdinLibrary } from "./OdinLibrary";
-import { OdinProfile } from "./OdinProfile";
-import { AiToolsPanel } from "@/components/ai-tools-panel";
+import { OdinProfileMenu } from "./OdinProfileMenu";
+import { OdinAccountZone } from "./OdinAccountZone";
+import { OdinAiToolsPanel } from "./OdinAiToolsPanel";
 import { useGenerationsBalance } from "@/hooks/use-generations-balance";
 import logo from "@/assets/odin.webp";
 import "./odin-panel.scss";
 
 export function OdinHeader({
-  onSettings,
-  onProfile,
+  onHome,
+  onOpenSettings,
+  onOpenProfile,
 }: {
-  onSettings: () => void;
-  onProfile: () => void;
+  onHome: () => void;
+  onOpenSettings: () => void;
+  onOpenProfile: () => void;
 }) {
   return (
     <header className="odin-header">
-      <button
-        type="button"
-        className="odin-header__logo"
-        onClick={onSettings}
-        aria-label="Settings"
-      >
+      <button type="button" className="odin-header__logo" aria-label="Back to library" onClick={onHome}>
         <img src={logo} alt="Odin Pro" width={36} height={36} />
       </button>
-      <button
-        type="button"
-        className="odin-header__profile"
-        onClick={onProfile}
-        aria-label="Profile"
-      >
-        <User size={22} />
-      </button>
+      <OdinProfileMenu onOpenProfile={onOpenProfile} onOpenSettings={onOpenSettings} />
     </header>
   );
 }
 
 function OdinOverlay({
   title,
+  hideTitle = false,
   onClose,
   children,
 }: {
   title: string;
+  hideTitle?: boolean;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -73,9 +61,9 @@ function OdinOverlay({
   return (
     <section
       ref={ref}
-      className="odin-overlay"
-      role="dialog"
-      aria-modal="true"
+      className={hideTitle ? "odin-overlay odin-overlay--account" : "odin-overlay"}
+      role={hideTitle ? "region" : "dialog"}
+      aria-modal={hideTitle ? undefined : true}
       aria-label={title}
       tabIndex={-1}
       onKeyDown={(event) => {
@@ -83,7 +71,7 @@ function OdinOverlay({
           event.stopPropagation();
           onClose();
         }
-        if (event.key === "Tab") {
+        if (!hideTitle && event.key === "Tab") {
           const items = Array.from(
             ref.current?.querySelectorAll<HTMLElement>(
               'button:not([disabled]), input:not([disabled]), a[href], select, [tabindex="0"]',
@@ -105,7 +93,7 @@ function OdinOverlay({
         }
       }}
     >
-      <div className="odin-overlay__heading">
+      {!hideTitle && <div className="odin-overlay__heading">
         <button type="button" aria-label="Back to library" onClick={onClose}>
           <ArrowLeft size={18} />
         </button>
@@ -113,35 +101,16 @@ function OdinOverlay({
         <button type="button" aria-label="Close" onClick={onClose}>
           <X size={18} />
         </button>
-      </div>
+      </div>}
       <div className="odin-overlay__content">{children}</div>
     </section>
   );
 }
 
 function OdinActivity() {
-  const { jobs, cancel } = useDownloadManager();
   const { statusMessage } = usePanelUI();
-  const active = jobs.find((job) =>
-    ["queued", "downloading", "installing"].includes(job.status),
-  );
   return (
     <>
-      {active && (
-        <div className="odin-download" role="status">
-          <Loader2 size={14} className="animate-spin" />
-          <span>
-            {active.pack.name} · {Math.round(active.progress || 0)}%
-          </span>
-          <button
-            type="button"
-            aria-label="Cancel download"
-            onClick={() => cancel(active.id)}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
       {statusMessage && (
         <div
           className={`odin-status odin-status--${statusMessage.tone}`}
@@ -156,16 +125,11 @@ function OdinActivity() {
 
 function OdinShell() {
   const { signedIn, authReady, subscription } = useAuth();
-  const host = useOdinHost() === "PPRO" ? "PR" : "AE";
-  const workspace = usePackWorkspace({
-    loadTestPack:
-      import.meta.env.DEV && BRAND.devPack?.host === host
-        ? loadOdinDevPack
-        : undefined,
-  });
+  const workspace = usePackWorkspace();
   const packageModel = useOdinPackage(workspace);
   const generations = useGenerationsBalance();
-  const { showStatus } = usePanelUI();
+  const { setShowFavoritesOnly } = usePanelUI();
+  const [homeVisit, setHomeVisit] = useState(0);
   const [overlay, setOverlay] = useState<
     "profile" | "settings" | "package" | "ai-tools" | null
   >(null);
@@ -187,72 +151,71 @@ function OdinShell() {
       </div>
     );
   if (!signedIn) return <LoginScreen />;
+  if (packageModel.blocking) return <OdinPackagePanel model={packageModel} fullscreen />;
   const close = () => {
     setUpgradeTool(null);
     setOverlay(null);
+  };
+  const home = () => {
+    close();
+    workspace.setQuery("");
+    setShowFavoritesOnly(false);
+    workspace.setCategory(getFirstPackRoot(workspace.tree)?.id || "");
+    setHomeVisit((value) => value + 1);
   };
   const dismissUpgrade = () => {
     setUpgradeTool(null);
     setTimeout(() => upgradeTriggerRef.current?.focus(), 0);
   };
-  const tutorials = () => {
-    const url = BRAND.tutorialsUrl?.trim();
-    if (!url) {
-      showStatus("Tutorials link is not configured yet.", "error");
-      return;
-    }
-    if (!/^https?:\/\//i.test(url)) {
-      showStatus("Tutorials link must start with https:// or http://", "error");
-      return;
-    }
-    openLinkInBrowser(url);
-  };
+  const accountOverlay = overlay === "profile" || overlay === "settings";
   return (
     <div className="odin-app">
       <div
         className="odin-app__workspace"
-        aria-hidden={overlay ? true : undefined}
-        inert={overlay ? true : undefined}
+        aria-hidden={overlay && !accountOverlay ? true : undefined}
+        inert={overlay && !accountOverlay ? true : undefined}
       >
         <OdinHeader
-          onSettings={() => setOverlay("settings")}
-          onProfile={() => setOverlay("profile")}
+          onHome={home}
+          onOpenSettings={() => setOverlay("settings")}
+          onOpenProfile={() => setOverlay("profile")}
         />
+        <div className="odin-app__library" aria-hidden={overlay ? true : undefined} inert={overlay ? true : undefined}>
         <OdinLibrary
+          key={homeVisit}
           workspace={workspace}
           packageModel={packageModel}
-          onTutorials={tutorials}
           onAiTools={() => setOverlay("ai-tools")}
         />
+        </div>
       </div>
       {overlay && (
         <OdinOverlay
+          hideTitle={accountOverlay}
           title={
             {
-              profile: "Profile",
-              settings: "Settings",
+              profile: "Account",
+              settings: "Account",
               package: "Package",
               "ai-tools": "AI Tools",
             }[overlay]
           }
           onClose={close}
         >
-          {overlay === "profile" ? (
-            <OdinProfile
+          {overlay === "profile" || overlay === "settings" ? (
+            <OdinAccountZone
+              tab={overlay}
+              onTabChange={(tab) => setOverlay(tab)}
               onPackage={() => setOverlay("package")}
               onLibrary={close}
               installed={packageModel.installed}
               testPack={workspace.isTestPack}
               version={workspace.packSettings?.main.version}
             />
-          ) : overlay === "settings" ? (
-            <div className="odin-settings">
-              <SettingsPanel onBack={close} />
-            </div>
           ) : overlay === "ai-tools" ? (
             <section className="odin-ai-tools">
               <div className="odin-ai-tools__panel" inert={upgradeTool ? true : undefined}>
-                <AiToolsPanel
+                <OdinAiToolsPanel
                   monthly={generations.monthly}
                   extra={generations.extra}
                   monthlyLimit={generations.monthlyLimit}

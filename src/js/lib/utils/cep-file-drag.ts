@@ -1,5 +1,5 @@
 /**
- * Drag out of the Spunkram panel into Premiere.
+ * Drag out of the Spunkram or Odin panel into Premiere.
  *
  * A real media file is handed to the host with `com.adobe.cep.dnd.file.0`, so
  * Premiere inserts it where the pointer is released. Pack projects and mogrts
@@ -10,7 +10,7 @@
 import { BRAND } from "@brands";
 import { os } from "../cep/node";
 
-export const cepHostFileDragEnabled = BRAND.id === "spunkram";
+export const cepHostFileDragEnabled = BRAND.id === "spunkram" || BRAND.id === "odin";
 
 const GHOST_SRC =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=";

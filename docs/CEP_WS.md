@@ -40,7 +40,7 @@ Hub sets Redis `cep:presence:dev:{deviceId}` (TTL 90s) on `auth.ok` and refreshe
 }
 ```
 
-`product` is `"spunkram" | "gal"` (optional on older notifies). Panels ignore events for other brands (`BRAND.id`), then re-check `GET /api/cep/update` (Bearer → brand-specific manifest) before showing the Update banner.
+`product` is `"spunkram" | "gal" | "odin"` (optional on older notifies). Panels ignore events for other brands (`BRAND.id`), then re-check `GET /api/cep/update` (Bearer → brand-specific manifest) before showing the Update banner. The Odin panel currently has remote notifications and extension auto-updates disabled.
 
 ## Device revoke (`cep:device`)
 

@@ -1,4 +1,5 @@
 import { Type, BookOpen, Scissors, Sparkles, Plus, Infinity as InfinityIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { openMotionflowSubscribe } from "@/api/motionflow-auth";
 
 const AI_TOOLS = [
@@ -19,6 +20,7 @@ export function AiToolsList({
   onOpenTool,
   allowOpenWithoutCredits = false,
   showGetMore = true,
+  additionalTools,
 }: {
   monthly: number;
   extra: number;
@@ -27,6 +29,7 @@ export function AiToolsList({
   onOpenTool: (id: string) => void;
   allowOpenWithoutCredits?: boolean;
   showGetMore?: boolean;
+  additionalTools?: ReactNode;
   /** @deprecated Local fake extras removed — quota is server-owned. */
   onBuyExtra?: (amount: number) => void;
 }) {
@@ -132,6 +135,7 @@ export function AiToolsList({
                   </button>
                 );
               })}
+              {additionalTools}
             </div>
           </div>
         </div>

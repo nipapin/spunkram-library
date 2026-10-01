@@ -5,6 +5,7 @@ on:
     tags:
       - "spunkram-*.*.*"
       - "gal-*.*.*"
+      - "odin-*.*.*"
       - "*.*.*"
 
 permissions:
@@ -30,6 +31,8 @@ jobs:
           $tag = $env:GITHUB_REF_NAME
           if ($tag -like "gal-*") {
             Add-Content -Path $env:GITHUB_OUTPUT -Value "id=gal"
+          } elseif ($tag -like "odin-*") {
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "id=odin"
           } else {
             Add-Content -Path $env:GITHUB_OUTPUT -Value "id=spunkram"
           }

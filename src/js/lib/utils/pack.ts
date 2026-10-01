@@ -48,12 +48,13 @@ export function parsePackageFileFormat(
 function parseJsonPackContent(raw: string): PackContent {
   const cleaned = raw.replace(/^\uFEFF/, "").trim();
   const parsed = JSON.parse(cleaned) as {
-    settings?: PackContent["settings"];
+    settings?: PackContent["settings"] & { contents?: PackContent["structure"] };
     structure?: PackContent["structure"];
     content?: PackContent["structure"];
     contents?: PackContent["structure"];
   };
-  const structure = parsed.structure ?? parsed.contents ?? parsed.content;
+  // Some Odin exports keep the tree inside settings rather than at the root.
+  const structure = parsed?.structure ?? parsed?.contents ?? parsed?.content ?? parsed?.settings?.contents;
   if (!parsed?.settings || !structure || typeof structure !== "object") {
     throw new Error("Missing settings or content");
   }
