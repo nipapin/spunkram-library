@@ -174,8 +174,10 @@ function migrateLegacyResult(): ChaptersHistoryItem[] {
 
 export const ChaptersApp = ({
   generationsLeft = 0,
+  onNoCredits,
 }: {
   generationsLeft?: number;
+  onNoCredits?: () => void;
 }) => {
   const { chaptersSrcLang, chaptersTranslateTo } = useConfiguration();
   const { showStatus } = usePanelUI();
@@ -391,13 +393,18 @@ export const ChaptersApp = ({
 
   const handleGenerate = async () => {
     if (progress) return;
+    if (generationsLeft <= 0 && onNoCredits) {
+      onNoCredits();
+      return;
+    }
     const range = await workRange.refresh();
     if (range.error) {
       showError(range.error);
       return;
     }
     if (generationsLeft < range.cost) {
-      showError("No generations left. Upgrade your plan or buy extra credits.");
+      if (onNoCredits) onNoCredits();
+      else showError("No generations left. Upgrade your plan or buy extra credits.");
       return;
     }
     try {
@@ -431,7 +438,8 @@ export const ChaptersApp = ({
     const source = transcriptionRef.current;
     if (!source || opts.busy) return;
     if (generationsLeft <= 0) {
-      showError("No generations left. Upgrade your plan or buy extra credits.");
+      if (onNoCredits) onNoCredits();
+      else showError("No generations left. Upgrade your plan or buy extra credits.");
       return;
     }
     opts.setBusy(true);
@@ -655,7 +663,7 @@ export const ChaptersApp = ({
         onStyleChange={updateStyle}
         generateLabel={withGenerationCostLabel("Generate", generationCost)}
         onBack={handleBack}
-        canRegenerate={generationsLeft > 0}
+        canRegenerate={generationsLeft > 0 || Boolean(onNoCredits)}
         history={historyPreview}
         onOpenHistory={handleOpenHistory}
         onDeleteHistory={handleDeleteHistory}

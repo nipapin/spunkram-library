@@ -73,8 +73,10 @@ const cleanupTempAudio = (paths: (string | undefined)[]) => {
 
 export const SilenceRemoverApp = ({
   generationsLeft = 0,
+  onNoCredits,
 }: {
   generationsLeft?: number;
+  onNoCredits?: () => void;
 }) => {
   const { showStatus } = usePanelUI();
   const workRange = useWorkRangeCost(true);
@@ -210,13 +212,18 @@ export const SilenceRemoverApp = ({
 
   const handleRemove = async () => {
     if (progress) return;
+    if (generationsLeft <= 0 && onNoCredits) {
+      onNoCredits();
+      return;
+    }
     const range = await workRange.refresh();
     if (range.error) {
       showError(range.error);
       return;
     }
     if (generationsLeft < range.cost) {
-      showError("No generations left. Upgrade your plan or buy extra credits.");
+      if (onNoCredits) onNoCredits();
+      else showError("No generations left. Upgrade your plan or buy extra credits.");
       return;
     }
     try {
@@ -287,7 +294,7 @@ export const SilenceRemoverApp = ({
         <button
           type="button"
           className="btn btn--primary silence-app__run"
-          disabled={!!progress || generationsLeft <= 0}
+          disabled={!!progress || (generationsLeft <= 0 && !onNoCredits)}
           onClick={() => void handleRemove()}
         >
           {withGenerationCostLabel("Remove silence", workRange.cost)}

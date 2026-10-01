@@ -100,8 +100,10 @@ const isPremiere = () => cepHostAppId() === "PPRO";
 
 export const CaptionsApp = ({
   generationsLeft = 0,
+  onNoCredits,
 }: {
   generationsLeft?: number;
+  onNoCredits?: () => void;
 }) => {
   const {
     mode,
@@ -621,13 +623,18 @@ export const CaptionsApp = ({
 
   const handleDescribe = async () => {
     if (progress) return;
+    if (generationsLeft <= 0 && onNoCredits) {
+      onNoCredits();
+      return;
+    }
     const range = await workRange.refresh();
     if (range.error) {
       showError(range.error);
       return;
     }
     if (generationsLeft < range.cost) {
-      showError("No generations left. Upgrade your plan or buy extra credits.");
+      if (onNoCredits) onNoCredits();
+      else showError("No generations left. Upgrade your plan or buy extra credits.");
       return;
     }
     try {

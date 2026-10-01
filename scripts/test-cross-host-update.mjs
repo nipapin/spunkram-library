@@ -64,6 +64,26 @@ test("do not reload when stamp does not match the banner target", () => {
   );
 });
 
+test("do not reload when the roaming stamp is older than this build", () => {
+  assert.equal(
+    shouldReloadExtensionForAppliedUpdate({
+      runningVersion: "0.10.4",
+      appliedVersion: "0.10.3",
+    }),
+    false,
+  );
+});
+
+test("do not reload a release over a leftover beta stamp of the same core", () => {
+  assert.equal(
+    shouldReloadExtensionForAppliedUpdate({
+      runningVersion: "0.10.4",
+      appliedVersion: "0.10.4-beta.2",
+    }),
+    false,
+  );
+});
+
 test("without a banner, reload when another host applied a newer version", () => {
   assert.equal(
     shouldReloadExtensionForAppliedUpdate({

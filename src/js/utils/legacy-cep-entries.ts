@@ -1,6 +1,15 @@
 import fs from "fs";
 import path from "path";
 
+function bootPanelHtmlName(version: string): string {
+  // Keep in step with bootPanelHtmlName() in cross-host-update.ts.
+  const clean = String(version || "")
+    .trim()
+    .replace(/^v/i, "")
+    .replace(/[^0-9A-Za-z.]+/g, "_");
+  return clean ? `index-${clean}.html` : "index.html";
+}
+
 /**
  * Hashed `assets/main-*.cjs` from shipped Spunkram ZXPs that still overlay
  * (additive copy + `location.reload()` of the *old* HTML). A tiny redirect
@@ -21,7 +30,10 @@ export const LEGACY_SPUNKRAM_PANEL_JS = [
 
 export function hashedAssetRedirectStub(targetHtmlFromThisFile: string): string {
   const dest = targetHtmlFromThisFile.replace(/\\/g, "/");
-  return `(function(){try{window.location.replace("${dest}?_cep_upd="+Date.now());}catch(e){}})();`;
+  // `../spunkram/index.html` from a document that already is `spunkram/index.html`
+  // resolves to the same file. CEF then serves the cached HTML, which loads this
+  // stub again. Skip when the document is already the destination file.
+  return `(function(){try{var dest="${dest}";var path=String(location.pathname||"").replace(/\\\\/g,"/");var file=dest.split("/").pop().split("?")[0];if(file&&path.toLowerCase().slice(-file.length)===file.toLowerCase())return;window.location.replace(dest+"?_cep_upd="+Date.now());}catch(e){}})();`;
 }
 
 export function rewriteHtmlAssetDepth(html: string, fromDepth: number, toDepth: number): string {
@@ -44,7 +56,11 @@ function currentHashedMains(assetsDir: string, ext: ".cjs" | ".css"): Set<string
  * After Vite emits `{brand}/index.html`, also write the CEP paths older
  * overlays still reload, plus tiny stubs at historical JS hashes.
  */
-export function writeLegacyCepEntries(outDir: string, brandId: string): string[] {
+export function writeLegacyCepEntries(
+  outDir: string,
+  brandId: string,
+  version = "",
+): string[] {
   const written: string[] = [];
   const brandHtmlPath = path.join(outDir, brandId, "index.html");
   if (!fs.existsSync(brandHtmlPath)) return written;
@@ -59,6 +75,15 @@ export function writeLegacyCepEntries(outDir: string, brandId: string): string[]
 
   if (brandId !== "spunkram") return written;
 
+  const bootName = bootPanelHtmlName(version);
+  const bootHtml = path.join(outDir, "spunkram", bootName);
+  if (bootName !== "index.html") {
+    fs.writeFileSync(bootHtml, html);
+    written.push(bootHtml);
+  }
+  const bootRel = `../spunkram/${bootName}`;
+  const nestedBootRel = `../../spunkram/${bootName}`;
+
   const nestedDir = path.join(outDir, "ui", "spunkram");
   fs.mkdirSync(nestedDir, { recursive: true });
   const nestedHtml = path.join(nestedDir, "index.html");
@@ -68,7 +93,7 @@ export function writeLegacyCepEntries(outDir: string, brandId: string): string[]
   const assetsDir = path.join(outDir, "assets");
   fs.mkdirSync(assetsDir, { recursive: true });
   const currentJs = currentHashedMains(assetsDir, ".cjs");
-  const rootStub = hashedAssetRedirectStub("../spunkram/index.html");
+  const rootStub = hashedAssetRedirectStub(bootRel);
   for (const name of LEGACY_SPUNKRAM_PANEL_JS) {
     if (currentJs.has(name)) continue;
     const dest = path.join(assetsDir, name);
@@ -79,7 +104,7 @@ export function writeLegacyCepEntries(outDir: string, brandId: string): string[]
   // 0.9.17 HTML used `../assets/…` from `ui/spunkram/` → `ui/assets/…`
   const uiAssets = path.join(outDir, "ui", "assets");
   fs.mkdirSync(uiAssets, { recursive: true });
-  const nestedStub = hashedAssetRedirectStub("../../spunkram/index.html");
+  const nestedStub = hashedAssetRedirectStub(nestedBootRel);
   const uiLegacyJs = path.join(uiAssets, "main-PMs0Ubu9.cjs");
   if (!currentJs.has("main-PMs0Ubu9.cjs")) {
     fs.writeFileSync(uiLegacyJs, nestedStub);

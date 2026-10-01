@@ -10,6 +10,7 @@ import {
 } from "@/utils/extension-update";
 import { pendingNativesOnly } from "@/utils/replace-live-file";
 import {
+  claimCrossHostPanelReload,
   getEffectiveLocalVersion,
   readCrossHostAppliedVersion,
   reloadPanelHard,
@@ -116,6 +117,7 @@ export function useExtensionUpdate() {
       if (reloadingPanelRef.current) return;
       const applied = readCrossHostAppliedVersion();
       if (
+        !applied ||
         !shouldReloadExtensionForAppliedUpdate({
           runningVersion: BUILD_VERSION,
           appliedVersion: applied,
@@ -125,6 +127,9 @@ export function useExtensionUpdate() {
       ) {
         return;
       }
+      // One navigation per handshake. If CEF still serves the old bundle
+      // afterwards, stop — another replace() is the white-flash loop.
+      if (!claimCrossHostPanelReload(applied)) return;
       reloadingPanelRef.current = true;
       reloadPanelHard();
     };

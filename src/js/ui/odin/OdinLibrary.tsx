@@ -5,8 +5,10 @@ import {
   LayoutGrid,
   Loader2,
   Search,
+  Sparkles,
   Star,
 } from "lucide-react";
+import { BRAND } from "@brands";
 import { PanelSidebar } from "@/components/panel-sidebar";
 import { FootageGrid } from "@/components/footage-grid";
 import { usePanelUI } from "@/lib/panel-ui-context";
@@ -22,10 +24,12 @@ export function OdinLibrary({
   workspace,
   packageModel,
   onTutorials,
+  onAiTools,
 }: {
   workspace: ReturnType<typeof usePackWorkspace>;
   packageModel: ReturnType<typeof useOdinPackage>;
   onTutorials: () => void;
+  onAiTools: () => void;
 }) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [observer, setObserver] = useState(false);
@@ -85,6 +89,16 @@ export function OdinLibrary({
           >
             <Star size={18} />
           </button>
+          {BRAND.features.aiTools && (
+            <button
+              type="button"
+              aria-label="AI Tools"
+              data-tooltip="AI Tools"
+              onClick={onAiTools}
+            >
+              <Sparkles size={18} />
+            </button>
+          )}
         </div>
         <label className="odin-search">
           <Search size={16} />

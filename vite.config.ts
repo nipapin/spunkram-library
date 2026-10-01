@@ -144,7 +144,7 @@ function writeLegacyCepEntriesPlugin(): Plugin {
     name: "write-legacy-cep-entries",
     enforce: "pre",
     writeBundle() {
-      writeLegacyCepEntries(outDir, appBrandId);
+      writeLegacyCepEntries(outDir, appBrandId, brand.version);
     },
   };
 }

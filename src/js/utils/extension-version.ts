@@ -7,9 +7,12 @@ import { version as BUILD_VERSION } from "../../shared/shared";
 import {
   APPLIED_VERSION_STAMP_FILE,
   type AppliedVersionStamp,
+  bootPanelHtmlName,
   parseAppliedVersionStamp,
 } from "./cross-host-update";
-import { INSTALLED_UPDATE_FILE } from "./update-swap-page";
+import { INSTALLED_UPDATE_FILE, pathToFileUrl } from "./update-swap-page";
+
+const CROSS_HOST_RELOAD_ATTEMPT_KEY = storageKey("crossHostReloadAttempt");
 
 const APPLIED_STORE_KEY = storageKey("appliedExtensionUpdate");
 
@@ -152,21 +155,55 @@ export function markExtensionUpdateApplied(version: string): void {
   }
 }
 
+/**
+ * Remember that we already navigated for this handshake.
+ * A second call returns false, so a stamp the reload cannot catch up to
+ * does not restart the panel on every boot.
+ */
+export function claimCrossHostPanelReload(appliedVersion: string): boolean {
+  const clean = appliedVersion.trim().replace(/^v/i, "");
+  if (!clean) return false;
+  try {
+    if (panelStore.getItem(CROSS_HOST_RELOAD_ATTEMPT_KEY) === clean) return false;
+    panelStore.setItem(CROSS_HOST_RELOAD_ATTEMPT_KEY, clean);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function replaceWithCacheBust(fileUrl: string): void {
+  const sep = fileUrl.includes("?") ? "&" : "?";
+  window.location.replace(`${fileUrl}${sep}_cep_upd=${Date.now()}`);
+}
+
 /** Reload panel HTML with a cache-bust query so CEF does not serve stale main.js. */
 export function reloadPanelHard(): void {
   if (typeof window === "undefined" || !window.location) return;
   try {
-    const url = new URL(window.location.href);
-    const filePath = url.pathname.replace(/\\/g, "/");
-    const onLegacyEntry =
-      /\/main\/index\.html$/i.test(filePath) ||
-      /\/ui\/spunkram\/index\.html$/i.test(filePath);
-    if (onLegacyEntry && BRAND.panelMainPath) {
-      const dest = new URL(BRAND.panelMainPath, url);
-      dest.searchParams.set("_cep_upd", String(Date.now()));
-      window.location.replace(dest.toString());
-      return;
+    const root = extRoot();
+    const here = decodeURIComponent(window.location.pathname || "").replace(/\\/g, "/");
+    if (root && BRAND.id === "spunkram") {
+      const bootName = bootPanelHtmlName(BUILD_VERSION);
+      const bootAbs = path.join(root, "spunkram", bootName);
+      const onBoot = here.toLowerCase().endsWith(`/${bootName.toLowerCase()}`);
+      if (!onBoot && fs.existsSync(bootAbs)) {
+        replaceWithCacheBust(pathToFileUrl(bootAbs));
+        return;
+      }
     }
+    const onLegacyEntry =
+      /\/main\/index\.html$/i.test(here) ||
+      /\/ui\/[^/]+\/index\.html$/i.test(here);
+    if (onLegacyEntry && root && BRAND.panelMainPath) {
+      const rel = BRAND.panelMainPath.replace(/^[./\\]+/, "").replace(/\\/g, "/");
+      const destAbs = path.join(root, rel);
+      if (fs.existsSync(destAbs)) {
+        replaceWithCacheBust(pathToFileUrl(destAbs));
+        return;
+      }
+    }
+    const url = new URL(window.location.href);
     url.searchParams.set("_cep_upd", String(Date.now()));
     window.location.replace(url.toString());
   } catch {

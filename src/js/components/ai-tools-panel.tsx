@@ -5,11 +5,12 @@ import { CaptionsApp } from "@/ui/spunkram/apps/CaptionsApp";
 import { ChaptersApp } from "@/ui/spunkram/apps/ChaptersApp";
 import { SilenceRemoverApp } from "@/ui/spunkram/apps/SilenceRemoverApp";
 import * as panelStore from "@/lib/userdata-store";
+import { BRAND } from "@brands";
 import "@/ai-tools.scss";
 
 type ActiveTool = "hub" | "captions" | "chapters" | "silence";
 
-const TOOL_KEY = "spunkram-library-ai-active-tool";
+const TOOL_KEY = BRAND.id === "odin" ? "odin-ai-active-tool" : "spunkram-library-ai-active-tool";
 
 const loadTool = (): ActiveTool => {
   try {
@@ -27,15 +28,17 @@ export function AiToolsPanel({
   monthlyLimit,
   isFreeUser,
   onUse,
+  onNoCredits,
 }: {
   monthly: number;
   extra: number;
   monthlyLimit: number | null;
   isFreeUser?: boolean;
   onUse: () => void;
+  onNoCredits?: (tool: string) => void;
   onBuyExtra?: (amount: number) => void;
 }) {
-  const [activeTool, setActiveTool] = useState<ActiveTool>(loadTool);
+  const [activeTool, setActiveTool] = useState<ActiveTool>(() => BRAND.id === "odin" ? "hub" : loadTool());
   const totalLeft = monthly + extra;
   const onUseRef = useRef(onUse);
   onUseRef.current = onUse;
@@ -51,7 +54,7 @@ export function AiToolsPanel({
   }, []);
 
   const openTool = (id: string) => {
-    if (totalLeft <= 0) return;
+    if (totalLeft <= 0 && !onNoCredits) return;
     if (id === "captions") setActiveTool("captions");
     else if (id === "chapter" || id === "chapters") setActiveTool("chapters");
     else if (id === "silence") setActiveTool("silence");
@@ -83,11 +86,11 @@ export function AiToolsPanel({
         </header>
         <div className="tool-shell__body">
           {activeTool === "captions" ? (
-            <CaptionsApp generationsLeft={totalLeft} />
+            <CaptionsApp generationsLeft={totalLeft} onNoCredits={onNoCredits ? () => onNoCredits(title) : undefined} />
           ) : activeTool === "chapters" ? (
-            <ChaptersApp generationsLeft={totalLeft} />
+            <ChaptersApp generationsLeft={totalLeft} onNoCredits={onNoCredits ? () => onNoCredits(title) : undefined} />
           ) : (
-            <SilenceRemoverApp generationsLeft={totalLeft} />
+            <SilenceRemoverApp generationsLeft={totalLeft} onNoCredits={onNoCredits ? () => onNoCredits(title) : undefined} />
           )}
         </div>
       </div>
@@ -101,6 +104,8 @@ export function AiToolsPanel({
       monthlyLimit={monthlyLimit}
       isFreeUser={isFreeUser}
       onOpenTool={openTool}
+      allowOpenWithoutCredits={Boolean(onNoCredits)}
+      showGetMore={!onNoCredits}
     />
   );
 }

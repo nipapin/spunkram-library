@@ -17,12 +17,16 @@ export function AiToolsList({
   monthlyLimit,
   isFreeUser,
   onOpenTool,
+  allowOpenWithoutCredits = false,
+  showGetMore = true,
 }: {
   monthly: number;
   extra: number;
   monthlyLimit: number | null;
   isFreeUser?: boolean;
   onOpenTool: (id: string) => void;
+  allowOpenWithoutCredits?: boolean;
+  showGetMore?: boolean;
   /** @deprecated Local fake extras removed — quota is server-owned. */
   onBuyExtra?: (amount: number) => void;
 }) {
@@ -83,14 +87,14 @@ export function AiToolsList({
                         {extra} extra
                       </span>
                     ) : null}
-                    <button
+                    {showGetMore && <button
                       type="button"
                       className="ai-hub-btn ai-hub-btn--primary ai-hub-btn--tiny"
                       onClick={() => openMotionflowSubscribe()}
                     >
                       <Plus className="size-3" strokeWidth={2.5} />
                       Get more
-                    </button>
+                    </button>}
                   </div>
                 </div>
               </div>
@@ -99,7 +103,7 @@ export function AiToolsList({
             <div className="ai-hub__tools">
               {AI_TOOLS.map((tool) => {
                 const Icon = tool.icon;
-                const disabled = tool.soon || totalLeft <= 0;
+                const disabled = tool.soon || (totalLeft <= 0 && !allowOpenWithoutCredits);
                 return (
                   <button
                     key={tool.id}

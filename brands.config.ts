@@ -117,7 +117,7 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
     apiOrigin: "https://odin-pro.com",
     verificationPath: "/cep/login",
     manageSubscriptionPath: "/account",
-    features: { aiTools: false, footages: false, remoteNotifications: false, extensionUpdates: false, telemetry: false, remotePackPreview: false },
+    features: { aiTools: true, footages: false, remoteNotifications: false, extensionUpdates: false, telemetry: false, remotePackPreview: false },
     packExtension: "odin",
     legacyPackExtension: "odin",
     prefsCompany: "Premiere Basics",

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Loader2, User, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Loader2, Sparkles, User, X } from "lucide-react";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { PanelUIProvider, usePanelUI } from "@/lib/panel-ui-context";
 import { NotificationsProvider } from "@/lib/notifications-context";
@@ -17,9 +17,12 @@ import { loadOdinDevPack } from "./odin-dev-pack";
 import { OdinTooltips } from "./OdinTooltips";
 import { SettingsPanel } from "@/components/settings-panel";
 import { BRAND } from "@brands";
+import { openMotionflowSubscribe } from "@/api/motionflow-auth";
 import { openLinkInBrowser } from "@/lib/utils/bolt";
 import { OdinLibrary } from "./OdinLibrary";
 import { OdinProfile } from "./OdinProfile";
+import { AiToolsPanel } from "@/components/ai-tools-panel";
+import { useGenerationsBalance } from "@/hooks/use-generations-balance";
 import logo from "@/assets/odin.webp";
 import "./odin-panel.scss";
 
@@ -152,7 +155,7 @@ function OdinActivity() {
 }
 
 function OdinShell() {
-  const { signedIn, authReady } = useAuth();
+  const { signedIn, authReady, subscription } = useAuth();
   const host = useOdinHost() === "PPRO" ? "PR" : "AE";
   const workspace = usePackWorkspace({
     loadTestPack:
@@ -161,10 +164,17 @@ function OdinShell() {
         : undefined,
   });
   const packageModel = useOdinPackage(workspace);
+  const generations = useGenerationsBalance();
   const { showStatus } = usePanelUI();
   const [overlay, setOverlay] = useState<
-    "profile" | "settings" | "package" | null
+    "profile" | "settings" | "package" | "ai-tools" | null
   >(null);
+  const [upgradeTool, setUpgradeTool] = useState<string | null>(null);
+  const upgradeCloseRef = useRef<HTMLButtonElement>(null);
+  const upgradeTriggerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (upgradeTool) upgradeCloseRef.current?.focus();
+  }, [upgradeTool]);
   useEffect(() => {
     if (!signedIn) setOverlay(null);
   }, [signedIn]);
@@ -177,7 +187,14 @@ function OdinShell() {
       </div>
     );
   if (!signedIn) return <LoginScreen />;
-  const close = () => setOverlay(null);
+  const close = () => {
+    setUpgradeTool(null);
+    setOverlay(null);
+  };
+  const dismissUpgrade = () => {
+    setUpgradeTool(null);
+    setTimeout(() => upgradeTriggerRef.current?.focus(), 0);
+  };
   const tutorials = () => {
     const url = BRAND.tutorialsUrl?.trim();
     if (!url) {
@@ -205,14 +222,18 @@ function OdinShell() {
           workspace={workspace}
           packageModel={packageModel}
           onTutorials={tutorials}
+          onAiTools={() => setOverlay("ai-tools")}
         />
       </div>
       {overlay && (
         <OdinOverlay
           title={
-            { profile: "Profile", settings: "Settings", package: "Package" }[
-              overlay
-            ]
+            {
+              profile: "Profile",
+              settings: "Settings",
+              package: "Package",
+              "ai-tools": "AI Tools",
+            }[overlay]
           }
           onClose={close}
         >
@@ -228,6 +249,57 @@ function OdinShell() {
             <div className="odin-settings">
               <SettingsPanel onBack={close} />
             </div>
+          ) : overlay === "ai-tools" ? (
+            <section className="odin-ai-tools">
+              <div className="odin-ai-tools__panel" inert={upgradeTool ? true : undefined}>
+                <AiToolsPanel
+                  monthly={generations.monthly}
+                  extra={generations.extra}
+                  monthlyLimit={generations.monthlyLimit}
+                  isFreeUser={generations.isFreeUser}
+                  onUse={() => void generations.refresh()}
+                  onNoCredits={(tool) => {
+                    upgradeTriggerRef.current = document.activeElement as HTMLElement;
+                    setUpgradeTool(tool);
+                  }}
+                />
+              </div>
+              {upgradeTool && (
+                <div className="odin-ai-upgrade__backdrop" onClick={dismissUpgrade}>
+                  <div
+                    className="odin-ai-upgrade"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="odin-ai-upgrade-title"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.stopPropagation();
+                        dismissUpgrade();
+                      }
+                    }}
+                  >
+                    <div className="odin-ai-upgrade__top">
+                      <span className="odin-ai-upgrade__icon"><Sparkles size={20} /></span>
+                      <button ref={upgradeCloseRef} type="button" aria-label="Close upgrade prompt" onClick={dismissUpgrade}><X size={18} /></button>
+                    </div>
+                    <span className="odin-ai-upgrade__eyebrow">Odin Pro AI</span>
+                    <h2 id="odin-ai-upgrade-title">
+                      {subscription.subscribed ? "More generations needed" : `Unlock ${upgradeTool}`}
+                    </h2>
+                    <p>
+                      {subscription.subscribed
+                        ? `You need more generations to use ${upgradeTool}. Check your Odin Pro plan to continue.`
+                        : `You're ready to use ${upgradeTool}. Subscribe to Odin Pro to run this tool and unlock AI generations.`}
+                    </p>
+                    <button type="button" className="odin-ai-upgrade__cta" onClick={openMotionflowSubscribe}>
+                      {subscription.subscribed ? "View plan" : "Explore Odin Pro"}
+                      <ArrowUpRight size={17} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
           ) : (
             <OdinPackagePanel model={packageModel} />
           )}

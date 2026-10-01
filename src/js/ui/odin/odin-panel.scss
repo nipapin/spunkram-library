@@ -1,3 +1,5 @@
+@use "../../themes/spunkram.scss" as theme;
+
 :root[data-brand="odin"],
 :root[data-brand="odin"] body,
 :root[data-brand="odin"] #app {
@@ -1057,6 +1059,257 @@
 
 .odin-settings {
   height: 100%;
+}
+.odin-ai-tools {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.odin-ai-tools__panel {
+  height: 100%;
+  min-height: 0;
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-tools-scope {
+  // The shared AI scope emits Spunkram tokens; restore the Odin theme for every token.
+  @each $name, $value in theme.$tokens {
+    --#{$name}: inherit;
+  }
+  --acc-page: 14, 15, 17;
+  --acc-surface: 23, 24, 28;
+  --acc-surface-2: 32, 33, 36;
+  --acc-line: 48, 50, 54;
+  --acc-line-strong: 85, 89, 73;
+  --acc-fg: 244, 244, 244;
+  --acc-muted: 156, 160, 164;
+  --acc-cta: #ccff00;
+  --acc-cta-hover: #e1ff61;
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-hub {
+  background: #0e0f11;
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-hub__grid {
+  background-image: linear-gradient(#ffffff06 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff06 1px, transparent 1px);
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-hub__stack {
+  max-width: 480px;
+  margin-inline: auto;
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-hub__card {
+  border-color: #303238;
+  background: #181a1d;
+  box-shadow: inset 0 1px #ffffff0c, 0 8px 24px #0005;
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-hub__card--click:hover {
+  border-color: #ccff0080;
+  background: #202322;
+  box-shadow: inset 0 1px #ffffff10, 0 8px 24px #0007;
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-hub__fill--monthly,
+:root[data-brand="odin"] .odin-ai-tools .ai-hub__dot--monthly {
+  background: #ccff00;
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-hub__icon {
+  color: #111;
+  background: #ccff00;
+  box-shadow: none;
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-hub__soon {
+  border-color: #ccff0060;
+  background: #ccff0018;
+  color: #ccff00;
+}
+:root[data-brand="odin"] .odin-ai-tools .tool-shell__header {
+  border-color: #303238;
+  background: #181a1d;
+}
+:root[data-brand="odin"] .odin-ai-tools .tool-shell__back {
+  background: #202124;
+}
+:root[data-brand="odin"] .odin-ai-tools .tool-shell__gens {
+  color: #111;
+  background: #ccff00;
+  box-shadow: none;
+}
+:root[data-brand="odin"] .odin-ai-tools .card {
+  background: #17181c;
+  border-color: #303238;
+  box-shadow: inset 0 1px #ffffff0c, 0 8px 24px #0005;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-brand="odin"] .odin-ai-tools .chapter-style__option,
+:root[data-brand="odin"] .odin-ai-tools .btn:not(.btn--primary),
+:root[data-brand="odin"] .odin-ai-tools .btn-group__item:not(.btn-group__item--active-fill):not(.btn-group__item--active-outline),
+:root[data-brand="odin"] .odin-ai-tools .chip-toggle:not(.chip-toggle--active) {
+  background: #202124;
+  border-color: #34363b;
+  box-shadow: none;
+}
+:root[data-brand="odin"] .odin-ai-tools .chapter-style__option--active,
+:root[data-brand="odin"] .odin-ai-tools .btn-group__item--active-outline {
+  background: #293300;
+  border-color: #ccff00;
+  color: #fff;
+}
+:root[data-brand="odin"] .odin-ai-tools .tabs,
+:root[data-brand="odin"] .odin-ai-tools .segmented,
+:root[data-brand="odin"] .odin-ai-tools .chapters-tab__results-header,
+:root[data-brand="odin"] .odin-ai-tools .menu {
+  background: #17181c;
+  border-color: #34363b;
+  box-shadow: inset 0 1px #ffffff0c, 0 8px 24px #0005;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-brand="odin"] .odin-ai-tools .tab--active,
+:root[data-brand="odin"] .odin-ai-tools .segmented__btn--active {
+  background: #293300;
+  color: #ccff00;
+  box-shadow: none;
+}
+:root[data-brand="odin"] .odin-ai-tools .btn--primary,
+:root[data-brand="odin"] .odin-ai-tools .btn-group__item--active-fill,
+:root[data-brand="odin"] .odin-ai-tools .chip-toggle--active {
+  background: #ccff00;
+  border-color: #ccff00;
+  color: #10120a;
+  box-shadow: none;
+}
+:root[data-brand="odin"] .odin-ai-tools .btn--primary:hover:not(:disabled) {
+  background: #ddff55;
+}
+:root[data-brand="odin"] :is(.odin-ai-tools, .change-preset-dialog) .preset-grid__media {
+  background: #17181c;
+  border-color: #34363b;
+}
+:root[data-brand="odin"] :is(.odin-ai-tools, .change-preset-dialog) button.preset-grid__tag-chip {
+  background: #202124;
+  border-color: #41443a;
+  color: #d3d6d0;
+  box-shadow: none;
+}
+:root[data-brand="odin"] :is(.odin-ai-tools, .change-preset-dialog) button.preset-grid__tag-chip:hover:not(.preset-grid__tag-chip--active) {
+  background: #293300;
+  border-color: #ccff0080;
+  color: #fff;
+}
+:root[data-brand="odin"] :is(.odin-ai-tools, .change-preset-dialog) button.preset-grid__tag-chip--active {
+  background: #ccff00;
+  border-color: #ccff00;
+  color: #10120a;
+}
+:root[data-brand="odin"] :is(.odin-ai-tools, .change-preset-dialog) .preset-grid__icon-btn--active {
+  color: #10120a;
+  box-shadow: none;
+}
+:root[data-brand="odin"] :is(.odin-ai-tools, .change-preset-dialog) .preset-grid__chip {
+  background: #202124;
+  color: #f4f4f4;
+}
+:root[data-brand="odin"] .odin-ai-tools .caption-card--highlight {
+  box-shadow: inset 0 1px #ffffff10, 0 0 0 1px #ccff0050, 0 8px 24px #0005;
+}
+:root[data-brand="odin"] .odin-ai-tools .style-tab__update-pill {
+  color: #10120a;
+  box-shadow: none;
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-hub__scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #ccff00 #17181c;
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-hub__scroll::-webkit-scrollbar {
+  width: 5px;
+}
+:root[data-brand="odin"] .odin-ai-tools .ai-hub__scroll::-webkit-scrollbar-thumb {
+  background: #ccff00;
+}
+.odin-ai-upgrade__backdrop {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: #090a0be0;
+}
+.odin-ai-upgrade {
+  width: min(360px, 100%);
+  padding: 22px;
+  border: 1px solid #41453b;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #1e211c, #17191a 62%);
+  box-shadow: 0 22px 56px #000a, inset 0 1px #ffffff12;
+}
+.odin-ai-upgrade__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.odin-ai-upgrade__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #ccff0050;
+  border-radius: 12px;
+  background: #ccff0014;
+  color: #ccff00;
+}
+.odin-ai-upgrade__top button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #aeb0b0;
+}
+.odin-ai-upgrade__top button:hover {
+  background: #ffffff12;
+  color: #fff;
+}
+.odin-ai-upgrade__eyebrow {
+  color: #ccff00;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.odin-ai-upgrade h2 {
+  margin: 7px 0 0;
+  color: #fff;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.odin-ai-upgrade p {
+  margin: 10px 0 20px;
+  color: #afb2b0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.odin-ai-upgrade__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 9px;
+  background: #ccff00;
+  color: #10120a;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 8px 22px #0005;
+}
+.odin-ai-upgrade__cta:hover {
+  background: #e1ff61;
 }
 .odin-install {
   max-width: 430px;

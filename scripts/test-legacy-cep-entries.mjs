@@ -8,6 +8,7 @@ import {
   rewriteHtmlAssetDepth,
   writeLegacyCepEntries,
 } from "../src/js/utils/legacy-cep-entries.ts";
+import { bootPanelHtmlName } from "../src/js/utils/cross-host-update.ts";
 
 test("nested 0.9.17 HTML gains an extra ../ for assets", () => {
   const html = `<link href="../assets/main-x.css"><script src="../assets/main-x.cjs"></script>`;
@@ -18,9 +19,11 @@ test("nested 0.9.17 HTML gains an extra ../ for assets", () => {
   );
 });
 
-test("redirect stub jumps to current panel html with cache bust", () => {
-  const stub = hashedAssetRedirectStub("../spunkram/index.html");
-  assert.match(stub, /spunkram\/index\.html\?_cep_upd=/);
+test("redirect stub jumps to the uncached boot html", () => {
+  const stub = hashedAssetRedirectStub("../spunkram/index-0.10.4.html");
+  assert.match(stub, /spunkram\/index-0\.10\.4\.html/);
+  assert.match(stub, /_cep_upd/);
+  assert.match(stub, /slice\(-file\.length\)/);
 });
 
 test("Spunkram dist gets main/ + ui/spunkram/ + 0.9.16 hash stub", () => {
@@ -35,7 +38,9 @@ test("Spunkram dist gets main/ + ui/spunkram/ + 0.9.16 hash stub", () => {
     fs.writeFileSync(path.join(root, "assets", "main-NEW.cjs"), "bundle()");
     fs.writeFileSync(path.join(root, "assets", "main-NEW.css"), "body{}");
 
-    const written = writeLegacyCepEntries(root, "spunkram");
+    const written = writeLegacyCepEntries(root, "spunkram", "0.10.4");
+    const bootName = bootPanelHtmlName("0.10.4");
+    assert.equal(bootName, "index-0.10.4.html");
     assert.ok(written.some((p) => p.replace(/\\/g, "/").endsWith("main/index.html")));
 
     const mainHtml = fs.readFileSync(path.join(root, "main", "index.html"), "utf8");
@@ -52,13 +57,18 @@ test("Spunkram dist gets main/ + ui/spunkram/ + 0.9.16 hash stub", () => {
       "utf8",
     );
     assert.match(stub16, /location\.replace/);
-    assert.match(stub16, /spunkram\/index\.html/);
+    assert.match(stub16, /spunkram\/index-0\.10\.4\.html/);
+
+    assert.equal(
+      fs.readFileSync(path.join(root, "spunkram", bootName), "utf8"),
+      `<link href="../assets/main-NEW.css"><script src="../assets/main-NEW.cjs"></script>`,
+    );
 
     const stub17 = fs.readFileSync(
       path.join(root, "ui", "assets", "main-PMs0Ubu9.cjs"),
       "utf8",
     );
-    assert.match(stub17, /\.\.\/\.\.\/spunkram\/index\.html/);
+    assert.match(stub17, /\.\.\/\.\.\/spunkram\/index-0\.10\.4\.html/);
 
     // Do not clobber the live hashed bundle with a stub
     assert.equal(

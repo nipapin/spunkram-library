@@ -25,12 +25,49 @@ export function parseAppliedVersionStamp(raw: unknown): string | null {
   return clean || null;
 }
 
+/** HTML file CEF has not cached yet. Stubs and hard reloads land here, not on `index.html`. */
+export function bootPanelHtmlName(version: string): string {
+  const clean = normalizeExtensionVersion(version).replace(/[^0-9A-Za-z.]+/g, "_");
+  return clean ? `index-${clean}.html` : "index.html";
+}
+
+/** Same ordering as `compareVersions` in api/update.ts. Positive when a > b. */
+function compareExtensionVersions(a: string, b: string): number {
+  const parse = (v: string) => {
+    const clean = normalizeExtensionVersion(v);
+    const dash = clean.indexOf("-");
+    const core = (dash >= 0 ? clean.slice(0, dash) : clean)
+      .split(".")
+      .map((part) => parseInt(part, 10) || 0);
+    const pre = dash >= 0 ? clean.slice(dash + 1) : null;
+    return { core, pre };
+  };
+  const preNumber = (pre: string) => {
+    const match = pre.match(/beta\.(\d+)/i);
+    return match ? parseInt(match[1], 10) : 0;
+  };
+  const left = parse(a);
+  const right = parse(b);
+  const length = Math.max(left.core.length, right.core.length);
+  for (let i = 0; i < length; i++) {
+    const delta = (left.core[i] || 0) - (right.core[i] || 0);
+    if (delta !== 0) return delta;
+  }
+  if (left.pre === null && right.pre !== null) return 1;
+  if (left.pre !== null && right.pre === null) return -1;
+  if (left.pre === null || right.pre === null) return 0;
+  return preNumber(left.pre) - preNumber(right.pre);
+}
+
 /**
- * Reload the CEP panel (not the host app) when another host finished applying
- * a version this document has not loaded yet.
+ * Reload the CEP panel (not the host app) once, when another host finished
+ * applying a version this document has not loaded yet.
  *
- * If `targetVersion` is set (Update banner), only reload when the handshake
- * matches that version. Otherwise reload whenever applied ≠ running.
+ * Only when the handshake is strictly newer than the embedded build. An older
+ * stamp left by a previous in-panel update can never equal the new build, and
+ * reloading does not change either side — that reload loops forever.
+ *
+ * If `targetVersion` is set (Update banner), the handshake must match it.
  */
 export function shouldReloadExtensionForAppliedUpdate(opts: {
   runningVersion: string;
@@ -41,8 +78,9 @@ export function shouldReloadExtensionForAppliedUpdate(opts: {
   if (opts.applying) return false;
   const applied = normalizeExtensionVersion(opts.appliedVersion);
   const running = normalizeExtensionVersion(opts.runningVersion);
-  if (!applied || applied === running) return false;
+  if (!applied || !running) return false;
+  if (compareExtensionVersions(applied, running) <= 0) return false;
   const target = normalizeExtensionVersion(opts.targetVersion);
-  if (target) return applied === target;
+  if (target && applied !== target) return false;
   return true;
 }
