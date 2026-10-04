@@ -61,14 +61,19 @@ export class PosterQueue {
     } catch {
       job.resource = null;
     }
-    job.settled = true;
-    if (!job.listeners.size) {
-      job.resource?.release();
-      this.jobs.delete(job.key);
-    } else {
-      for (const listener of job.listeners) listener(job.resource?.url ?? null);
+    try {
+      job.settled = true;
+      if (!job.listeners.size) {
+        job.resource?.release();
+        this.jobs.delete(job.key);
+      } else {
+        for (const listener of job.listeners) {
+          try { listener(job.resource?.url ?? null); } catch { /* consumer closed */ }
+        }
+      }
+    } finally {
+      this.active -= 1;
+      this.pump();
     }
-    this.active -= 1;
-    this.pump();
   }
 }

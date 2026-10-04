@@ -7,6 +7,8 @@ export type DownloadProgress = {
 
 export type DownloadToFileOpts = {
   timeoutMs?: number;
+  /** Wall-clock limit across connection, redirects and response body (small previews). */
+  totalTimeoutMs?: number;
   onProgress?: (p: DownloadProgress) => void;
   maxRedirects?: number;
   /** Abort in-flight request (Cancel download). */
@@ -236,10 +238,12 @@ export function downloadToFile(
     let activeReq: { destroy: (err?: Error) => void } | null = null;
     let activeRes: { destroy?: () => void; resume?: () => void } | null = null;
     let out: NodeWriteStream | null = null;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
 
     const fail = (err: unknown) => {
       if (settled) return;
       settled = true;
+      clearTimeout(deadline);
       opts.signal?.removeEventListener("abort", onAbort);
       // Cancel destroys the write stream; Windows often emits EPERM on that
       // open/.part handle. Never let that race replace ABORTED.
@@ -266,6 +270,8 @@ export function downloadToFile(
     };
     const ok = () => {
       if (settled) return;
+      // The body is complete; disk replacement has its own bounded retries.
+      clearTimeout(deadline);
       const stream = out;
       out = null;
       const part = tmpPath;
@@ -297,6 +303,9 @@ export function downloadToFile(
     if (opts.signal?.aborted) {
       fail(abortedError());
       return;
+    }
+    if (opts.totalTimeoutMs != null) {
+      deadline = setTimeout(() => fail(new Error("Download timed out")), opts.totalTimeoutMs);
     }
 
     const request = (
@@ -347,7 +356,14 @@ export function downloadToFile(
       // CEP Node typings are loose; keep handler untyped like the original GET path.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const handleRes = (res: any) => {
+        if (settled) { res.destroy?.(); return; }
         activeRes = res;
+        // Attach before opening the file: an early disconnect must settle too.
+        res.on("error", fail);
+        res.on("aborted", () => fail(new Error("Download interrupted")));
+        res.on("close", () => {
+          if (!res.complete) fail(new Error("Download interrupted"));
+        });
         const status = res.statusCode || 0;
         if (
           status >= 300 &&
@@ -388,7 +404,6 @@ export function downloadToFile(
             }
             fail(new Error(`Download failed (${status})`));
           });
-          res.on("error", fail);
           return;
         }
 
@@ -416,7 +431,6 @@ export function downloadToFile(
             tmpPath = partPath;
             out = stream;
             out.on("error", fail);
-            res.on("error", fail);
             res.on("data", (chunk: Buffer) => {
               if (opts.signal?.aborted) return;
               bytesReceived += chunk.length;
@@ -449,7 +463,7 @@ export function downloadToFile(
 
       activeReq = req;
       req.on("timeout", () => {
-        req.destroy();
+        if (activeReq !== req) return;
         fail(new Error("Download timed out"));
       });
       req.on("error", fail);

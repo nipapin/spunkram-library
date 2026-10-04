@@ -61,3 +61,14 @@ test('failures free slots and an abandoned active request can be re-subscribed',
   assert.deepEqual(starts, ['bad', 'good']);
   cleanup();
 });
+
+test('a closed consumer throwing during notification cannot stall the queue', async () => {
+  const queue = new PosterQueue(async key => ({ url: key, release() {} }), 1);
+  queue.subscribe('first', () => { throw new Error('consumer closed'); });
+  const result = new Promise(resolve => {
+    queue.subscribe('first', resolve);
+  });
+  const next = new Promise(resolve => queue.subscribe('next', resolve));
+  assert.equal(await result, 'first');
+  assert.equal(await next, 'next');
+});

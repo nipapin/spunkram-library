@@ -36,6 +36,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Chapters: rename hub/shell to “Chapters”; hide welcome card when history exists; circular back without tooltip; normalize tags as `#tag1 #tag2`
 - Voiceover: history only in IconButton modal; fixed Generate button (Captions Transcribe styles); ScrubNumber + Y-resizable Script; unified 12px body type
 
+## [0.10.6] - 2026-10-04
+
+### Added
+
+- Premiere on macOS: Install Bridge button for missing Motionflow native helpers, with restart and Control Surface setup instructions.
+
+### Fixed
+
+- macOS transitions: extract the bundled native helpers into Application Support and pass the actual Motionflow.bundle parent to the host.
+- API and preview loading: bound stalled connections, interrupted responses and disk reads so they cannot hold the loading queues indefinitely.
+- Poster loading: keep the queue moving when a closed consumer throws during notification.
+
 ## [0.9.21] - 2026-09-09
 
 ### Fixed

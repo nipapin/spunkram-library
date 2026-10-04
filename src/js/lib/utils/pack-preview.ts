@@ -143,17 +143,32 @@ function readObjectUrl(absolutePath: string): Promise<string | null> {
   if (cached) return Promise.resolve(cached.url);
   if (typeof fs?.readFile !== "function") return Promise.resolve(null);
   return new Promise((resolve) => {
-    fs.readFile(absolutePath, (error, data) => {
-      if (error) { resolve(null); return; }
-      const existing = objectUrlCache.get(absolutePath);
-      if (existing) { resolve(existing.url); return; }
-      try {
-        const blob = new Blob([new Uint8Array(data)], { type: mimeFromExt(absolutePath) });
-        const url = URL.createObjectURL(blob);
-        objectUrlCache.set(absolutePath, { url, refs: 0, revokeTimer: null });
-        resolve(url);
-      } catch { resolve(null); }
-    });
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      resolve(null);
+    }, 15000);
+    try {
+      fs.readFile(absolutePath, (error, data) => {
+        // A suspended/unavailable volume must not occupy all read slots forever.
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (error) { resolve(null); return; }
+        const existing = objectUrlCache.get(absolutePath);
+        if (existing) { resolve(existing.url); return; }
+        try {
+          const blob = new Blob([new Uint8Array(data)], { type: mimeFromExt(absolutePath) });
+          const url = URL.createObjectURL(blob);
+          objectUrlCache.set(absolutePath, { url, refs: 0, revokeTimer: null });
+          resolve(url);
+        } catch { resolve(null); }
+      });
+    } catch {
+      settled = true;
+      clearTimeout(timer);
+      resolve(null);
+    }
   });
 }
 

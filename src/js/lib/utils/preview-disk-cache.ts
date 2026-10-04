@@ -145,7 +145,8 @@ async function downloadPreviewToDisk(remoteUrl: string): Promise<string | null> 
     await downloadToFile(remoteUrl, dest, {
       headers,
       stripAuthOnRedirect: true,
-      timeoutMs: 60_000,
+      timeoutMs: 15_000,
+      totalTimeoutMs: 15_000,
     });
     // Re-probe after write (bypass stale miss).
     peekCache.delete(dest);

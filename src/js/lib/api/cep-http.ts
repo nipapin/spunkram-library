@@ -17,12 +17,30 @@ function nodeRequest(
   } = {},
 ): Promise<HttpResult> {
   return new Promise((resolve) => {
+    let settled = false;
+    let req: ReturnType<typeof http.request> | undefined;
+    let response: import("http").IncomingMessage | undefined;
+    const finish = (result: HttpResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      resolve(result);
+      if (!result.ok && result.status === 0) {
+        response?.destroy();
+        req?.destroy();
+      }
+    };
+    // Socket timeouts do not bound DNS/connect time or a trickling response.
+    const deadline = setTimeout(
+      () => finish({ ok: false, text: "", status: 0, error: "TIMEOUT" }),
+      init.timeoutMs ?? 20000,
+    );
     try {
       const parsed = new URL(url);
       const isHttps = parsed.protocol === "https:";
       const lib = isHttps ? https : http;
       if (typeof lib?.request !== "function") {
-        resolve({ ok: false, text: "", status: 0, error: "NO_CONNECTION" });
+        finish({ ok: false, text: "", status: 0, error: "NO_CONNECTION" });
         return;
       }
 
@@ -31,7 +49,7 @@ function nodeRequest(
       if (init.body != null && headers["Content-Length"] == null && headers["content-length"] == null) {
         headers["Content-Length"] = String(Buffer.byteLength(init.body));
       }
-      const req = lib.request(
+      req = lib.request(
         {
           protocol: parsed.protocol,
           hostname: parsed.hostname,
@@ -42,7 +60,14 @@ function nodeRequest(
           timeout: timeoutMs,
         },
         (res) => {
+          response = res;
+          if (settled) { res.destroy(); return; }
           const chunks: Buffer[] = [];
+          const interrupted = () =>
+            finish({ ok: false, text: "", status: 0, error: "NO_CONNECTION" });
+          res.on("error", interrupted);
+          res.on("aborted", interrupted);
+          res.on("close", () => { if (!res.complete) interrupted(); });
           res.on("data", (chunk: Buffer | string) => {
             chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
           });
@@ -50,26 +75,25 @@ function nodeRequest(
             const text = Buffer.concat(chunks).toString("utf8");
             const status = res.statusCode || 0;
             if (status >= 200 && status < 300) {
-              resolve({ ok: true, text, status });
+              finish({ ok: true, text, status });
             } else {
-              resolve({ ok: false, text, status, error: "NO_SUCCESS_LOAD" });
+              finish({ ok: false, text, status, error: "NO_SUCCESS_LOAD" });
             }
           });
         },
       );
 
       req.on("timeout", () => {
-        req.destroy();
-        resolve({ ok: false, text: "", status: 0, error: "TIMEOUT" });
+        finish({ ok: false, text: "", status: 0, error: "TIMEOUT" });
       });
       req.on("error", () => {
-        resolve({ ok: false, text: "", status: 0, error: "NO_CONNECTION" });
+        finish({ ok: false, text: "", status: 0, error: "NO_CONNECTION" });
       });
 
       if (init.body) req.write(init.body);
       req.end();
     } catch {
-      resolve({ ok: false, text: "", status: 0, error: "NO_CONNECTION" });
+      finish({ ok: false, text: "", status: 0, error: "NO_CONNECTION" });
     }
   });
 }
@@ -97,6 +121,7 @@ function xhrRequest(
         resolve({ ok: false, text: "", status: 0, error: "TIMEOUT" });
       xhr.onerror = () =>
         resolve({ ok: false, text: "", status: 0, error: "NO_CONNECTION" });
+      xhr.onabort = xhr.onerror;
       xhr.onload = () => {
         const status = xhr.status;
         const text = xhr.responseText || "";
@@ -125,38 +150,58 @@ export async function cepHttpRequest(
     timeoutMs?: number;
   } = {},
 ): Promise<HttpResult> {
+  const expiresAt = Date.now() + (init.timeoutMs ?? 20000);
+  const fallback = () => {
+    const remaining = expiresAt - Date.now();
+    return remaining > 0
+      ? xhrRequest(url, { ...init, timeoutMs: remaining })
+      : Promise.resolve<HttpResult>({ ok: false, text: "", status: 0, error: "TIMEOUT" });
+  };
   if (typeof window !== "undefined" && window.cep) {
     const viaNode = await nodeRequest(url, init);
     if (viaNode.ok || viaNode.error === "TIMEOUT" || viaNode.error === "NO_SUCCESS_LOAD") {
       return viaNode;
     }
-    return xhrRequest(url, init);
+    return fallback();
   }
 
   // Browser / Vite preview fallback
-  try {
+  return new Promise<HttpResult>((resolve) => {
     const controller = new AbortController();
-    const timer = setTimeout(
-      () => controller.abort(),
-      init.timeoutMs ?? 20000,
-    );
-    const res = await fetch(url, {
-      method: init.method || "GET",
-      headers: init.headers,
-      body: init.body,
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    const text = await res.text();
-    if (!res.ok) {
-      return { ok: false, text, status: res.status, error: "NO_SUCCESS_LOAD" };
-    }
-    return { ok: true, text, status: res.status };
-  } catch (err) {
-    const name = err instanceof Error ? err.name : "";
-    if (name === "AbortError") {
-      return { ok: false, text: "", status: 0, error: "TIMEOUT" };
-    }
-    return xhrRequest(url, init);
-  }
+    let settled = false;
+    const finish = (result: HttpResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      finish({ ok: false, text: "", status: 0, error: "TIMEOUT" });
+      controller.abort();
+    }, Math.max(0, expiresAt - Date.now()));
+    void (async () => {
+      try {
+        const res = await fetch(url, {
+          method: init.method || "GET",
+          headers: init.headers,
+          body: init.body,
+          signal: controller.signal,
+        });
+        const text = await res.text();
+        if (!res.ok) {
+          finish({ ok: false, text, status: res.status, error: "NO_SUCCESS_LOAD" });
+        } else {
+          finish({ ok: true, text, status: res.status });
+        }
+      } catch (err) {
+        if (settled) return;
+        const name = err instanceof Error ? err.name : "";
+        if (name === "AbortError") {
+          finish({ ok: false, text: "", status: 0, error: "TIMEOUT" });
+        } else {
+          finish(await fallback());
+        }
+      }
+    })();
+  });
 }

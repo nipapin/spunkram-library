@@ -5,6 +5,7 @@
 import { csi, evalTS } from "@/lib/utils/bolt";
 import { fs, os, path, zlib } from "@/lib/cep/node";
 import { MotionFlow } from "@/sdk";
+import { ensureMacMotionflowLibrary, macBridgeStatus, MAC_BRIDGE_SETUP_HELP } from "./premiere-native";
 
 /** `%USER_DATA%/Adobe/Common/{folder}/` — PTX seed destination (legacy parity). */
 const PTX_COMMON_FOLDER = "Motionflow";
@@ -85,7 +86,7 @@ function ensurePtxSeeds(): void {
 }
 
 /**
- * Best-effort install of Premiere Motionflow bridge plugins (requires admin on first run).
+ * Windows diagnostics. Mac installation is exposed through the panel's Install Bridge button.
  * Without these, ExternalObject execute(cmd.edit.*) may no-op.
  */
 export async function ensureMotionflowBridgePlugins(): Promise<void> {
@@ -166,6 +167,19 @@ async function preparePtxProject(
 export async function applyFullProjectViaCopyPaste(
   args: FullProjectApplyArgs,
 ): Promise<FullProjectApplyResult> {
+  let libraryBasePath = extensionPath().replace(/\\/g, "/");
+  if (!isWin()) {
+    const bridge = macBridgeStatus();
+    if (!bridge.installed || bridge.restartRequired) {
+      return { ok: false, message: MAC_BRIDGE_SETUP_HELP };
+    }
+    try {
+      // The Mac host API appends Motionflow.bundle directly to this base path.
+      libraryBasePath = await ensureMacMotionflowLibrary(extensionPath());
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
+  }
   await MotionFlow.ready();
   ensurePtxSeeds();
   await ensureMotionflowBridgePlugins();
@@ -181,15 +195,6 @@ export async function applyFullProjectViaCopyPaste(
       return {
         ok: false,
         message: "Motionflow.dll missing from extension bin/win — rebuild/reinstall the panel.",
-      };
-    }
-  } else {
-    // Mac: the bundle lives under bin/mac/, not directly in the extension root
-    const bundleHint = path.join(extensionPath(), "bin", "mac", "Motionflow.bundle");
-    if (!fs.existsSync(bundleHint)) {
-      return {
-        ok: false,
-        message: "Motionflow.bundle missing from extension bin/mac — rebuild/reinstall the panel.",
       };
     }
   }
@@ -217,7 +222,6 @@ export async function applyFullProjectViaCopyPaste(
       await evalTS("copyPasteImportSelectedItem", projectEs);
     }
 
-    const libraryBasePath = extensionPath().replace(/\\/g, "/");
     const platform = isWin() ? "win" : "mac";
     const lib = await evalTS("copyPasteInitializeLibrary", libraryBasePath, platform);
     if (!lib?.ready) {

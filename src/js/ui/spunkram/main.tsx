@@ -14,6 +14,7 @@ import { AccountPanel } from "@/components/account-panel";
 import { LoginScreen } from "@/components/login-screen";
 import { UpdateBanner } from "@/components/update-banner";
 import { SpunkramBootLoader } from "@/components/spunkram-boot-loader";
+import { PremiereBridgeSetup } from "@/components/premiere-bridge-setup";
 import { FootagesPanel } from "@/footages";
 import { PanelUIProvider, usePanelUI } from "@/lib/panel-ui-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
@@ -718,6 +719,7 @@ function AppShell() {
         onOpenSettings={openSettings}
         editingDisabled={!hasInstalledPacks}
       />
+      <PremiereBridgeSetup />
 
       {showUpdateBanner && updateVersion ? (
         <UpdateBanner
