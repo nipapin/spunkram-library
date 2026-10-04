@@ -121,14 +121,12 @@ export function buildPackEntitlementContext(opts: {
   };
 }
 
-function catalogItemIsFree(item: CepMarketPackage): boolean {
+export function catalogItemIsFree(item: CepMarketPackage): boolean {
   const action = (item.action || "").toLowerCase();
   if (action === "get_free") return true;
-  const price =
-    typeof item.custom_price === "number"
-      ? item.custom_price
-      : Number(item.custom_price) || 0;
-  return price <= 0 && action !== "buy";
+  if (item.custom_price == null) return false;
+  const price = Number(item.custom_price);
+  return Number.isFinite(price) && price <= 0 && action !== "buy";
 }
 
 /**
@@ -144,7 +142,9 @@ export function isPackEntitled(
 
   const item = findMarketItemForPack(meta, ctx.catalog);
   if (item) {
-    if (item.owned || item.covered_by_subscription) return true;
+    // Subscription coverage in a cached catalog is not permanent ownership.
+    // The current /me subscription was already checked above.
+    if (item.owned) return true;
     if (catalogItemIsFree(item)) return true;
   }
 

@@ -764,11 +764,11 @@ function AppShell() {
             onOpenLogin={openAccount}
             onPacksChanged={reloadPackList}
             activePackPath={packFilePath}
-            onSelectPack={(meta) => {
+            onSelectPack={(meta, source) => {
               const host = currentPackHost();
               if (host && !packMetaMatchesHost(meta, host)) return;
               applyPack(meta);
-              // Stay on current nav so background "Use when ready" doesn't yank the user.
+              if (source === "switch") handleNav("editing");
             }}
           />
         </section>

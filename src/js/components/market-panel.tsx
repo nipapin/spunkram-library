@@ -387,7 +387,7 @@ export function MarketPanel({
 }: {
   onPacksChanged?: () => void;
   onOpenLogin?: () => void;
-  onSelectPack?: (meta: InstalledPackMeta) => void;
+  onSelectPack?: (meta: InstalledPackMeta, source: "switch" | "download") => void;
   activePackPath?: string;
 }) {
   const { market, marketLoading, marketError, refreshMarket, subscription } = useAuth();
@@ -445,7 +445,7 @@ export function MarketPanel({
   }
 
   function handleSwitch(meta: InstalledPackMeta) {
-    onSelectPack?.(meta);
+    onSelectPack?.(meta, "switch");
   }
 
   function handleInstall(item: CepMarketPackage) {
@@ -457,7 +457,7 @@ export function MarketPanel({
         onReady: (meta) => {
           setPackTick((t) => t + 1);
           onPacksChanged?.();
-          onSelectPack?.(meta);
+          onSelectPack?.(meta, "download");
         },
       });
     })();

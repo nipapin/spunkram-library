@@ -6,7 +6,7 @@
     "startingDebugPort": 8880
   },
   "spunkram": {
-    "version": "0.10.7",
+    "version": "0.10.8",
     "port": 4000,
     "servePort": 5000,
     "startingDebugPort": 8860

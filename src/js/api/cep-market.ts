@@ -15,6 +15,8 @@ import { openLinkInBrowser } from "@/lib/utils/bolt";
 import { fs, os, path } from "@/lib/cep/node";
 import {
   loadPreferencesFile,
+  readActiveMotionflowAuth,
+  readPrefSettings,
   resolvePreferencesPath,
   savePreferencesFile,
 } from "@/lib/api/preferences";
@@ -34,6 +36,8 @@ import {
 import { version as EXTENSION_VERSION } from "../../shared/shared";
 import type { MotionflowPurchase } from "@/api/motionflow-auth";
 import { BRAND } from "@brands";
+import { isReleaseAdminEmail } from "./update";
+import { applySpunkramAdminDevMarket, applySpunkramAdminDevPlan } from "@/lib/utils/spunkram-plan";
 import {
   buildPackEntitlementContext,
   installedPackMatchesMarketItem,
@@ -159,7 +163,7 @@ function normalizePackage(raw: CepMarketPackage): CepMarketPackage {
   const price =
     typeof raw.custom_price === "number"
       ? raw.custom_price
-      : Number(raw.custom_price) || 0;
+      : Number(raw.custom_price);
   return {
     ...raw,
     id: raw.id,
@@ -167,7 +171,7 @@ function normalizePackage(raw: CepMarketPackage): CepMarketPackage {
     pack_name: raw.pack_name || raw.name,
     primary_type: raw.primary_type,
     image_url: raw.image_url || "",
-    custom_price: price,
+    custom_price: raw.custom_price == null ? undefined : price,
     owned: Boolean(raw.owned),
     covered_by_subscription: Boolean(raw.covered_by_subscription),
     action: raw.action,
@@ -209,11 +213,22 @@ export async function resolvePackEntitlementContextForScan(opts: {
   purchases: MotionflowPurchase[];
 }): Promise<PackEntitlementContext> {
   const { catalog, subscriptionActive, error } = await fetchCombinedMarketCatalog();
+  const devPlan = BRAND.id === "spunkram" && isReleaseAdminEmail(readActiveMotionflowAuth().email)
+    ? readPrefSettings().adminDevPlan
+    : undefined;
+  const simulated = applySpunkramAdminDevMarket(
+    { Packages: catalog, subscription_active: subscriptionActive },
+    devPlan,
+  );
+  const status = applySpunkramAdminDevPlan(
+    { subscribed: subscriptionActive, purchases: opts.purchases },
+    devPlan,
+  );
   return buildPackEntitlementContext({
     signedIn: opts.signedIn && error !== "UNAUTHORIZED",
-    subscriptionActive,
-    purchases: opts.purchases,
-    catalog,
+    subscriptionActive: simulated?.subscription_active ?? subscriptionActive,
+    purchases: status.purchases,
+    catalog: simulated?.Packages ?? catalog,
   });
 }
 

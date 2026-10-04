@@ -47,7 +47,8 @@ import { reportSupportError } from "@/api/support";
 import { reportClientSession, reportInstalledPacks } from "@/api/telemetry";
 import { currentHostAppId } from "@/lib/utils/apply-item";
 import { applyAdminDevPlan } from "@/lib/utils/gal-plan";
-import { applySpunkramAdminDevPlan } from "@/lib/utils/spunkram-plan";
+import { applySpunkramAdminDevMarket, applySpunkramAdminDevPlan } from "@/lib/utils/spunkram-plan";
+import { watchSubscriptionChanges } from "@/lib/utils/watch-subscription-changes";
 import { currentPackHost } from "@/lib/utils/pack-host";
 import { waitForNextAuthPoll } from "@/lib/wait-for-auth-poll";
 import { getUserSystemData } from "@/lib/api/usp";
@@ -742,6 +743,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [refreshProfile, forgetSessionInMemory]);
 
+  useEffect(() => {
+    if (BRAND.id !== "spunkram" || !authReady || !auth.token) return;
+    return watchSubscriptionChanges(recheck, subscription.renews_at);
+  }, [authReady, auth.token, recheck, subscription.renews_at]);
+
   const revoke = useCallback(
     async (deviceId: string) => {
       const current = readMotionflowAuth();
@@ -790,6 +796,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return applyAdminDevPlan(subscription, prefs.adminDevPlan, currentPackHost());
   }, [auth.email, prefs.adminDevPlan, subscription]);
 
+  const effectiveMarket = useMemo(() => {
+    if (BRAND.id !== "spunkram" || !isReleaseAdminEmail(auth.email)) return market;
+    return applySpunkramAdminDevMarket(market, prefs.adminDevPlan);
+  }, [auth.email, prefs.adminDevPlan, market]);
+
   const accessTier = useMemo(
     () =>
       resolveAccessTier({
@@ -825,7 +836,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isFreeUser,
       generationLimit,
       freePackSlots,
-      market,
+      market: effectiveMarket,
       marketLoading,
       marketError,
       refreshMarket,
@@ -854,7 +865,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isFreeUser,
       generationLimit,
       freePackSlots,
-      market,
+      effectiveMarket,
       marketLoading,
       marketError,
       refreshMarket,

@@ -36,6 +36,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Chapters: rename hub/shell to “Chapters”; hide welcome card when history exists; circular back without tooltip; normalize tags as `#tag1 #tag2`
 - Voiceover: history only in IconButton modal; fixed Generate button (Captions Transcribe styles); ScrubNumber + Y-resizable Script; unified 12px body type
 
+## [0.10.8] - 2026-10-04
+
+### Fixed
+
+- Pack access: synchronize the admin Free/Purchased/Subscribed switch with Market and disk scan permissions, and ignore stale subscription coverage after the subscription becomes inactive.
+- Pack access: recheck subscriptions on panel focus, once a minute, and at the renewal deadline; missing or invalid catalog prices no longer grant free access.
+- Account testing: hide the real subscription renewal date in Free and Purchased modes.
+
+### Changed
+
+- Market: clicking Switch opens the selected pack in Editing.
+
 ## [0.9.25] - 2026-10-04 (Gal Toolkit MAX)
 
 ### Fixed

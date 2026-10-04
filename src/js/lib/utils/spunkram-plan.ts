@@ -1,4 +1,6 @@
 import type { MotionflowPurchase } from "@/api/motionflow-auth";
+import type { CepMarketPayload } from "@/api/cep-market";
+import { catalogItemIsFree } from "./pack-entitlement";
 
 /** Local Spunkram tiers an admin can pretend to be. Empty prefs value means live `/me`. */
 export const SPUNKRAM_DEV_PLANS = ["free", "purchased", "subscribed"] as const;
@@ -28,6 +30,7 @@ type DevStatus = {
   purchases: MotionflowPurchase[];
   tier?: string;
   aiGenerationsLimit?: number;
+  renews_at?: string;
 };
 
 /** Admin-only local override of `/me` so Spunkram can be tested as free, purchased, or subscribed. */
@@ -57,6 +60,7 @@ export function applySpunkramAdminDevPlan<T extends DevStatus>(
       tier: "purchased",
       purchases: status.purchases.length > 0 ? status.purchases : [DEV_PURCHASE],
       aiGenerationsLimit: 0,
+      renews_at: undefined,
     };
   }
   return {
@@ -67,5 +71,29 @@ export function applySpunkramAdminDevPlan<T extends DevStatus>(
     tier: "free",
     purchases: [],
     aiGenerationsLimit: 0,
+    renews_at: undefined,
+  };
+}
+
+/** Keep catalog rights in sync with the simulated account, including disk scans. */
+export function applySpunkramAdminDevMarket(
+  market: CepMarketPayload | null,
+  plan: string | null | undefined,
+): CepMarketPayload | null {
+  if (!market || !isSpunkramDevPlan(plan)) return market;
+  const subscribed = plan === "subscribed";
+  return {
+    ...market,
+    subscription_active: subscribed,
+    Packages: market.Packages?.map((item) => {
+      const owned = plan !== "free" && Boolean(item.owned);
+      const free = catalogItemIsFree(item);
+      return {
+        ...item,
+        owned,
+        covered_by_subscription: subscribed,
+        action: free ? "get_free" : owned || subscribed ? "install" : "buy",
+      };
+    }),
   };
 }
