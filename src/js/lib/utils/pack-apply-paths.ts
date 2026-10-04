@@ -10,6 +10,7 @@ import { fs, path } from "../cep/node";
 import { resolvePackPreviewsPath, resolvePackTemplatesPath } from "./pack-folders";
 import { resolveItemAssetSegments } from "./pack-tree";
 import type { PackPreviewItem, PackSettings, PackTreeItem } from "./pack-types";
+import { resolveAEGroupArgument } from "./ae-composer-arguments";
 
 const AUDIO_EXTS = [".wav", ".mp3", ".ogg", ".m4a", ".aac", ".aif", ".aiff", ".flac"] as const;
 const AUDIO_FILETYPES = new Set(AUDIO_EXTS.map((ext) => ext.slice(1)));
@@ -186,10 +187,16 @@ export function resolveItemSourceFile(
   }
 
   if (hostAppId === "AEFT") {
-    const individualComp = !!customArgs.individual_comp;
+    const individualComp = !!resolveAEGroupArgument(item, "individual_comp");
+    const aepName = resolveAEGroupArgument(item, "aep_file_name");
+    const projectSegments = [...item.pathSegments];
+    if (typeof aepName === "string" && aepName) {
+      projectSegments.splice(-1, 1, aepName);
+    }
+    const projectPath = path.join(templatesDir, ...projectSegments);
     const file = individualComp
-      ? path.join(groupDir, `${item.name}.aep`)
-      : path.join(templatesDir, `${item.pathSegments.join(path.sep)}.aep`);
+      ? path.join(projectPath, `${item.name}.aep`)
+      : `${projectPath}.aep`;
     return { ctype: "PROJECT", file, cacheName: path.basename(file) };
   }
 

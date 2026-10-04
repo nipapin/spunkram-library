@@ -29,6 +29,16 @@ export type PackLeafGroup = {
   /** Preview card aspect: DEFAULT (16:9), VERTICAL (9:16), BOX_MIN/BOX_MAX (1:1). */
   custom_preview_res_thumbnail?: "DEFAULT" | "VERTICAL" | "BOX_MIN" | "BOX_MAX" | string;
   aep_file_name?: string;
+  /** AE composer group overrides; layer-specific settings stay in preview.custom_args. */
+  change_auto_size_composition?: "NONE" | "FIT_TO_COMP" | "ONLY_MAIN" | "ALL_COMPS";
+  change_duplicate_origin_setting?: string;
+  change_use_start_timeline_pointer?: string;
+  change_layer_index_position?: string;
+  change_auto_size_footage?: string;
+  change_engine?: string;
+  label_color_num?: number;
+  parent_folder?: string | boolean;
+  individual_comp?: boolean;
   is_audio?: boolean;
   /** true or image type string ("JPG"/"PNG") for static footage thumbnails. */
   is_footage?: boolean | string;

@@ -27,6 +27,7 @@ import { INSTANCE_GROUP_JOIN_CHAR } from "./pack-types";
 import { reportSupportError } from "@/api/support";
 import { BRAND } from "@brands";
 import { currentPackHost, normalizePackHost } from "./pack-host";
+import { buildAEComposerArguments, resolveAEGroupArgument } from "./ae-composer-arguments";
 
 export type ApplyItemOutcome =
   | { ok: true; warning?: string }
@@ -69,9 +70,7 @@ function friendlyReason(reason: string): string {
 }
 
 function resolvePackEngine(settings: PackSettings | null, item: PackTreeItem): string {
-  const previewEntry = item.group.preview?.[item.previewKey];
-  const customArgs = (previewEntry?.custom_args as Record<string, unknown>) || {};
-  const changeEngine = customArgs.change_engine;
+  const changeEngine = resolveAEGroupArgument(item, "change_engine");
   if (typeof changeEngine === "string" && changeEngine.trim()) return changeEngine.trim();
   return settings?.main?.engine_pack || "_COMPOSER";
 }
@@ -217,22 +216,7 @@ export async function applyPackItemToHost(
       ? {
           itemId: item.id,
           instanceGroup: item.pathSegments.join(INSTANCE_GROUP_JOIN_CHAR),
-          argsObject: {
-            ...(previewEntry || { name: item.name }),
-            label_color_num:
-              (previewEntry as Record<string, unknown> | undefined)?.label_color_num ?? 2,
-            parent_folder:
-              (previewEntry as Record<string, unknown> | undefined)?.parent_folder ?? false,
-            change_auto_size_composition: customArgs.change_auto_size_composition,
-            change_duplicate_origin_setting: customArgs.change_duplicate_origin_setting,
-            change_use_start_timeline_pointer: customArgs.change_use_start_timeline_pointer,
-            change_layer_index_position: customArgs.change_layer_index_position,
-            is_audio: !!item.group.is_audio,
-            is_footage: !!item.group.is_footage,
-            is_presets: !!item.group.is_presets,
-            individual_comp: !!customArgs.individual_comp,
-            custom_args: customArgs,
-          } as Record<string, unknown>,
+          argsObject: buildAEComposerArguments(item),
           extraArguments: {
             filepath: filePath,
             last_group: item.pathSegments[item.pathSegments.length - 1] || item.name,

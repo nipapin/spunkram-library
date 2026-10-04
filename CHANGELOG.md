@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Chapters: rename hub/shell to “Chapters”; hide welcome card when history exists; circular back without tooltip; normalize tags as `#tag1 #tag2`
 - Voiceover: history only in IconButton modal; fixed Generate button (Captions Transcribe styles); ScrubNumber + Y-resizable Script; unified 12px body type
 
+## [0.10.7] - 2026-10-04
+
+### Fixed
+
+- After Effects titles: pass the group's resize override to Motionflow SDK, so `FIT_TO_COMP` scales the layer instead of falling back to a pack setting that crops the source composition.
+- After Effects pack options: preserve group placement, label, duplication, footage resize and engine overrides while keeping item layer settings in `custom_args`.
+- After Effects source paths: honor group `individual_comp` and `aep_file_name` when selecting the `.aep` file.
+
 ## [0.10.6] - 2026-10-04
 
 ### Added
