@@ -36,6 +36,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Chapters: rename hub/shell to “Chapters”; hide welcome card when history exists; circular back without tooltip; normalize tags as `#tag1 #tag2`
 - Voiceover: history only in IconButton modal; fixed Generate button (Captions Transcribe styles); ScrubNumber + Y-resizable Script; unified 12px body type
 
+## [0.10.9] - 2026-10-04
+
+### Fixed
+
+- Editing: display the pack's Market title, using its catalog ID when available, with the local pack name as a fallback.
+
+### Changed
+
+- Market: remove the repeated subscription description beneath pack titles.
+
 ## [0.10.8] - 2026-10-04
 
 ### Fixed

@@ -39,6 +39,7 @@ import {
 } from "@/lib/utils/pack-install";
 import {
   buildPackEntitlementContext,
+  findMarketItemForPack,
   isPackEntitled,
 } from "@/lib/utils/pack-entitlement";
 import { readPrefSettings } from "@/lib/api/preferences";
@@ -342,6 +343,7 @@ function EditingWorkspace({
   setTutorialsOpen,
   assetsPath,
   packFilePath,
+  packMarketId,
   packSettings,
   packError,
   onOpenAccount,
@@ -355,6 +357,7 @@ function EditingWorkspace({
   setTutorialsOpen: (open: boolean) => void;
   assetsPath: string;
   packFilePath: string;
+  packMarketId: string | undefined;
   packSettings: PackSettings | null;
   packError: string | null;
   onOpenAccount: () => void;
@@ -380,10 +383,20 @@ function EditingWorkspace({
       author: packSettings.main.cc_author_username || "Unknown",
       version: packSettings.main.version || "1.0",
       path: packFilePath,
+      marketId: packMarketId,
       appID: packSettings.main.software_id,
       appVersion: packSettings.main.software_version,
     };
-  }, [packSettings, packFilePath]);
+  }, [packSettings, packFilePath, packMarketId]);
+
+  const packDisplayName = useMemo(() => {
+    if (!activePackMeta) return packSettings?.main.name;
+    const catalog = market?.Packages ?? [];
+    const item = activePackMeta.marketId != null
+      ? catalog.find((item) => String(item.id) === String(activePackMeta.marketId))
+      : findMarketItemForPack(activePackMeta, catalog);
+    return item?.name?.trim() || packSettings?.main.name;
+  }, [activePackMeta, market?.Packages, packSettings]);
 
   const canApply = useMemo(
     () => activePackMeta != null && isPackEntitled(activePackMeta, entitlementCtx),
@@ -438,7 +451,7 @@ function EditingWorkspace({
         onToggleTutorials={() => setTutorialsOpen(!tutorialsOpen)}
         query={query}
         onQuery={setQuery}
-        packName={packSettings?.main.name}
+        packName={packDisplayName}
       />
       <div className="flex min-h-0 flex-1">
         {tutorialsOpen ? (
@@ -506,6 +519,7 @@ function AppShell() {
   const [packError, setPackError] = useState<string | null>(null);
   const [assetsPath, setAssetsPath] = useState("");
   const [packFilePath, setPackFilePath] = useState("");
+  const [packMarketId, setPackMarketId] = useState<string | undefined>();
   const [packSettings, setPackSettings] = useState<PackSettings | null>(null);
   const [hasInstalledPacks, setHasInstalledPacks] = useState(
     () => readInstallablePackages().length > 0,
@@ -520,6 +534,7 @@ function AppShell() {
         setTree(nextTree);
         setAssetsPath(loaded.assetsPath);
         setPackFilePath(loaded.meta.path);
+        setPackMarketId(loaded.meta.marketId);
         setPackSettings(loaded.pack.settings);
         setCategory(resolveCategoryForPack(nextTree, loaded.meta.path));
         setPackError(null);
@@ -573,6 +588,7 @@ function AppShell() {
     if (installed.length === 0) {
       setPackError("No installed pack found");
       setPackFilePath("");
+      setPackMarketId(undefined);
       setTree([]);
       setPackSettings(null);
       setAssetsPath("");
@@ -797,6 +813,7 @@ function AppShell() {
           setTutorialsOpen={setTutorialsOpen}
           assetsPath={assetsPath}
           packFilePath={packFilePath}
+          packMarketId={packMarketId}
           packSettings={packSettings}
           packError={packError}
           onOpenAccount={openAccount}

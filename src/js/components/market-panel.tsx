@@ -196,7 +196,6 @@ function MarketCard({
   const { label: price } = priceLabel(item);
   const action = uiActionForItem(item, { installed, active, needsUpdate });
   const imageSrc = `${item.image_url}${item.image_url.includes("?") ? "&" : "?"}v=${item.version || "1"}`;
-  const showSubHint = action.type === "buy";
   const detailsUrl = item.details_url?.trim() || "";
   const jobBusy = job && (job.status === "queued" || job.status === "downloading" || job.status === "installing");
   const jobFailed = job && (job.status === "error" || job.status === "cancelled");
@@ -315,8 +314,6 @@ function MarketCard({
             {jobStatusLabel(job)}
           </p>
         )}
-
-        {showSubHint && <p className="text-[10px] leading-snug text-muted-foreground">Included with {BRAND.displayName} subscription</p>}
 
         <div className="flex gap-1">
           <button
