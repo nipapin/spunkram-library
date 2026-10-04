@@ -36,6 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Chapters: rename hub/shell to “Chapters”; hide welcome card when history exists; circular back without tooltip; normalize tags as `#tag1 #tag2`
 - Voiceover: history only in IconButton modal; fixed Generate button (Captions Transcribe styles); ScrubNumber + Y-resizable Script; unified 12px body type
 
+## [0.9.25] - 2026-10-04 (Gal Toolkit MAX)
+
+### Fixed
+
+- After Effects: preserve group resize, placement and other composer overrides, and honor group `individual_comp` and `aep_file_name` source paths.
+- Premiere on macOS: extract the bundled Motionflow helpers into Application Support and use the actual bundle parent when applying full projects.
+- API and previews: bound stalled connections and disk reads, and keep poster queues moving after interrupted or abandoned requests.
+
+## [1.0.3] - 2026-10-04 (Odin Pro)
+
+### Fixed
+
+- After Effects: preserve group resize, placement and other composer overrides, and honor group `individual_comp` and `aep_file_name` source paths.
+- Premiere on macOS: extract the bundled Motionflow helpers into Application Support and use the actual bundle parent when applying full projects.
+- API and previews: bound stalled connections and disk reads, and keep poster queues moving after interrupted or abandoned requests.
+
 ## [0.10.7] - 2026-10-04
 
 ### Fixed
