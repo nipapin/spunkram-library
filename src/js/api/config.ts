@@ -4,6 +4,7 @@
 import { BRAND } from "@brands";
 
 export const API_BASE = BRAND.apiOrigin ?? "https://motionflow.pro";
+export const AI_API_BASE = BRAND.aiOrigin ?? API_BASE;
 
 export const GENERATIONS_ENDPOINTS = {
   /** POST — транскрипция аудио (multipart/form-data), см. utils/transcribe.ts */
@@ -65,5 +66,12 @@ export const CAPTIONS_ENDPOINTS = {
 /** @deprecated используйте CAPTIONS_ENDPOINTS */
 export const PRESET_ENDPOINTS = CAPTIONS_ENDPOINTS;
 
-export const apiUrl = (path: string): string =>
-  path.startsWith("http") ? path : `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+export const apiUrl = (path: string): string => {
+  if (path.startsWith("http")) return path;
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  const pathname = normalized.split("?")[0];
+  const aiEndpoint = pathname.startsWith("/api/generations/") ||
+    pathname === "/api/cep/generations" || pathname.startsWith("/api/cep/voiceover/") ||
+    pathname === "/api/captions" || pathname.startsWith("/api/captions/");
+  return `${aiEndpoint ? AI_API_BASE : API_BASE}${normalized}`;
+};

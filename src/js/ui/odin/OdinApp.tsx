@@ -252,7 +252,7 @@ function OdinShell() {
                     </h2>
                     <p>
                       {subscription.subscribed
-                        ? `You need more generations to use ${upgradeTool}. Check your Odin Pro plan to continue.`
+                        ? `Your Odin Pro subscription includes 100 AI generations per month. You don't have enough left to use ${upgradeTool}. Your balance resets next month.`
                         : `You're ready to use ${upgradeTool}. Subscribe to Odin Pro to run this tool and unlock AI generations.`}
                     </p>
                     <button type="button" className="odin-ai-upgrade__cta" onClick={openMotionflowSubscribe}>

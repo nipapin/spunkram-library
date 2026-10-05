@@ -62,6 +62,8 @@ export type BrandConfig = {
   packagePreviews?: Partial<Record<"AE" | "PR", string>>;
   /** Backend hosting this brand's CEP routes. */
   apiOrigin?: string;
+  /** AI service origin when accounts and billing live on a separate storefront. */
+  aiOrigin?: string;
   verificationPath?: string;
   manageSubscriptionPath?: string;
   features: {
@@ -106,6 +108,7 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
       PR: "https://api.get-atomx.com/atomx_files/ext_market/packages/542.jpg",
     },
     apiOrigin: "https://odin-pro.com",
+    aiOrigin: "https://motionflow.pro",
     verificationPath: "/cep/login",
     manageSubscriptionPath: "/account",
     features: { aiTools: true, footages: false, remoteNotifications: false, extensionUpdates: false, telemetry: false, remotePackPreview: false },
@@ -125,7 +128,7 @@ export const BRANDS: Record<BrandId, BrandConfig> = {
     access: {
       tiers: ["free", "subscribed"],
       packPurchasesGrantAccess: false,
-      generations: { free: 0, purchased: 0, subscribed: 0 },
+      generations: { free: 0, purchased: 0, subscribed: 100 },
       freePackSlots: 0,
     },
   },

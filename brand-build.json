@@ -1,6 +1,6 @@
 {
   "odin": {
-    "version": "1.0.3",
+    "version": "1.0.4",
     "port": 4020,
     "servePort": 5020,
     "startingDebugPort": 8880

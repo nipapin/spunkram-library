@@ -6,6 +6,18 @@ Files keep the `.odin` extension but contain plain UTF-8 JSON with `settings` an
 
 AI Tools are available in the Odin toolbar. Footages, ffmpeg prefetch, Motionflow telemetry, remote notifications, and extension auto-updates are disabled for this brand. Package categories come from installed `.odin` files. Package downloads and updates use full archives from the existing Odin service.
 
+Subscribed Odin accounts receive 100 AI generations per calendar month (UTC);
+free accounts receive zero. AI balance, transcription and chapters use
+`https://motionflow.pro`, which verifies the Odin device token and current
+subscription against `https://odin-pro.com/api/cep/me`. Odin user IDs and usage
+remain separate from Motionflow/Gal/Spunkram accounts. Captions and Silence
+Remover charge one generation per started 10 minutes; the combined
+Captions/Chapters flow uses the existing signed receipt to avoid a second charge.
+Observer remains free. Deploy the `next-app` changes (`lib/odin-ai.ts` and AI
+auth/metering routes) and the Odin `/me` entitlement change before distributing
+the new panel. The AI ledger is created on first use, as with other Motionflow
+ledgers; SQL is also in `next-app/db/migrations/2026_10_05_odin_ai_generations.sql`.
+
 ```sh
 npm run dev -- --author=odin
 npm run build -- --author=odin

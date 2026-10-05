@@ -1,6 +1,6 @@
 import { createAiTools, type AiRuntime } from "motionflow-ai";
 import { fs } from "../lib/cep/node";
-import { API_BASE } from "../api/config";
+import { AI_API_BASE } from "../api/config";
 import { getUserIdentity } from "../api/user";
 import { getBundledCaptionsJsxPath } from "../utils/captionsJsx";
 
@@ -10,7 +10,7 @@ function readAudioFile(filePath: string): Uint8Array {
 
 export function createCepAiRuntime(): AiRuntime {
   return {
-    apiBase: API_BASE,
+    apiBase: AI_API_BASE,
     readAudioFile,
     getIdentity: () => {
       const user = getUserIdentity();

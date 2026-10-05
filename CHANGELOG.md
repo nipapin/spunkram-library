@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Chapters: rename hub/shell to “Chapters”; hide welcome card when history exists; circular back without tooltip; normalize tags as `#tag1 #tag2`
 - Voiceover: history only in IconButton modal; fixed Generate button (Captions Transcribe styles); ScrubNumber + Y-resizable Script; unified 12px body type
 
+## [1.0.4] - 2026-10-05 (Odin Pro)
+
+### Fixed
+
+- AI Tools: active Odin subscriptions receive 100 generations per month, with server-side usage shared across devices.
+- AI Tools: route transcription, chapters and generation balance to Motionflow while preserving Odin account authentication.
+- Library: allow dragging the category sidebar divider beyond the former 26% width limit and start each drag at its visible width.
+
 ## [0.10.9] - 2026-10-04
 
 ### Fixed

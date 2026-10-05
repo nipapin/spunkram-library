@@ -320,7 +320,7 @@
   flex-direction: column;
 }
 .odin-library__body > aside {
-  max-width: 26%;
+  max-width: calc(100% - 80px);
   min-width: 116px;
   border-color: #303030;
   background: #0e0f11;

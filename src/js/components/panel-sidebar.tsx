@@ -412,7 +412,8 @@ export function PanelSidebar({
 
   const handleResizePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
-    dragStateRef.current = { startX: e.clientX, startWidth: width };
+    const renderedWidth = e.currentTarget.parentElement?.getBoundingClientRect().width;
+    dragStateRef.current = { startX: e.clientX, startWidth: renderedWidth || width };
     setResizing(true);
     window.addEventListener("pointermove", handleResizePointerMove);
     window.addEventListener("pointerup", handleResizePointerUp);
